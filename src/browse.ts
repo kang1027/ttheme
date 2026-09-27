@@ -1,5 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import * as p from '@clack/prompts'
 import { type BrowseIo, BrowsePanel, type BrowseResult, type Market, type Problem } from './browse-panel.ts'
 import { available, catalogPath, parseCatalog, readCachedIndex, readCatalog, readKept } from './catalog.ts'
@@ -7,7 +6,7 @@ import { listed, type PaletteEntry } from './emit/manifest.ts'
 import { reload } from './market.ts'
 import { dropCache, findMarkets, idOf, keptNote, lastUpdate, withMarkets } from './markets.ts'
 import { colorless, paletteOsc, queryTerminalColors, restoreOsc } from './osc.ts'
-import { palettesDir, readMarketDir, readOwnText } from './own.ts'
+import { type MarketFile, marketFileProblem, marketFiles, readMarketDir, readOwnText } from './own.ts'
 import { promptFx } from './palette-prompt.ts'
 import { commit, configHome, forget, type Installed, readInstalled, worn, writeInstalled } from './palettes.ts'
 import { bringPictures, since } from './pictures.ts'
@@ -101,17 +100,17 @@ function problemsOf(home: string, state: Installed, tries: Record<string, Tried>
     } else {
       try {
         const id = marketId(localIdentity(source))
-        const folder = palettesDir(source)
-        const files = existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith('.toml')) : []
-        for (const file of files.sort()) {
+        const seen = new Map<string, MarketFile>()
+        for (const file of marketFiles(source)) {
           try {
-            readOwnText(
-              `${id}/${basename(file, '.toml')}`,
-              readFileSync(join(folder, file), 'utf8'),
-              cachedEntries(home, OFFICIAL),
-            )
+            const problem = marketFileProblem(file, seen)
+            if (problem) {
+              throw new Error(problem)
+            }
+            seen.set(file.slug, file)
+            readOwnText(`${id}/${file.slug}`, readFileSync(file.path, 'utf8'), cachedEntries(home, OFFICIAL))
           } catch (error) {
-            problems.push({ where: shownSource(join(folder, file)), message: message(error) })
+            problems.push({ where: shownSource(file.path), message: message(error) })
           }
         }
       } catch (error) {

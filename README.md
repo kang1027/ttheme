@@ -87,7 +87,8 @@ waiting for a release.
 
 Anyone can publish palettes from a GitHub repository. A market is named
 `<owner>@<name>` — its repository's owner and the name its index gives — and
-sits below the series in `ttheme preview` and `ttheme browse`, past a line:
+sits below the series in `ttheme preview` and `ttheme browse`, past a line, with
+the folders under its `palettes/` as catalogs:
 
 ```
 ▾ Evangelion
@@ -95,8 +96,10 @@ sits below the series in `ttheme preview` and `ttheme browse`, past a line:
     asuka
 ── Markets ──────────
 ▾ alice@pastel
-    dusk
-    rei
+  ▾ night
+      dusk
+      moon
+  ▸ day
 ```
 
 ```sh
@@ -124,7 +127,8 @@ handle and a market name the first `new` asks for, in
 `~/.config/ttheme/market/<market>`, and installs it. `ttheme edit rei` opens it
 in `$EDITOR`; `ttheme check --fix` suggests colors that pass the gate.
 
-A local market is already a repository layout: `palettes/*.toml`, the
+A local market is already a repository layout: `palettes/*.toml` (a folder
+under it, such as `palettes/night/`, is a catalog), the
 `ttheme-market.json` index and a workflow that rebuilds the index on every
 push. `ttheme market init <name>` makes one and prints the commands that
 publish it:

@@ -230,8 +230,23 @@ keeping its auto-update.
 
 A market is `<owner>@<name>`: the repository's owner and the name its index
 gives. Its palettes are `<owner>@<name>/<palette>` (`ttheme add
-alice@pastel/dusk`), and the market is their group: `preview`, `browse` and the
-bare `ttheme` list it below every series, past a `── Markets` line. Only the
+alice@pastel/dusk`), and `preview`, `browse` and the bare `ttheme` list the
+market below every series, past a `── Markets` line: the market, then its
+catalogs — the folders under its `palettes/` — then their palettes by their
+own names, and a palette filed straight under `palettes/` after the catalogs.
+
+```
+alice/ttheme-pastel               ▾ alice@pastel
+  palettes/night/dusk.toml          ▾ night
+  palettes/night/moon.toml              dusk
+  palettes/day/noon.toml                moon
+  palettes/rei.toml                 ▸ day
+                                      rei
+```
+
+The catalog is only a shelf, never part of the name — dusk stays
+`alice@pastel/dusk` wherever its file moves — so a palette name is used once in
+a market; `market build` refuses a second one. Only the
 official catalog is held to the contrast gate — a market palette installs
 whatever its numbers, and `ttheme check` shows them. `ttheme market remove
 official` drops the official catalog too; `ttheme market add official` brings
@@ -257,7 +272,7 @@ ttheme share rei                 # tt1:… — anyone runs ttheme add tt1:…
 Your palettes are files in a local market: the first `new` asks for its name and
 creates `~/.config/ttheme/market/<name>` (`ttheme market init <name>` makes one
 up front, or in a folder you give, and `--in <name>` picks between several). Each is
-`palettes/<name>.toml`, in the same format as `themes/*.toml` (see
+`palettes/<name>.toml` (move it into a folder there to shelve it in a catalog), in the same format as `themes/*.toml` (see
 CONTRIBUTING.md) with a bare `meta.name`; the market's `ttheme-market.json`
 carries its name and `<you>`, your GitHub handle — read from `gh` when it is logged in, asked
 once otherwise, and kept in `installed.json`. A file you break stays out of the

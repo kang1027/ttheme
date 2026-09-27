@@ -86,7 +86,7 @@ export const VERB_SPECS: VerbSpec[] = [
     args: ['[query]'],
     about: 'Show the catalog, marking what is installed',
     section: 'catalog',
-    flags: { json: { type: 'boolean', about: 'Print the matches as JSON: name, group, installed' } },
+    flags: { json: { type: 'boolean', about: 'Print the matches as JSON: name, group, catalog, installed' } },
   },
   {
     name: 'add',

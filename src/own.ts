@@ -15,6 +15,7 @@ import {
   type SharedPicture,
   slugOf,
   type Theme,
+  textProblem,
 } from './theme.ts'
 
 export const CODE = 'tt1:'
@@ -63,6 +64,45 @@ export function palettesDir(dir: string): string {
   return join(dir, 'palettes')
 }
 
+export interface MarketFile {
+  path: string
+  slug: string
+  catalog?: string
+}
+
+export function marketFiles(dir: string): MarketFile[] {
+  const folder = palettesDir(dir)
+  if (!existsSync(folder)) {
+    return []
+  }
+  const shelved: MarketFile[] = []
+  const loose: MarketFile[] = []
+  for (const item of readdirSync(folder, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (item.name.startsWith('.')) {
+      continue
+    }
+    if (item.isDirectory()) {
+      for (const file of readdirSync(join(folder, item.name)).sort()) {
+        if (file.endsWith('.toml')) {
+          shelved.push({ path: join(folder, item.name, file), slug: basename(file, '.toml'), catalog: item.name })
+        }
+      }
+    } else if (item.name.endsWith('.toml')) {
+      loose.push({ path: join(folder, item.name), slug: basename(item.name, '.toml') })
+    }
+  }
+  return [...shelved, ...loose]
+}
+
+export function marketFileProblem(file: MarketFile, seen: ReadonlyMap<string, MarketFile>): string | undefined {
+  const twin = seen.get(file.slug)
+  if (twin) {
+    return `${file.slug} is also ${twin.catalog ? `in ${twin.catalog}` : 'outside a catalog'} — a palette name is used once in a market`
+  }
+  const problem = file.catalog === undefined ? undefined : textProblem(file.catalog)
+  return problem ? `the catalog folder ${JSON.stringify(file.catalog)} ${problem}` : undefined
+}
+
 export function ownPath(configHome: string, name: string): string {
   const market = marketOf(name)
   if (!market) {
@@ -72,7 +112,8 @@ export function ownPath(configHome: string, name: string): string {
   if (!local) {
     throw new Error(`${market} is not a local market — \`ttheme market add <dir>\` adds the folder that holds it`)
   }
-  return join(palettesDir(local.dir), `${slugOf(name)}.toml`)
+  const slug = slugOf(name)
+  return marketFiles(local.dir).find((f) => f.slug === slug)?.path ?? join(palettesDir(local.dir), `${slug}.toml`)
 }
 
 export function placeFor(name: string, entries: PaletteEntry[]): Place {
@@ -97,20 +138,23 @@ export function readOwnText(name: string, source: string, entries: PaletteEntry[
 }
 
 export function readMarketDir(dir: string, id: string, entries: PaletteEntry[], warn = true): PaletteEntry[] {
-  const folder = palettesDir(dir)
-  return (existsSync(folder) ? readdirSync(folder).sort() : [])
-    .filter((file) => file.endsWith('.toml'))
-    .flatMap((file) => {
-      try {
-        const text = readFileSync(join(folder, file), 'utf8')
-        return [paletteEntry(readOwnText(`${id}/${basename(file, '.toml')}`, text, entries))]
-      } catch (error) {
-        if (warn) {
-          process.stderr.write(`ttheme: skipping ${join(folder, file)} — ${(error as Error).message}\n`)
-        }
-        return []
+  const seen = new Map<string, MarketFile>()
+  return marketFiles(dir).flatMap((file) => {
+    try {
+      const problem = marketFileProblem(file, seen)
+      if (problem) {
+        throw new Error(problem)
       }
-    })
+      seen.set(file.slug, file)
+      const entry = paletteEntry(readOwnText(`${id}/${file.slug}`, readFileSync(file.path, 'utf8'), entries))
+      return [file.catalog ? { ...entry, catalog: file.catalog } : entry]
+    } catch (error) {
+      if (warn) {
+        process.stderr.write(`ttheme: skipping ${file.path} — ${(error as Error).message}\n`)
+      }
+      return []
+    }
+  })
 }
 
 export function readLocal(configHome: string, entries: PaletteEntry[], warn = true): PaletteEntry[] {

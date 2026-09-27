@@ -6,6 +6,7 @@ export interface Theme {
   market: string | null
   name: string
   group: string
+  catalog: string | null
   native: string | null
   lead: boolean
   ansiSource: string
@@ -30,6 +31,7 @@ export interface GateRule {
 export interface ManifestEntry {
   name: string
   group: string
+  catalog?: string
   native?: string
   lead?: boolean
   ansiSource: string
@@ -58,6 +60,7 @@ export function toTheme(entry: ManifestEntry, market: string | null = null): The
     market,
     name: entry.name,
     group: market ?? entry.group,
+    catalog: market ? (entry.catalog ?? null) : null,
     native: market ? null : (entry.native ?? null),
     lead: market ? false : (entry.lead ?? false),
     ansiSource: entry.ansiSource,

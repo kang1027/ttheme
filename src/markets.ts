@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import * as p from '@clack/prompts'
 import {
   catalogPath,
@@ -14,7 +14,17 @@ import {
 } from './catalog.ts'
 import { writeAtomic } from './edits.ts'
 import { emptyManifest, listed, type PaletteEntry, paletteEntry } from './emit/manifest.ts'
-import { gateLines, type LocalMarket, localMarkets, palettesDir, readMarketDir, readOwnText } from './own.ts'
+import {
+  gateLines,
+  type LocalMarket,
+  localMarkets,
+  type MarketFile,
+  marketFileProblem,
+  marketFiles,
+  palettesDir,
+  readMarketDir,
+  readOwnText,
+} from './own.ts'
 import { configHome, type Installed, readInstalled, sync, writeInstalled } from './palettes.ts'
 import { ago, counted, type Fetched, fetchedAt, fetchMarket, readTries, storeMarket } from './refresh.ts'
 import {
@@ -36,7 +46,7 @@ import {
   shownSource,
   TOPIC,
 } from './sources.ts'
-import { marketOf, nameProblem, type Theme } from './theme.ts'
+import { marketOf, nameProblem } from './theme.ts'
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const ACTIONS = ['add', 'remove', 'search', 'init']
@@ -494,7 +504,7 @@ async function initMarket(arg: string | undefined): Promise<void> {
   const market = await initLocal(home, dir, name)
   const repo = `${market.owner}/${repoFor(market)}`
   console.log(`
-\`ttheme new <palette> --from <palette>\` puts palettes in it — others see them once it is on GitHub:
+\`ttheme new <palette> --from <palette>\` puts palettes in it, and a folder under palettes/ shelves them in a catalog — others see them once it is on GitHub:
 
   cd ${shownSource(dir)}
   git init -b main && git add -A && git commit -m "${market.id}"
@@ -509,27 +519,32 @@ function buildMarket(arg: string | undefined): number {
   const identity = localIdentity(dir)
   const id = marketId(identity)
   const entries = officialFor(configHome())
-  const folder = palettesDir(dir)
-  const files = (existsSync(folder) ? readdirSync(folder).sort() : []).filter((f) => f.endsWith('.toml'))
-  const themes: Theme[] = []
+  const seen = new Map<string, MarketFile>()
+  const palettes: PaletteEntry[] = []
   const broken: string[] = []
-  for (const file of files) {
-    const slug = basename(file, '.toml')
+  for (const file of marketFiles(dir)) {
     try {
-      themes.push({ ...readOwnText(`${id}/${slug}`, readFileSync(join(folder, file), 'utf8'), entries), name: slug })
+      const problem = marketFileProblem(file, seen)
+      if (problem) {
+        throw new Error(problem)
+      }
+      seen.set(file.slug, file)
+      const theme = readOwnText(`${id}/${file.slug}`, readFileSync(file.path, 'utf8'), entries)
+      const entry = paletteEntry({ ...theme, name: file.slug })
+      palettes.push(file.catalog ? { ...entry, catalog: file.catalog } : entry)
     } catch (error) {
-      broken.push(`  ${join('palettes', file)}: ${(error as Error).message}`)
+      broken.push(`  ${relative(dir, file.path)}: ${(error as Error).message}`)
     }
   }
   if (broken.length > 0) {
     console.error(`${broken.length} palettes cannot be read — the index was left as it was:\n${broken.join('\n')}`)
     return 1
   }
-  const palettes = themes.map(paletteEntry)
   for (const entry of palettes) {
     const lines = gateLines(entry)
     const failing = lines.filter((l) => l.startsWith('  ✗'))
-    console.log(`  ${entry.name}${failing.length > 0 ? `\n${failing.join('\n')}` : '  passes the gate'}`)
+    const shown = entry.catalog ? `${entry.catalog}/${entry.name}` : entry.name
+    console.log(`  ${shown}${failing.length > 0 ? `\n${failing.join('\n')}` : '  passes the gate'}`)
   }
   writeIndex(dir, identity, palettes)
   console.log(`\n${id} · ${counted(palettes.length)} → ${join(dir, INDEX)}`)

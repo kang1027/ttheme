@@ -8,6 +8,7 @@ export interface PaletteEntry {
   name: string
   base?: string
   group: string
+  catalog?: string
   native?: string
   lead?: boolean
   order: number

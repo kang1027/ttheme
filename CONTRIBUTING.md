@@ -19,12 +19,16 @@ index that names it (`"owner"`, `"name"`) and a workflow that runs
 `kecan0406/ttheme/market@v1` on every push to rebuild the index; `ttheme market
 build` does the same by hand. Added from GitHub, a market is
 `<repository owner>@<name>` and its palettes are `<owner>@<name>/<palette>`;
-the TOML files name them bare (`name = "rei"`). The market is their group in
-every list, below the series, so `meta.group` is not read. A market palette has
-no `order` and no `role`; `meta.base` names the official palette it varies,
-which only says where its ANSI colors came from. Give the repository the
-`ttheme-market` topic and `ttheme market search` and the
-[markets page](https://kecan0406.github.io/ttheme/markets) find it.
+the TOML files name them bare (`name = "rei"`). A folder under `palettes/` is a
+catalog — `palettes/neon/arcade.toml` puts arcade in the neon catalog — so every
+list shows the market, then its catalogs, then their palettes, below the series;
+a file straight under `palettes/` sits in no catalog, after them. The catalog is
+not part of the name (still `<owner>@<name>/arcade`), so a palette name is used
+once in a market, and `meta.group` is not read. A market palette has no `order`
+and no `role`; `meta.base` names the official palette it varies, which only says
+where its ANSI colors came from. Give the repository the `ttheme-market` topic
+and `ttheme market search` and the
+[market page](https://kecan0406.github.io/ttheme/market) find it.
 
 Open a pull request here when a palette belongs in the official catalog: it
 then has to pass the contrast gate and everything below.

@@ -438,13 +438,17 @@ export function rotation(themes: Theme[]): Theme[] {
   return themes.filter((t) => t.role === undefined)
 }
 
-export function alphabetical<T extends { group: string; name: string; base?: string }>(items: T[]): T[] {
+export function alphabetical<T extends { group: string; name: string; base?: string; catalog?: string }>(
+  items: T[],
+): T[] {
   const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
   const root = (t: T) => (marketOf(t.name) ? t.name : (t.base ?? t.name))
   return [...items].sort(
     (a, b) =>
       Number(marketOf(a.name) !== undefined) - Number(marketOf(b.name) !== undefined) ||
       cmp(a.group.toLowerCase(), b.group.toLowerCase()) ||
+      Number(a.catalog === undefined) - Number(b.catalog === undefined) ||
+      cmp((a.catalog ?? '').toLowerCase(), (b.catalog ?? '').toLowerCase()) ||
       cmp(root(a), root(b)) ||
       Number(a.base !== undefined) - Number(b.base !== undefined) ||
       cmp(a.name, b.name),

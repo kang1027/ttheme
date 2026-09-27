@@ -183,6 +183,7 @@ export function runList(query: string | undefined, json = false): void {
     const rows = hits.map((p) => ({
       name: p.name,
       group: p.group,
+      ...(p.catalog ? { catalog: p.catalog } : {}),
       installed: installed.has(p.name),
       source: source(p.name),
     }))
@@ -192,7 +193,8 @@ export function runList(query: string | undefined, json = false): void {
   const pad = Math.max(...hits.map((p) => p.name.length), 0)
   const note: Record<Source, string> = { market: '', mine: '  · yours', kept: '  · in no market you added' }
   for (const p of hits) {
-    console.log(`  ${installed.has(p.name) ? '●' : '○'} ${p.name.padEnd(pad)}  ${p.group}${note[source(p.name)]}`)
+    const group = p.catalog ? `${p.group} / ${p.catalog}` : p.group
+    console.log(`  ${installed.has(p.name) ? '●' : '○'} ${p.name.padEnd(pad)}  ${group}${note[source(p.name)]}`)
   }
   if (process.stdout.isTTY) {
     const shown = query ? `${hits.length} of ${all.length}` : `${all.length}`

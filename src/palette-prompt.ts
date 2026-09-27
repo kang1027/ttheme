@@ -2,24 +2,52 @@ import type { Readable, Writable } from 'node:stream'
 import { Prompt } from '@clack/core'
 import { ansiBar, ansiFg, ansiSquares } from './ansi.ts'
 import { type PaletteEntry, swatch } from './emit/manifest.ts'
+import { marketOf, slugOf } from './theme.ts'
 
 export type PickerRow =
   | { kind: 'palette'; entry: PaletteEntry }
   | { kind: 'group'; name: string; native?: string; lead: PaletteEntry; expanded: boolean; count: number }
+  | { kind: 'catalog'; group: string; name: string; lead: PaletteEntry; expanded: boolean; count: number }
 
 type Row = PickerRow | { kind: 'all'; count: number } | { kind: 'rule' }
 
 export type PickerScope = 'palette' | 'series'
 
+export function catalogKey(group: string, catalog: string): string {
+  return `${group}/${catalog}`
+}
+
+export function shownName(entry: PaletteEntry): string {
+  return marketOf(entry.name) ? slugOf(entry.name) : entry.name
+}
+
+function shelf(entry: PaletteEntry): string | undefined {
+  return entry.catalog !== undefined && isMarket(entry.group) ? catalogKey(entry.group, entry.catalog) : undefined
+}
+
+export function rowKey(row: Row | undefined): string {
+  if (row?.kind === 'palette') {
+    return `palette ${row.entry.name}`
+  }
+  if (row?.kind === 'group') {
+    return `group ${row.name}`
+  }
+  if (row?.kind === 'catalog') {
+    return `catalog ${catalogKey(row.group, row.name)}`
+  }
+  return row?.kind ?? ''
+}
+
 export function matchesPalette(entry: PaletteEntry, search: string): boolean {
   const q = search.toLowerCase()
-  return [entry.name, entry.group, entry.native ?? ''].some((s) => s.toLowerCase().includes(q))
+  return [entry.name, entry.group, entry.native ?? '', entry.catalog ?? ''].some((s) => s.toLowerCase().includes(q))
 }
 
 export function pickerRows(entries: PaletteEntry[], expanded: ReadonlySet<string>, filter: string): PickerRow[] {
   const q = filter.trim()
   const rows: PickerRow[] = []
   const seen = new Set<string>()
+  const palette = (entry: PaletteEntry): PickerRow => ({ kind: 'palette', entry })
   for (const e of entries) {
     if (e.default || seen.has(e.group)) {
       continue
@@ -39,9 +67,26 @@ export function pickerRows(entries: PaletteEntry[], expanded: ReadonlySet<string
       expanded: open,
       count: matching.length,
     })
-    if (open) {
-      rows.push(...matching.map((m) => ({ kind: 'palette' as const, entry: m })))
+    if (!open) {
+      continue
     }
+    const shelved = matching.filter((m) => shelf(m) !== undefined)
+    for (const name of new Set(shelved.map((m) => m.catalog as string))) {
+      const inside = shelved.filter((m) => m.catalog === name)
+      const unfolded = q.length > 0 || expanded.has(catalogKey(e.group, name))
+      rows.push({
+        kind: 'catalog',
+        group: e.group,
+        name,
+        lead: inside[0] as PaletteEntry,
+        expanded: unfolded,
+        count: inside.length,
+      })
+      if (unfolded) {
+        rows.push(...inside.map(palette))
+      }
+    }
+    rows.push(...matching.filter((m) => shelf(m) === undefined).map(palette))
   }
   return rows
 }
@@ -125,7 +170,11 @@ export class PaletteList {
     this.named = entries.filter((e) => !e.default)
     this.series = [...new Set(this.named.map((e) => e.group))]
     this.seriesPad = Math.max(0, ...this.series.map((g) => g.length))
-    this.namePad = Math.max(0, ...this.named.map((e) => e.name.length))
+    this.namePad = Math.max(0, ...this.named.map((e) => this.indent(e).length + shownName(e).length))
+  }
+
+  private indent(entry: PaletteEntry): string {
+    return shelf(entry) === undefined ? '  ' : '    '
   }
 
   setEntries(entries: PaletteEntry[]): void {
@@ -149,9 +198,14 @@ export class PaletteList {
     this.sync()
   }
 
-  private members(group: string): PaletteEntry[] {
+  private members(group: string, catalog?: string): PaletteEntry[] {
     const filter = this.scope === 'palette' ? this.filter.trim() : ''
-    return this.named.filter((e) => e.group === group && (filter === '' || matchesPalette(e, filter)))
+    return this.named.filter(
+      (e) =>
+        e.group === group &&
+        (catalog === undefined || e.catalog === catalog) &&
+        (filter === '' || matchesPalette(e, filter)),
+    )
   }
 
   private everyone(rows: Row[]): PaletteEntry[] {
@@ -165,9 +219,11 @@ export class PaletteList {
         ? [row.entry.name]
         : row?.kind === 'group'
           ? this.members(row.name).map((e) => e.name)
-          : row?.kind === 'all'
-            ? this.everyone(this.rows).map((e) => e.name)
-            : []
+          : row?.kind === 'catalog'
+            ? this.members(row.group, row.name).map((e) => e.name)
+            : row?.kind === 'all'
+              ? this.everyone(this.rows).map((e) => e.name)
+              : []
     if (names.length === 0) {
       return
     }
@@ -181,8 +237,8 @@ export class PaletteList {
     }
   }
 
-  pickedIn(group: string): number {
-    return this.members(group).filter((e) => this.picked.has(e.name)).length
+  pickedIn(group: string, catalog?: string): number {
+    return this.members(group, catalog).filter((e) => this.picked.has(e.name)).length
   }
 
   pickedCount(): number {
@@ -225,14 +281,8 @@ export class PaletteList {
     if (snap === 'first') {
       this.cursor = start
     } else if (snap === 'keep' || snap === 'stay') {
-      const same = (r: Row) =>
-        focused?.kind === 'palette'
-          ? r.kind === 'palette' && r.entry.name === focused.entry.name
-          : snap === 'stay' &&
-            focused !== undefined &&
-            r.kind === focused.kind &&
-            ('name' in r ? r.name : '') === ('name' in focused ? focused.name : '')
-      const kept = focused ? this.rows.findIndex(same) : -1
+      const key = rowKey(focused)
+      const kept = focused?.kind === 'palette' || snap === 'stay' ? this.rows.findIndex((r) => rowKey(r) === key) : -1
       this.cursor = kept === -1 ? start : kept
     } else if (this.cursor >= this.rows.length) {
       this.cursor = Math.max(0, this.rows.length - 1)
@@ -255,13 +305,23 @@ export class PaletteList {
     this.sync()
   }
 
-  private toggle(group: string): void {
-    if (this.expanded.has(group)) {
-      this.expanded.delete(group)
+  private toggle(key: string): void {
+    if (this.expanded.has(key)) {
+      this.expanded.delete(key)
     } else {
-      this.expanded.add(group)
+      this.expanded.add(key)
     }
     this.rebuild('clamp')
+  }
+
+  private climb(key: string, row: string): void {
+    this.expanded.delete(key)
+    this.rebuild('clamp')
+    this.cursor = Math.max(
+      0,
+      this.rows.findIndex((r) => rowKey(r) === row),
+    )
+    this.sync()
   }
 
   fold(open: boolean): void {
@@ -273,15 +333,19 @@ export class PaletteList {
       if (open !== row.expanded) {
         this.toggle(row.name)
       }
-    } else if (row?.kind === 'palette' && !open && !row.entry.default) {
-      const group = row.entry.group
-      this.expanded.delete(group)
-      this.rebuild('clamp')
-      this.cursor = this.rows.findIndex((r) => r.kind === 'group' && r.name === group)
-      if (this.cursor === -1) {
-        this.cursor = 0
+    } else if (row?.kind === 'catalog') {
+      if (open !== row.expanded) {
+        this.toggle(catalogKey(row.group, row.name))
+      } else if (!open) {
+        this.climb(row.group, `group ${row.group}`)
       }
-      this.sync()
+    } else if (row?.kind === 'palette' && !open && !row.entry.default) {
+      const parent = shelf(row.entry)
+      if (parent === undefined) {
+        this.climb(row.entry.group, `group ${row.entry.group}`)
+      } else {
+        this.climb(parent, `catalog ${parent}`)
+      }
     }
   }
 
@@ -305,7 +369,7 @@ export class PaletteList {
       const line = '── Markets ──────────'
       return `   ${this.color ? `${DIM}${line}${RESET}` : line}`
     }
-    const entry = row.kind === 'palette' ? row.entry : row.kind === 'group' ? row.lead : undefined
+    const entry = row.kind === 'palette' ? row.entry : row.kind === 'all' ? undefined : row.lead
     const lit = this.color && focused && entry !== undefined
     const dim = (s: string) => (this.color ? `${DIM}${s}${NORMAL}` : s)
     const bold = (s: string) => (this.color ? `${BOLD}${s}${NORMAL}` : s)
@@ -325,18 +389,28 @@ export class PaletteList {
         `${box} ${bold(row.name.padEnd(this.seriesPad))}${squares(row.lead)}${this.color ? '  ' : ' '}${dim(tail)}`,
       )
     }
+    const at = this.rows[this.cursor]
+    const heldBy = (inside: boolean, label: string) =>
+      this.color && at?.kind === 'palette' && inside
+        ? `${BOLD}${ansiFg(at.entry.cursor)}${label}${NORMAL}\x1b[39m`
+        : bold(label)
     if (row.kind === 'group') {
-      const at = this.rows[this.cursor]
-      const held = at?.kind === 'palette' && at.entry.group === row.name ? at.entry : undefined
-      const name = this.color && held ? `${BOLD}${ansiFg(held.cursor)}${row.name}${NORMAL}\x1b[39m` : bold(row.name)
+      const name = heldBy(at?.kind === 'palette' && at.entry.group === row.name, row.name)
       const native = row.native ? ` ${dim(row.native)}` : ''
       return bar(`${row.expanded ? '▾' : '▸'} ${name} ${dim(`(${this.pickedIn(row.name)}/${row.count})`)}${native}`)
     }
+    if (row.kind === 'catalog') {
+      const inside = at?.kind === 'palette' && shelf(at.entry) === catalogKey(row.group, row.name)
+      const counts = dim(`(${this.pickedIn(row.group, row.name)}/${row.count})`)
+      return bar(`  ${row.expanded ? '▾' : '▸'} ${heldBy(inside, row.name)} ${counts}`)
+    }
     const e = row.entry
     const box = this.picked.has(e.name) ? '●' : '○'
-    const padded = this.color ? e.name.padEnd(this.namePad) : e.name
+    const indent = this.indent(e)
+    const label = shownName(e)
+    const padded = this.color ? label.padEnd(this.namePad - indent.length) : label
     const name = focused ? bold(padded) : padded
-    return bar(`  ${box} ${name}${squares(e)}`)
+    return bar(`${indent}${box} ${name}${squares(e)}`)
   }
 }
 

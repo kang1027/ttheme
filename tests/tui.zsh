@@ -14,8 +14,9 @@ typeset -g FIXTURE=$ROOT/tests/fixture.json
 typeset -g COLS=100 ROWS=24
 
 typeset -gA STATES=(
-  empty ''
-  few   'konata kita'
+  empty  ''
+  few    'konata kita'
+  market 'konata fix@shop/arcade'
 )
 
 typeset -ga SCENARIOS=(
@@ -32,6 +33,9 @@ typeset -ga SCENARIOS=(
   'preview-folded  few    preview'
   'preview-open    few    preview  Down Right'
   'preview-keys    few    preview  ?'
+  'browse-market   market browse   Down Down Down Right Down Right Down'
+  'preview-market  market preview  Down Right Down Right Down'
+  'menu-market     market menu'
 )
 
 fixture_home() {
@@ -40,6 +44,11 @@ fixture_home() {
   env -i PATH=$PATH HOME=$home XDG_CONFIG_HOME=$home ZDOTDIR=$home GHOSTTY_RESOURCES_DIR=x \
     node $ROOT/bin/ttheme.js init --yes < /dev/null > /dev/null
   cp $FIXTURE $home/ttheme/catalog.json
+  if [[ $state == market ]]; then
+    cp -R $ROOT/tests/market $home/shop
+    env -i PATH=$PATH HOME=$home XDG_CONFIG_HOME=$home \
+      node $ROOT/bin/ttheme.js market add $home/shop > /dev/null
+  fi
   local -a palettes=(${=STATES[$state]})
   if (( ${#palettes} )); then
     env -i PATH=$PATH HOME=$home XDG_CONFIG_HOME=$home \

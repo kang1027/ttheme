@@ -114,7 +114,7 @@ function entryProblem(p: PaletteEntry): string | undefined {
   if (![p.background, p.foreground, p.cursor, p.selection, ...p.ansi].every((c) => typeof c === 'string' && isHex(c))) {
     return 'holds a color that is not "#rrggbb"'
   }
-  for (const field of [p.group, p.native ?? '-', p.ansiSource]) {
+  for (const field of [p.group, p.native ?? '-', p.catalog ?? '-', p.ansiSource]) {
     const problem = typeof field === 'string' ? textProblem(field) : 'has a field that is not text'
     if (problem) {
       return problem

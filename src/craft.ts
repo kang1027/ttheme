@@ -15,8 +15,8 @@ import {
   fromCode,
   gateLines,
   localMarkets,
+  marketFiles,
   ownPath,
-  palettesDir,
   paletteToml,
   readOwnText,
   recolor,
@@ -35,7 +35,7 @@ function mine(name: string, home: string): string {
     return name
   }
   const locals = localMarkets(home, false)
-  const holding = locals.filter((m) => existsSync(join(palettesDir(m.dir), `${name}.toml`)))
+  const holding = locals.filter((m) => marketFiles(m.dir).some((f) => f.slug === name))
   const [hit] = holding.length === 1 ? holding : locals.length === 1 ? locals : []
   return hit ? `${hit.id}/${name}` : name
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { catalogsOf } from '@/lib/catalogs'
 import type { Market } from '@/lib/markets'
 import { gatePassed } from '@/lib/sheet'
 import type { GateRule } from '@/lib/themes'
@@ -63,7 +64,12 @@ export function MarketStore({ markets, gate }: { markets: Market[]; gate: GateRu
         </Stat>
       </dl>
       <MarketGallery
-        sections={[{ key: market.id, title: 'palettes', themes: market.palettes }]}
+        sections={catalogsOf(market.palettes).map(({ catalog, themes }) => ({
+          key: `${market.id}:${catalog ?? ''}`,
+          title: 'palettes',
+          ...(catalog ? { subtitle: catalog } : {}),
+          themes,
+        }))}
         markets={[market]}
         gate={gate}
         sources={false}

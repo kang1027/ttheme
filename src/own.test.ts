@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { type Draft, fromCode, paletteToml, readOwnText, recolor, shareCode } from './own.ts'
+import { type Draft, fromCode, paletteToml, readMarketDir, readOwnText, recolor, shareCode } from './own.ts'
 
 const draft: Draft = {
   name: 'kecan0406@dust/rei',
@@ -72,4 +75,27 @@ test('recolor rewrites the foreground, selection and ANSI list and nothing else'
   assert.equal(theme.ansi[1], '#ff0000')
   assert.equal(theme.background, draft.background)
   assert.equal(out.split('\n').length, source.split('\n').length)
+})
+
+test('a market takes its catalogs from folders, keeps loose palettes after them, and skips a name used twice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ttheme-shop-'))
+  const { waive: _, reason: __, pictures: ___, base: ____, ...plain } = draft
+  const put = (path: string, name: string) => {
+    mkdirSync(join(dir, 'palettes', path, '..'), { recursive: true })
+    writeFileSync(join(dir, 'palettes', path), paletteToml({ ...plain, name }))
+  }
+  put('neon/arcade.toml', 'arcade')
+  put('pastel/arcade.toml', 'arcade')
+  put('pastel/sakura.toml', 'sakura')
+  put('dusk.toml', 'dusk')
+  const entries = readMarketDir(dir, 'kec@shop', [], false)
+  assert.deepEqual(
+    entries.map((e) => [e.name, e.catalog]),
+    [
+      ['kec@shop/arcade', 'neon'],
+      ['kec@shop/sakura', 'pastel'],
+      ['kec@shop/dusk', undefined],
+    ],
+  )
+  assert.ok(entries.every((e) => e.group === 'kec@shop'))
 })

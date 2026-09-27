@@ -714,6 +714,16 @@ export class BrowsePanel extends Prompt<string> {
         brief: `${source} · ${counts}`,
       }
     }
+    if (row.kind === 'catalog') {
+      const members = this.entries().filter((e) => e.group === row.group && e.catalog === row.name)
+      const source = this.sourceOf(row.lead)
+      const counts = `${counted(members.length)} · ${members.filter((e) => this.installed.has(e.name)).length} installed`
+      return {
+        title: this.bold(row.name),
+        lines: [row.group, ...wrapText(source, width), counts],
+        brief: `${row.group} · ${counts}`,
+      }
+    }
     const e = row.entry
     const source = this.sourceOf(e)
     const fails = gateFailures(e)
@@ -723,7 +733,11 @@ export class BrowsePanel extends Prompt<string> {
       ...(pictures > 0 ? [`${pictures} picture${pictures === 1 ? '' : 's'}`] : []),
       ...(e.base ? [`Base ${e.base}`] : []),
     ].join(' · ')
-    const series = marketOf(e.name) ? [] : [e.group, ...(e.native ? [this.dim(e.native)] : [])]
+    const series = marketOf(e.name)
+      ? e.catalog
+        ? [e.catalog]
+        : []
+      : [e.group, ...(e.native ? [this.dim(e.native)] : [])]
     return {
       title: this.color ? `${BOLD}${ansiFg(e.cursor)}${e.name}${NORMAL}\x1b[39m` : e.name,
       lines: [

@@ -4,7 +4,7 @@ zmodload -F zsh/stat b:zstat 2>/dev/null
 
 __tt_palettes_load() {
   local -a at
-  unset TTHEME_PALETTE TTHEME_GROUP TTHEME_NATIVE TTHEME_SRC
+  unset TTHEME_PALETTE TTHEME_GROUP TTHEME_CATALOG TTHEME_NATIVE TTHEME_SRC
   source $TTHEME_HOME/palettes.zsh || return 1
   zstat -F %s.%N -A at +mtime -- $TTHEME_HOME/palettes.zsh 2>/dev/null
   TTHEME_PALETTES_AT=$at[1]
@@ -231,7 +231,7 @@ __tt_name_of() { REPLY=${${(k)TTHEME_PALETTE[(re)$1]}:-custom} }
 __tt_color() { [[ -t 1 && -z $NO_COLOR && $TERM != dumb ]] }
 
 __tt_palette_line() {
-  local name=$1 width=$2 on=$3 hex cell="" bar=""
+  local name=$1 width=$2 on=$3 label=${4:-$1} hex cell="" bar=""
   local -a p=(${=TTHEME_PALETTE[$name]}) sw=(${=TTHEME_SWATCH[$name]})
   (( ${#p} >= 20 )) || return 1
   for hex in $sw; do
@@ -243,9 +243,9 @@ __tt_palette_line() {
     printf -v ac '\e[38;2;%d;%d;%dm' $((16#${cur:0:2})) $((16#${cur:2:2})) $((16#${cur:4:2}))
     printf -v bar '\e[48;2;%d;%d;%d;38;2;%d;%d;%dm' \
       $((16#${sel:0:2})) $((16#${sel:2:2})) $((16#${sel:4:2})) $((16#${fg:0:2})) $((16#${fg:2:2})) $((16#${fg:4:2}))
-    printf '%s▌\e[39m %s %s■\e[39m \e[1m%-*s\e[22m  %s\e[0m\n' "$ac" "$bar" "$ac" "$width" "$name" "$cell"
+    printf '%s▌\e[39m %s %s■\e[39m \e[1m%-*s\e[22m  %s\e[0m\n' "$ac" "$bar" "$ac" "$width" "$label" "$cell"
   else
-    printf '     %-*s  %s\e[0m\n' "$width" "$name" "$cell"
+    printf '     %-*s  %s\e[0m\n' "$width" "$label" "$cell"
   fi
 }
 
@@ -457,7 +457,7 @@ __tt_order() {
 }
 
 __tt_menu() {
-  local k cur="" grp last_grp="" REPLY
+  local k cur="" grp last_grp="" shelf last_shelf="" label REPLY
   local -a reply
   local -i width=0
   __tt_order
@@ -469,7 +469,9 @@ __tt_menu() {
   fi
   [[ -n $TTHEME_SPEC ]] && __tt_name_of "$TTHEME_SPEC" && cur=$REPLY
   for k in $reply; do
-    (( ${#k} > width )) && width=${#k}
+    label=${k##*/}
+    [[ -n ${TTHEME_CATALOG[$k]} && ${TTHEME_GROUP[$k]} == *@* ]] && label="  $label"
+    (( ${#label} > width )) && width=${#label}
   done
   for k in $reply; do
     grp=${TTHEME_GROUP[$k]:-Other}
@@ -478,9 +480,17 @@ __tt_menu() {
       printf '  \033[1m%s\033[0m' "$grp"
       [[ -n ${TTHEME_NATIVE[$k]} ]] && printf ' \033[2m%s\033[0m' "${TTHEME_NATIVE[$k]}"
       printf '\n'
-      last_grp=$grp
+      last_grp=$grp last_shelf=""
     fi
-    __tt_palette_line "$k" $width ${${(M)k:#$cur}:+1}
+    shelf=""
+    [[ $grp == *@* ]] && shelf=${TTHEME_CATALOG[$k]}
+    if [[ -n $shelf && $shelf != "$last_shelf" ]]; then
+      printf '    \033[1m%s\033[0m\n' "$shelf"
+      last_shelf=$shelf
+    fi
+    label=${k##*/}
+    [[ -n $shelf ]] && label="  $label"
+    __tt_palette_line "$k" $width "${${(M)k:#$cur}:+1}" "$label"
   done
   printf '\n  \033[2mttheme use <palette> paints this tab · ttheme preview · ttheme help\033[0m\n'
 }
@@ -671,14 +681,14 @@ __tt_rotate() {
 
 __tt_pv_rows() {
   rtype=() rval=() rcnt=()
-  local g t gm ruled=""
-  local -a ts
+  local g t c gm ruled=""
+  local -a ts cs loose inside
   for g in $groups; do
     ts=()
     gm=""
     [[ -n $flt && ${(L)g} == *$flt* ]] && gm=1
     for t in ${=gthemes[$g]}; do
-      [[ -z $flt || -n $gm || $t == *$flt* ]] && ts+=($t)
+      [[ -z $flt || -n $gm || $t == *$flt* || ${(L)TTHEME_CATALOG[$t]} == *$flt* ]] && ts+=($t)
     done
     [[ -n $flt ]] && (( ! ${#ts} )) && continue
     if [[ $g == *@* && -z $ruled ]]; then
@@ -686,10 +696,36 @@ __tt_pv_rows() {
       (( ${#rtype} )) && { rtype+=(rule); rval+=(''); rcnt+=(0) }
     fi
     rtype+=(hdr); rval+=($g); rcnt+=(${#ts})
-    if [[ -n $flt || -n ${exp[$g]} ]]; then
-      for t in $ts; do rtype+=(thm); rval+=($t); rcnt+=(0); done
-    fi
+    [[ -n $flt || -n ${exp[$g]} ]] || continue
+    cs=() loose=()
+    for t in $ts; do
+      c=${TTHEME_CATALOG[$t]}
+      if [[ -n $c && $g == *@* ]]; then
+        (( ${cs[(Ie)$c]} )) || cs+=($c)
+      else
+        loose+=($t)
+      fi
+    done
+    for c in $cs; do
+      inside=()
+      for t in $ts; do
+        [[ ${TTHEME_CATALOG[$t]} == "$c" ]] && inside+=($t)
+      done
+      rtype+=(cat); rval+=("$g/$c"); rcnt+=(${#inside})
+      if [[ -n $flt || -n ${exp[$g/$c]} ]]; then
+        for t in $inside; do rtype+=(thm); rval+=($t); rcnt+=(0); done
+      fi
+    done
+    for t in $loose; do rtype+=(thm); rval+=($t); rcnt+=(0); done
   done
+}
+
+__tt_pv_at() {
+  local i
+  for (( i = 1; i <= ${#rval}; i++ )); do
+    [[ ${rtype[i]} == (hdr|cat) && ${rval[i]} == "$1" ]] && { cur=$i; return 0 }
+  done
+  return 0
 }
 
 __tt_pv_first() {
@@ -707,8 +743,9 @@ __tt_pv_first() {
 }
 
 __tt_pv_goto() {
-  local name=$1 i
-  exp[${TTHEME_GROUP[$name]:-Other}]=1
+  local name=$1 i g=${TTHEME_GROUP[$1]:-Other} c=${TTHEME_CATALOG[$1]}
+  exp[$g]=1
+  [[ -n $c && $g == *@* ]] && exp[$g/$c]=1
   __tt_pv_rows
   for (( i = 1; i <= ${#rval}; i++ )); do
     [[ ${rtype[i]} == thm && ${rval[i]} == $name ]] && { cur=$i; return 0 }
@@ -738,16 +775,19 @@ __tt_pv_toggle() {
 
 __tt_pv_left() {
   [[ -n $flt ]] && return 0
-  if [[ ${rtype[cur]} == hdr ]]; then
-    [[ -n ${exp[${rval[cur]}]} ]] && __tt_pv_toggle
+  if [[ ${rtype[cur]} == (hdr|cat) ]]; then
+    if [[ -n ${exp[${rval[cur]}]} ]]; then
+      __tt_pv_toggle
+    elif [[ ${rtype[cur]} == cat ]]; then
+      __tt_pv_at ${rval[cur]%%/*}
+    fi
     return 0
   fi
-  local g=${TTHEME_GROUP[${rval[cur]}]:-Other} i
-  for (( i = cur; i >= 1; i-- )); do
-    [[ ${rtype[i]} == hdr ]] && { cur=$i; break }
-  done
+  local g=${TTHEME_GROUP[${rval[cur]}]:-Other} c=${TTHEME_CATALOG[${rval[cur]}]}
+  [[ -n $c && $g == *@* ]] && g=$g/$c
   exp[$g]=""
   __tt_pv_rows
+  __tt_pv_at $g
 }
 
 typeset -gA TTHEME_GLYPHS=(
@@ -815,7 +855,7 @@ __tt_pv_hl() {
 }
 
 __tt_pv_row() {
-  local t=${rval[$1]} b=$'\e[1m' d=$'\e[2m' r=$'\e[22;24;39m' z=$'\e[0m' on="" gut="  " base="" lead=$'\e[2m' mark=" " name arrow=▸
+  local t=${rval[$1]} b=$'\e[1m' d=$'\e[2m' r=$'\e[22;24;39m' z=$'\e[0m' on="" gut="  " base="" lead=$'\e[2m' mark=" " name arrow=▸ ind="   "
   local -i w
   (( color )) || b= d= r= z= lead=
   if (( $1 == cur )); then
@@ -843,19 +883,37 @@ __tt_pv_row() {
     REPLY=$gut$on" "$lead$arrow$r" "$base$REPLY$r${(l:w:: :)}$d${rcnt[$1]}$r" "$z
     return 0
   fi
+  if [[ ${rtype[$1]} == cat ]]; then
+    [[ -n $flt || -n ${exp[$t]} ]] && arrow=▾
+    name=${t#*/}
+    (( ${(m)#name} > lw - 12 )) && name="${name[1,lw-13]}…"
+    base=$b
+    if (( color )) && [[ $t == "$acat" ]]; then
+      base+=$ac lead=$ac
+    elif (( $1 == cur )); then
+      lead=""
+    fi
+    __tt_pv_hl "$name" "$base"
+    w=$(( lw - 8 - ${(m)#name} - ${#rcnt[$1]} ))
+    (( w < 1 )) && w=1
+    REPLY=$gut$on"   "$lead$arrow$r" "$base$REPLY$r${(l:w:: :)}$d${rcnt[$1]}$r" "$z
+    return 0
+  fi
   if (( $1 == cur )); then
     mark=$ac"■"$r base=$b
   elif [[ -n $cdot && $t == "$cn" ]]; then
     mark=$cdot
   fi
-  __tt_pv_hl "$t" "$base"
+  name=${t##*/}
+  [[ -n ${TTHEME_CATALOG[$t]} && ${TTHEME_GROUP[$t]} == *@* ]] && ind="     "
+  __tt_pv_hl "$name" "$base"
   if (( color )); then
     [[ -n ${tstrip[$t]} ]] || __tt_pv_strip $t
-    w=$(( lw - 19 - ${#t} ))
+    w=$(( lw - 16 - ${#ind} - ${#name} ))
     (( w < 1 )) && w=1
-    REPLY=$gut$on"   $mark $base$REPLY$r${(l:w:: :)}${tstrip[$t]} "$z
+    REPLY=$gut$on"$ind$mark $base$REPLY$r${(l:w:: :)}${tstrip[$t]} "$z
   else
-    REPLY="$gut   $mark $REPLY"
+    REPLY="$gut$ind$mark $REPLY"
   fi
 }
 
@@ -919,7 +977,7 @@ __tt_pv_foot() {
     [[ -n $flt ]] && badge=FILTER
     if (( ! ${#rval} )); then
       kk=(bksp) kl=(edit)
-    elif [[ ${rtype[cur]} == hdr ]]; then
+    elif [[ ${rtype[cur]} == (hdr|cat) ]]; then
       if [[ -z $flt && -n ${exp[${rval[cur]}]} ]]; then
         kk=(←) kl=(close)
       elif [[ -z $flt ]]; then
@@ -1270,7 +1328,7 @@ __tt_pv_flush() {
 }
 
 __tt_pv_draw() {
-  local out line cnt ex ag="" ac="" sb="" dd="" zz="" state=on src="" REPLY
+  local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" REPLY
   local -i lw sw split sc se=$(( pw - 2 )) h k i N=${#rval} mt=${#TTHEME_ORDER} wiped=0
   __tt_pv_lw
   lw=$reply[1] sw=$reply[2]
@@ -1291,7 +1349,10 @@ __tt_pv_draw() {
       printf -v ac '\e[38;2;%d;%d;%dm' $((16#${acx:0:2})) $((16#${acx:2:2})) $((16#${acx:4:2}))
       printf -v sb '\e[48;2;%d;%d;%dm' $((16#${sbx:0:2})) $((16#${sbx:2:2})) $((16#${sbx:4:2}))
     fi
-    [[ ${rtype[cur]} == thm ]] && ag=${TTHEME_GROUP[${rval[cur]}]:-Other}
+    if [[ ${rtype[cur]} == thm ]]; then
+      ag=${TTHEME_GROUP[${rval[cur]}]:-Other}
+      [[ -n ${TTHEME_CATALOG[${rval[cur]}]} ]] && acat=$ag/${TTHEME_CATALOG[${rval[cur]}]}
+    fi
   fi
   if [[ -n $flt ]]; then
     local -a mm=(${(M)rtype:#thm})
@@ -1597,13 +1658,13 @@ __tt_pv_handle() {
           sel=${rval[cur]}
           return 1
         fi
-      elif [[ ${rtype[cur]} == hdr ]]; then
+      elif [[ ${rtype[cur]} == (hdr|cat) ]]; then
         __tt_pv_toggle
       fi
       ;;
     up) (( cur > 1 )) && cur=$(( cur - 1 )); [[ ${rtype[cur]} == rule ]] && cur=$(( cur - 1 )) ;;
     down) (( cur < ${#rval} )) && cur=$(( cur + 1 )); [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 )) ;;
-    right) [[ ${rtype[cur]} == hdr && -z ${exp[${rval[cur]}]} ]] && __tt_pv_toggle ;;
+    right) [[ ${rtype[cur]} == (hdr|cat) && -z ${exp[${rval[cur]}]} ]] && __tt_pv_toggle ;;
     left) __tt_pv_left ;;
     home) cur=1 ;;
     end) (( ${#rval} )) && cur=${#rval} ;;
@@ -1618,7 +1679,7 @@ __tt_pv_handle() {
       (( cur < 1 )) && cur=1
       [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 ))
       ;;
-    ' ') [[ ${rtype[cur]} == hdr ]] && __tt_pv_toggle ;;
+    ' ') [[ ${rtype[cur]} == (hdr|cat) ]] && __tt_pv_toggle ;;
     $'\t')
       [[ ${rtype[cur]} == thm ]] || return 0
       name=${rval[cur]}

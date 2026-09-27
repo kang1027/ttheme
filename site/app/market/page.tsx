@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { CommandRow } from '@/components/command-row'
 import { MarketGallery, type Section } from '@/components/market-gallery'
 import { SiteHeader } from '@/components/site-header'
+import { catalogsOf } from '@/lib/catalogs'
 import { loadMarkets } from '@/lib/markets'
 import { seriesOf } from '@/lib/sheet'
 import { loadManifest } from '@/lib/themes'
@@ -17,12 +18,15 @@ export default async function MarketPage() {
   const series = seriesOf(themes)
   const sections: Section[] = [
     ...series.map((entry) => ({ key: `series:${entry.name}`, title: entry.name, themes: entry.themes })),
-    ...markets.map((market) => ({
-      key: `market:${market.id}`,
-      title: market.id,
-      href: `/market/store?m=${encodeURIComponent(market.id)}`,
-      themes: market.palettes,
-    })),
+    ...markets.flatMap((market) =>
+      catalogsOf(market.palettes).map(({ catalog, themes }) => ({
+        key: `market:${market.id}:${catalog ?? ''}`,
+        title: market.id,
+        ...(catalog ? { subtitle: catalog } : {}),
+        href: `/market/store?m=${encodeURIComponent(market.id)}`,
+        themes,
+      })),
+    ),
   ]
 
   return (

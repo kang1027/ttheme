@@ -50,7 +50,7 @@ test('matchesPalette filters by name, group and native title', () => {
 test('folded rows show group headers only, without the default palette', () => {
   const rows = pickerRows(entries, new Set(), '')
   assert.deepEqual(
-    rows.map((r) => (r.kind === 'group' ? `▸${r.name}` : r.entry.name)),
+    rows.map((r) => (r.kind === 'group' ? `▸${r.name}` : r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name}`)),
     ['▸Vocaloid', '▸Madoka Magica'],
   )
   assert.deepEqual(
@@ -63,7 +63,13 @@ test('folded rows show group headers only, without the default palette', () => {
 test('expanding a group inserts its palettes under the header', () => {
   const rows = pickerRows(entries, new Set(['Vocaloid']), '')
   assert.deepEqual(
-    rows.map((r) => (r.kind === 'group' ? `${r.expanded ? '▾' : '▸'}${r.name}` : r.entry.name)),
+    rows.map((r) =>
+      r.kind === 'group'
+        ? `${r.expanded ? '▾' : '▸'}${r.name}`
+        : r.kind === 'palette'
+          ? r.entry.name
+          : `${r.kind} ${r.name}`,
+    ),
     ['▾Vocaloid', 'miku', 'rin', '▸Madoka Magica'],
   )
 })
@@ -71,7 +77,7 @@ test('expanding a group inserts its palettes under the header', () => {
 test('a filter overrides folds and hides non-matching groups', () => {
   const rows = pickerRows(entries, new Set(), 'mado')
   assert.deepEqual(
-    rows.map((r) => (r.kind === 'group' ? `▾${r.name}` : r.entry.name)),
+    rows.map((r) => (r.kind === 'group' ? `▾${r.name}` : r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name}`)),
     ['▾Madoka Magica', 'madoka', 'homura'],
   )
   assert.equal(firstPalette(rows), 1)
@@ -80,7 +86,9 @@ test('a filter overrides folds and hides non-matching groups', () => {
 test('a name filter narrows inside the matching group', () => {
   const rows = pickerRows(entries, new Set(), 'ho')
   assert.deepEqual(
-    rows.map((r) => (r.kind === 'group' ? `${r.name} (${r.count})` : r.entry.name)),
+    rows.map((r) =>
+      r.kind === 'group' ? `${r.name} (${r.count})` : r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name}`,
+    ),
     ['Madoka Magica (1)', 'homura'],
   )
 })
@@ -91,7 +99,9 @@ test('the default palette is never offered, even by filter', () => {
 
 test('series rows are folded headers matched through any member', () => {
   assert.deepEqual(
-    seriesRows(entries, 'ho').map((r) => (r.kind === 'group' ? `${r.name} (${r.count})` : r.entry.name)),
+    seriesRows(entries, 'ho').map((r) =>
+      r.kind === 'group' ? `${r.name} (${r.count})` : r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name}`,
+    ),
     ['Madoka Magica (2)'],
   )
   assert.deepEqual(
@@ -242,4 +252,51 @@ test('a required picker refuses to continue with nothing picked', async () => {
   const { picked, frames } = await drive(['\r', ' ', '\r'], { scope: 'series', required: true })
   assert.match(frames, /Pick at least one series/)
   assert.deepEqual(picked.sort(), ['miku', 'rin'])
+})
+
+const shop: PaletteEntry[] = [
+  entry({ name: 'kec@shop/arcade', group: 'kec@shop', catalog: 'neon' }),
+  entry({ name: 'kec@shop/volt', group: 'kec@shop', catalog: 'neon' }),
+  entry({ name: 'kec@shop/sakura', group: 'kec@shop', catalog: 'pastel' }),
+  entry({ name: 'kec@shop/dusk', group: 'kec@shop' }),
+]
+
+test('a market lists its catalogs, then the palettes outside every catalog', () => {
+  const rows = pickerRows(shop, new Set(['kec@shop', 'kec@shop/neon']), '')
+  assert.deepEqual(
+    rows.map((r) => (r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name} (${r.count})`)),
+    [
+      'group kec@shop (4)',
+      'catalog neon (2)',
+      'kec@shop/arcade',
+      'kec@shop/volt',
+      'catalog pastel (1)',
+      'kec@shop/dusk',
+    ],
+  )
+  assert.deepEqual(
+    pickerRows(shop, new Set(), 'pastel').map((r) => (r.kind === 'palette' ? r.entry.name : `${r.kind} ${r.name}`)),
+    ['group kec@shop', 'catalog pastel', 'kec@shop/sakura'],
+  )
+})
+
+test('space on a catalog picks its palettes, left folds a palette back into its catalog, and rows show the bare name', async () => {
+  const input = new PassThrough()
+  const output = new PassThrough()
+  let frames = ''
+  output.on('data', (chunk: Buffer) => {
+    frames += chunk.toString()
+  })
+  const prompt = new PalettePrompt({ entries: [...entries, ...shop], color: false, input, output })
+  const pending = prompt.prompt()
+  for (const key of ['\x1b[B', '\x1b[B', '\x1b[C', '\x1b[B', ' ', '\x1b[C', '\x1b[B', '\x1b[D', '\r']) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    input.write(key)
+  }
+  await pending
+  assert.deepEqual([...prompt.picked].sort(), ['kec@shop/arcade', 'kec@shop/volt'])
+  assert.match(frames, /▾ kec@shop \(2\/4\)/)
+  assert.match(frames, / {4}● arcade/)
+  assert.doesNotMatch(frames, /● kec@shop\/arcade/)
+  assert.ok(frames.lastIndexOf('▌    ▸ neon (2/2)') > frames.lastIndexOf('● volt'))
 })
