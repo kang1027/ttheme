@@ -37,10 +37,15 @@ import {
   fetchSuggestions,
   fileOf,
   headOf,
+  hidden,
+  KINDS,
+  kindSet,
   LENDER,
   lend,
   locate,
   mates,
+  type Narrow,
+  narrowOf,
   originHost,
   PAGE,
   type Post,
@@ -53,8 +58,11 @@ import {
   rated,
   ratingSet,
   rendition,
+  SCORES,
   SITES,
+  SIZES,
   type Site,
+  siteSet,
   sweepCache,
   tagsOf,
 } from './booru.ts'
@@ -69,6 +77,7 @@ import {
   gridShape,
   MIN,
   type Order,
+  pageOf,
   place,
   release,
   renderFind,
@@ -91,6 +100,17 @@ const SETTINGS: Setting[] = [
   { name: 'TTHEME_FIND_ORDER', label: 'order', choices: ['fit', 'newest', 'score'] },
   { name: 'TTHEME_FIND_SETS', label: 'sets', choices: ['fold', 'show'] },
   ...(canRemoveBackground() ? [{ name: 'TTHEME_FIND_REMOVE_BG', label: 'remove bg', choices: ['on', 'off'] }] : []),
+  { name: 'TTHEME_FIND_MIN_SCORE', label: 'min score', choices: SCORES, advanced: true },
+  { name: 'TTHEME_FIND_MIN_SIZE', label: 'min size', choices: SIZES, advanced: true },
+  {
+    name: 'TTHEME_FIND_SITES',
+    label: 'sites',
+    choices: SITES.map((site) => site.name),
+    multi: { read: siteSet },
+    advanced: true,
+  },
+  { name: 'TTHEME_FIND_HIDE', label: 'hide', choices: KINDS, multi: { read: kindSet, none: 'none' }, advanced: true },
+  { name: 'TTHEME_FIND_PNG', label: 'png only', choices: ['off', 'on'], advanced: true },
 ]
 
 function initial(setting: Setting, raw: string | undefined): string {
@@ -322,11 +342,16 @@ class Finder {
       rating: ratingSet(this.setting('TTHEME_FIND_RATING')),
       block: blockSet(this.setting('TTHEME_FIND_BLOCK')),
       sets: this.setting('TTHEME_FIND_SETS') === 'show' ? 'show' : 'fold',
+      narrow: this.narrowed(),
+      enabled: siteSet(this.setting('TTHEME_FIND_SITES')),
+      hide: kindSet(this.setting('TTHEME_FIND_HIDE')),
+      advanced: false,
       settings: SETTINGS.map((setting) => ({
         label: setting.label,
         choices: [...setting.choices],
         value: this.setting(setting.name),
         multi: setting.multi && { none: setting.multi.none },
+        advanced: setting.advanced,
         cursor: 0,
       })),
       colors: { cursor: entry.cursor, selection: entry.selection, ansi: entry.ansi },
@@ -354,7 +379,7 @@ class Finder {
   }
 
   private get sites(): Site[] {
-    return this.site ? [this.site] : SITES
+    return this.site ? [this.site] : SITES.filter((site) => this.view.enabled.includes(site.name))
   }
 
   private get tabName(): string {
@@ -376,6 +401,14 @@ class Finder {
 
   private setting(name: string): string {
     return this.values.get(name) as string
+  }
+
+  private narrowed(): Narrow {
+    return narrowOf(
+      this.setting('TTHEME_FIND_MIN_SCORE'),
+      this.setting('TTHEME_FIND_MIN_SIZE'),
+      this.setting('TTHEME_FIND_PNG'),
+    )
   }
 
   private get boardKey(): string {
@@ -929,6 +962,7 @@ class Finder {
     }
     if (key === 's') {
       view.panel = 0
+      view.advanced = false
       this.draw()
       return
     }
@@ -941,8 +975,16 @@ class Finder {
     const view = this.view
     const at = view.panel ?? 0
     const row = view.settings[at]
+    const page = pageOf(view)
     if (key === 'up' || key === 'down') {
-      view.panel = Math.max(0, Math.min(view.settings.length - 1, at + (key === 'up' ? -1 : 1)))
+      const k = page.indexOf(at) + (key === 'up' ? -1 : 1)
+      view.panel = page[Math.max(0, Math.min(page.length - 1, k))] ?? at
+      this.draw()
+      return
+    }
+    if (key === 'a') {
+      view.advanced = !view.advanced
+      view.panel = pageOf(view)[0] ?? 0
       this.draw()
       return
     }
@@ -972,11 +1014,13 @@ class Finder {
         setting.value = this.setting(SETTINGS[i]?.name ?? '')
       })
       view.panel = undefined
+      view.advanced = false
       this.draw()
       return
     }
     if (key === 'enter' || key === 'alt-c') {
       view.panel = undefined
+      view.advanced = false
       this.adopt()
     }
   }
@@ -1002,6 +1046,9 @@ class Finder {
     view.preset = this.setting('TTHEME_FIND_POSTS') === 'all' ? 'all' : 'cutouts'
     view.order = orderOf(this.setting('TTHEME_FIND_ORDER'))
     view.solo = this.setting('TTHEME_FIND_SOLO') === 'on'
+    view.narrow = this.narrowed()
+    view.enabled = siteSet(this.setting('TTHEME_FIND_SITES'))
+    view.hide = kindSet(this.setting('TTHEME_FIND_HIDE'))
     this.boards.clear()
     this.current = undefined
     view.shown = undefined
@@ -1302,6 +1349,7 @@ class Finder {
     const wanted = [
       either ? names.map((name) => `~${name}`).join(' ') : (names[0] as string),
       site.rate(this.view.rating),
+      ...site.narrow(view.narrow),
       clash ? '' : cutouts,
       view.order === 'score' ? site.best : '',
     ].filter(Boolean)
@@ -1319,6 +1367,10 @@ class Finder {
       notes: [
         ...(dropped.length > 0 ? [`${site.name} takes ${site.tagBudget} tags — ${dropped.join(' ')} left out`] : []),
         ...(clash ? [`${site.name} ORs the names, so cutouts are told by the file`] : []),
+        ...(view.narrow.score > 0 && !site.scored ? [`${site.name} keeps no score`] : []),
+        ...(view.narrow.png && site.guesses
+          ? [`${site.name} names a file type only where danbooru holds the file`]
+          : []),
       ],
     }
   }
@@ -1680,6 +1732,15 @@ class Finder {
       return false
     }
     if (this.view.solo && post.solo === false) {
+      return false
+    }
+    const { score, size, png } = this.view.narrow
+    if (
+      Math.min(post.width, post.height) < size ||
+      (site.scored && post.score < score) ||
+      (png && post.ext !== 'png') ||
+      hidden(post, this.view.hide).length > 0
+    ) {
       return false
     }
     return this.view.preset === 'all'

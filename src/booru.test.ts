@@ -9,10 +9,13 @@ import {
   cutoutMap,
   exposed,
   fetchPosts,
+  hidden,
   hostMap,
+  kindSet,
   lend,
   lentUrl,
   mates,
+  narrowOf,
   originHost,
   parseCount,
   parseCounts,
@@ -31,6 +34,7 @@ import {
   retryAfter,
   SITES,
   type Site,
+  siteSet,
   sweepCache,
   tagsOf,
 } from './booru.ts'
@@ -90,6 +94,36 @@ test('the rating a site asks for in the query follows the ticked set, where the 
 test('a rating does not count against a tag budget, since danbooru lets it through free', () => {
   assert.equal(tagsOf('amane_suzuha transparent_background rating:s,q,e'), 2)
   assert.equal(tagsOf('amane_suzuha order:score'), 2)
+})
+
+test('the advanced filters ask each site in its own terms, and danbooru takes them free of its tag budget', () => {
+  const all = { score: 10, size: 1080, png: true }
+  assert.deepEqual(dan.narrow(all), ['score:>=10', 'width:>=1080', 'height:>=1080', 'filetype:png'])
+  assert.deepEqual(yande.narrow(all), ['score:>=10', 'width:>=1080', 'height:>=1080'], 'moebooru tells png by the file')
+  assert.deepEqual(zero.narrow(all), ['dimension:large'], 'zerochan keeps no score and names no file type')
+  assert.deepEqual(zero.narrow({ score: 0, size: 1800, png: false }), ['dimension:huge'])
+  assert.deepEqual(dan.narrow({ score: 0, size: 0, png: false }), [])
+  assert.equal(tagsOf(`amane_suzuha transparent_background ${dan.narrow(all).join(' ')} rating:g`), 2)
+  assert.equal(tagsOf('amane_suzuha transparent_background order:score'), 3, 'an order still counts')
+  const url = new URL(zero.postsUrl('gotou_hitori dimension:huge', 0))
+  assert.deepEqual([url.pathname, url.searchParams.get('d')], ['/gotou+hitori', 'huge'])
+})
+
+test('hidden kinds are told by tag, in every site spelling, and none hides nothing', () => {
+  const post = { tags: ['makise_kurisu', 'comic', 'line_art', 'solo'] }
+  assert.deepEqual(hidden(post, ['comic', 'sketch']), ['comic', 'line_art'])
+  assert.deepEqual(hidden(post, ['chibi']), [])
+  assert.deepEqual(hidden(post, []), [])
+})
+
+test('the advanced settings read back with their defaults: every site, nothing hidden, no filter', () => {
+  assert.deepEqual(siteSet(undefined), ['danbooru', 'konachan', 'yande.re', 'zerochan'])
+  assert.deepEqual(siteSet('zerochan bogus'), ['zerochan'])
+  assert.deepEqual(kindSet(undefined), [])
+  assert.deepEqual(kindSet('none'), [])
+  assert.deepEqual(kindSet('chibi comic'), ['comic', 'chibi'])
+  assert.deepEqual(narrowOf('off', 'off', 'off'), { score: 0, size: 0, png: false })
+  assert.deepEqual(narrowOf('50', '1800', 'on'), { score: 50, size: 1800, png: true })
 })
 
 test('the settings read back as ticked sets, falling to the safe default when nothing valid is named', () => {

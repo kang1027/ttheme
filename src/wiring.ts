@@ -146,6 +146,26 @@ const CONFIG_SETTINGS = {
     doc: '# an opaque picture tried on in find: on cuts the character out with macOS Vision, off leaves it as it is (default on)',
     default: 'on',
   },
+  TTHEME_FIND_MIN_SCORE: {
+    doc: '# the lowest score find lists: off, 10 or 50 — danbooru, konachan and yande.re filter by it, zerochan keeps no score (default off)',
+    default: 'off',
+  },
+  TTHEME_FIND_MIN_SIZE: {
+    doc: '# the shortest side a picture find lists must reach, in pixels: off, 1080 or 1800 (default off)',
+    default: 'off',
+  },
+  TTHEME_FIND_SITES: {
+    doc: '# the sites find mixes in its all tab: any of danbooru, konachan, yande.re and zerochan (default all four)',
+    default: 'danbooru konachan yande.re zerochan',
+  },
+  TTHEME_FIND_HIDE: {
+    doc: '# the kinds of picture find leaves out by tag: comic, monochrome, sketch, chibi, or none to keep them all (default none)',
+    default: 'none',
+  },
+  TTHEME_FIND_PNG: {
+    doc: '# on lists PNG originals only — a zerochan post counts only where danbooru holds the same file (default off)',
+    default: 'off',
+  },
   TTHEME_FIND_HOSTS: {
     doc: '# send a find site somewhere else, as key=https://host pairs — e.g. "danbooru=https://danbooru.donmai.us" (default none)',
     default: '',

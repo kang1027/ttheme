@@ -12,14 +12,25 @@ export const CACHE_BYTES = 512 * 1024 * 1024
 
 export type Rating = 'safe' | 'questionable' | 'explicit'
 export type Block = 'nudity' | 'underwear'
+export type Kind = 'comic' | 'monochrome' | 'sketch' | 'chibi'
 
 export const RATINGS: Rating[] = ['safe', 'questionable', 'explicit']
 export const BLOCKS: Block[] = ['nudity', 'underwear']
+export const KINDS: Kind[] = ['comic', 'monochrome', 'sketch', 'chibi']
+export const SCORES = ['off', '10', '50']
+export const SIZES = ['off', '1080', '1800']
 
 const EXPOSED: Record<Block, Set<string>> = {
   nudity: new Set(['nude', 'naked', 'topless', 'bottomless', 'nipples', 'naked_towel', 'undressing']),
   underwear: new Set(['underwear', 'panties', 'pantsu', 'bra', 'lingerie', 'pantyshot']),
 }
+const KIND_TAGS: Record<Kind, Set<string>> = {
+  comic: new Set(['comic', '4koma']),
+  monochrome: new Set(['monochrome', 'greyscale']),
+  sketch: new Set(['sketch', 'lineart', 'line_art']),
+  chibi: new Set(['chibi']),
+}
+const FREE = /^(?:rating|score|width|height|filetype|dimension):/
 const MOEBOORU: Record<Rating, string> = { safe: 's', questionable: 'q', explicit: 'e' }
 const HEAD = 8191
 const TIMEOUT = 20_000
@@ -65,6 +76,12 @@ export interface Post extends Rendition {
   mirror?: { file: string; preview: string }
 }
 
+export interface Narrow {
+  score: number
+  size: number
+  png: boolean
+}
+
 export interface Site {
   key: string
   name: string
@@ -74,10 +91,12 @@ export interface Site {
   best: string
   tagBudget: number
   vouched: boolean
+  scored: boolean
   ansi: number
   missing?: number
   ratings: Record<Rating, Set<string>>
   rate(levels: readonly Rating[]): string
+  narrow(filters: Narrow): string[]
   postsUrl(tags: string, page: number): string
   countUrl(tags: string): string
   postUrl(id: number): string
@@ -354,6 +373,19 @@ export function blockSet(value: string | undefined): Block[] {
   return chosen(value, BLOCKS, BLOCKS, 'none')
 }
 
+export function kindSet(value: string | undefined): Kind[] {
+  return chosen(value, KINDS, [], 'none')
+}
+
+export function siteSet(value: string | undefined): string[] {
+  const names = SITES.map((site) => site.name)
+  return chosen(value, names, names)
+}
+
+export function narrowOf(score: string | undefined, size: string | undefined, png: string | undefined): Narrow {
+  return { score: Number(score) || 0, size: Number(size) || 0, png: png === 'on' }
+}
+
 function tiers(safe: string[], questionable: string[], explicit: string[]): Record<Rating, Set<string>> {
   return { safe: new Set(safe), questionable: new Set(questionable), explicit: new Set(explicit) }
 }
@@ -374,11 +406,17 @@ function anyOf(tags: string[]): string {
   return tags.length < 2 ? tags.join('') : tags.map((tag) => `~${tag}`).join(' ')
 }
 
+function sized(size: number): string[] {
+  return size > 0 ? [`width:>=${size}`, `height:>=${size}`] : []
+}
+
 function moebooru(raw: Spec): Site {
   const spec = based(raw)
   const params = (rest: Record<string, string>) => new URLSearchParams({ api_version: '2', include_tags: '1', ...rest })
   return {
     ...spec,
+    scored: true,
+    narrow: ({ score, size }) => [...(score > 0 ? [`score:>=${score}`] : []), ...sized(size)],
     cutouts: anyOf(spec.cutouts),
     ratings: tiers([MOEBOORU.safe], [MOEBOORU.questionable], [MOEBOORU.explicit]),
     rate: (levels) => {
@@ -407,6 +445,12 @@ function danbooru(raw: Spec): Site {
   const ratings = tiers(['g'], ['s', 'q'], ['e'])
   return {
     ...spec,
+    scored: true,
+    narrow: ({ score, size, png }) => [
+      ...(score > 0 ? [`score:>=${score}`] : []),
+      ...sized(size),
+      ...(png ? ['filetype:png'] : []),
+    ],
     cutouts: anyOf(spec.cutouts),
     ratings,
     rate: (levels) =>
@@ -426,15 +470,23 @@ function danbooru(raw: Spec): Site {
 function zerochanPath(tags: string): string {
   return tags
     .split(/\s+/)
-    .filter((tag) => tag && !tag.startsWith('order:'))
+    .filter((tag) => tag && !/^(?:order|dimension):/.test(tag))
     .map((tag) => tag.split('_').map(encodeURIComponent).join('+'))
     .join(',')
+}
+
+function zerochanParams(tags: string): Record<string, string> {
+  const words = tags.split(/\s+/)
+  const dimension = words.find((tag) => tag.startsWith('dimension:'))?.slice('dimension:'.length)
+  return { s: words.includes('order:fav') ? 'fav' : 'id', ...(dimension ? { d: dimension } : {}) }
 }
 
 function zerochan(raw: Spec): Site {
   const spec = based(raw)
   return {
     ...spec,
+    scored: false,
+    narrow: ({ size }) => (size >= 1800 ? ['dimension:huge'] : size > 0 ? ['dimension:large'] : []),
     cutouts: spec.cutouts[0] ?? '',
     ratings: tiers(['g'], ['q'], ['e']),
     rate: () => '',
@@ -446,7 +498,7 @@ function zerochan(raw: Spec): Site {
         json: '',
         l: String(PAGE),
         p: String(page + 1),
-        s: tags.split(/\s+/).includes('order:fav') ? 'fav' : 'id',
+        ...zerochanParams(tags),
       })}`,
     countUrl: (tags) => `${spec.origin}/${zerochanPath(tags)}?${new URLSearchParams({ xml: '', l: '1' })}`,
     postUrl: (id) => `${spec.origin}/${id}?json=`,
@@ -466,7 +518,7 @@ function siteNamed(host: string): Site | undefined {
 }
 
 export function tagsOf(query: string): number {
-  return query.split(/\s+/).filter((tag) => tag && !tag.startsWith('rating:')).length
+  return query.split(/\s+/).filter((tag) => tag && !FREE.test(tag)).length
 }
 
 export function postRef(text: string, fallback: Site): { site: Site; id: number } | undefined {
@@ -559,6 +611,10 @@ export function previewOf(site: Site, post: Post): Copy {
 
 export function exposed(post: Pick<Post, 'tags'>, blocks: readonly Block[] = BLOCKS): string[] {
   return post.tags.filter((tag) => blocks.some((block) => EXPOSED[block].has(tag)))
+}
+
+export function hidden(post: Pick<Post, 'tags'>, kinds: readonly Kind[]): string[] {
+  return post.tags.filter((tag) => kinds.some((kind) => KIND_TAGS[kind].has(tag)))
 }
 
 export function rated(site: Site, post: Pick<Post, 'rating'>, levels: readonly Rating[] = ['safe']): boolean {

@@ -1,4 +1,4 @@
-import { BLOCKS, type Block, KEY_SPAN, type Rating, SITES } from './booru.ts'
+import { BLOCKS, type Block, KEY_SPAN, type Kind, type Narrow, type Rating, SITES } from './booru.ts'
 import { type Hex, rgb } from './color.ts'
 
 export type Preset = 'cutouts' | 'all'
@@ -10,6 +10,7 @@ export interface Setting {
   label: string
   choices: string[]
   multi?: { read(raw: string | undefined): string[]; none?: string }
+  advanced?: boolean
 }
 
 export interface Row {
@@ -17,6 +18,7 @@ export interface Row {
   choices: string[]
   value: string
   multi?: { none?: string }
+  advanced?: boolean
   cursor: number
 }
 
@@ -57,8 +59,12 @@ export interface FindView {
   rating: Rating[]
   block: Block[]
   sets: Sets
+  narrow: Narrow
+  enabled: string[]
+  hide: Kind[]
   settings: Row[]
   panel?: number
+  advanced: boolean
   colors: { cursor: Hex; selection: Hex; ansi: Hex[] }
   tiles: Tile[]
   installed: number[]
@@ -471,12 +477,18 @@ function query(line: Line, cols: number, view: FindView, accent: string): void {
     [view.tag || 'nothing yet — / searches, ctrl+v pastes a picture', view.tag ? '' : D],
   ])
   const allowed = BLOCKS.filter((block) => !view.block.includes(block))
+  const skipped = SITES.filter((site) => !view.enabled.includes(site.name)).map((site) => site.name)
   const state = [
     view.preset,
     ...(view.solo ? ['solo'] : []),
     view.order,
     ...(view.rating.join('+') === 'safe' ? [] : [view.rating.join('+')]),
     ...(allowed.length > 0 ? [`allows ${allowed.join('+')}`] : []),
+    ...(view.narrow.size > 0 ? [`≥${view.narrow.size}px`] : []),
+    ...(view.narrow.score > 0 ? [`score≥${view.narrow.score}`] : []),
+    ...(view.narrow.png ? ['png'] : []),
+    ...(view.hide.length > 0 ? [`hides ${view.hide.join('+')}`] : []),
+    ...(skipped.length > 0 ? [`all skips ${skipped.join('+')}`] : []),
   ]
   line.put(c, `  ${state.join('  ')}`, D)
   if (view.total > 0 || !view.searching) {
@@ -685,6 +697,7 @@ const KEYS: Record<FindView['mode'], [string, string][]> = {
     ['unfold', 'space  a set of ×N'],
     ['open', 'o  the post page in a browser'],
     ['settings', 's  rating, block, posts, solo, order, sets, remove bg'],
+    ['advanced', 'a in settings  min score, min size, sites, hide, png only'],
     ['back', 'esc returns to preview'],
     ['close', '?  esc'],
   ],
@@ -699,22 +712,28 @@ const KEYS: Record<FindView['mode'], [string, string][]> = {
   ],
 }
 
+export function pageOf(view: Pick<FindView, 'settings' | 'advanced'>): number[] {
+  return view.settings.flatMap((row, i) => (Boolean(row.advanced) === view.advanced ? [i] : []))
+}
+
 function panel(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
   const at = view.panel ?? 0
+  const shown = pageOf(view).map((i) => ({ row: view.settings[i] as Row, i }))
   const label = Math.max(...view.settings.map((row) => row.label.length))
   const widest = Math.max(
     ...view.settings.map((row) => row.choices.reduce((n, c) => n + c.length + (row.multi ? 6 : 3), 0)),
   )
   const w = Math.min(cols - 2, Math.max(28, label + widest + 8))
-  const h = view.settings.length + 4
+  const h = shown.length + 4
   const x = Math.floor((cols - w) / 2)
   const y = Math.max(2, Math.floor((rows - h) / 2))
-  lines[y]?.put(x, `╭─ settings ${'─'.repeat(Math.max(0, w - 13))}╮`)
+  const title = view.advanced ? 'settings · advanced' : 'settings'
+  lines[y]?.put(x, `╭─ ${title} ${'─'.repeat(Math.max(0, w - title.length - 5))}╮`)
   for (let r = y + 1; r < y + h - 1; r++) {
     lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
   }
-  view.settings.forEach((row, i) => {
-    const line = lines[y + 2 + i] as Line
+  shown.forEach(({ row, i }, n) => {
+    const line = lines[y + 2 + n] as Line
     line.put(x + 3, row.label, i === at ? B : D)
     let c = x + 5 + label
     const on = row.value.split(' ')
@@ -731,6 +750,7 @@ function panel(lines: Line[], cols: number, rows: number, view: FindView, accent
     keys: [
       ['↑↓', 'setting'],
       ['←→', 'value'],
+      ['a', view.advanced ? 'basic' : 'advanced'],
       ['space', 'toggle'],
       ['enter', 'save'],
     ],

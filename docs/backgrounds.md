@@ -94,8 +94,16 @@ setting, enter to save them to `config.zsh` and esc to put them back. ←→ cha
 a value; on the two rows of checkboxes (rating and block) they move between the
 boxes and space ticks one, so `safe` and `explicit` can be listed without
 `questionable`, or underwear let through while nudity stays blocked. At least
-one rating stays ticked. Whatever is not the default shows next to the query, so
-the screen never hides what it is filtering by.
+one rating stays ticked. `a` turns the panel to its advanced page — the lowest
+score, the shortest side a picture must reach (1080 or 1800 px), the sites the
+all tab mixes, the kinds of picture to hide by tag (comic, monochrome, sketch,
+chibi) and PNG only — and back; enter saves both pages. Each site is asked to
+filter by what it can (danbooru takes its size, score and file-type terms
+without counting them against its two tags, zerochan its own `large` and
+`huge`), every post is checked again on arrival, and a site that cannot keep a
+filter — zerochan has no score — says so above the grid. Whatever is not the
+default shows next to the query, so the screen never hides what it is
+filtering by.
 
 `/` opens the query for editing — type a tag to search for something else, or paste a post url or id
 (`https://yande.re/post/show/214705`, `konachan:244200`, `7159377`) to go
