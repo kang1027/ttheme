@@ -115,7 +115,7 @@ export function toneFor(colors: Colors, slot: string): Tone {
     }).length === 0
   const cap = highest(gated)
   const matched = highest((o) => luminance(mix(colors.background, color, o)) <= PEAK)
-  const opacity = Math.floor(Math.min(cap, matched) * 1000) / 1000
+  const opacity = Math.floor(Math.min(cap, matched) * 100) / 100
   const bg = rgb(colors.background)
   const reach = Math.hypot(...rgb(color).map((c, i) => (c - (bg[i] ?? 0)) * opacity))
   return { slot, color, cap, matched, opacity, reach }
