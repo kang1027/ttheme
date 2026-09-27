@@ -39,6 +39,7 @@ import {
 } from './palettes.ts'
 import { redrawPictures } from './redraw.ts'
 import { marketsOf, OFFICIAL } from './sources.ts'
+import { marketOf } from './theme.ts'
 import {
   configFile,
   detectTerminal,
@@ -151,6 +152,37 @@ function currentPalettes(configHome: string): PaletteEntry[] {
     return available(configHome, readCatalog(configHome), false).palettes
   } catch {
     return []
+  }
+}
+
+export function againCatalog(state: Installed, paths: InitPaths): Manifest {
+  const bundled = loadManifest(paths.root)
+  const official = marketsOf(state.markets).includes(OFFICIAL) ? bundled.palettes : []
+  const names = new Set(official.map((e) => e.name))
+  const others = currentPalettes(paths.configHome).filter(
+    (e) => !names.has(e.name) && (marketOf(e.name) !== undefined || state.palettes.includes(e.name)),
+  )
+  return { ...bundled, palettes: [...official, ...others] }
+}
+
+export function keptStartup(state: Installed, palettes: string[]): string | undefined {
+  const was = startupPalette(state)
+  return was && palettes.includes(was) ? was : undefined
+}
+
+export function planAgain(state: Installed, opts: InitOptions, paths: InitPaths): InitPlan {
+  const plan = planInit(opts, paths)
+  const startup = keptStartup(state, opts.palettes)
+  const { author, markets, updates } = state
+  return {
+    ...plan,
+    installed: {
+      ...plan.installed,
+      ...(author ? { author } : {}),
+      ...(startup ? { startup } : {}),
+      ...(markets ? { markets } : {}),
+      ...(updates ? { updates } : {}),
+    },
   }
 }
 
@@ -504,7 +536,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     }
   }
   const terminals = await askTerminals(detected, existing?.terminals ?? preselected, paths)
-  const catalog = loadManifest(root)
+  const catalog = existing ? againCatalog(existing, paths) : loadManifest(root)
   const palettes = existing
     ? await pickPalettes(catalog, existing.palettes, 'palette', true)
     : await pickPalettes(catalog, [], 'series', true)
@@ -512,9 +544,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     p.cancel('Nothing changed')
     throw new Cancelled()
   }
-  const was = existing && startupPalette(existing)
-  const kept = was && palettes.includes(was) ? was : undefined
-  const first = kept ?? palettes[0]
+  const first = (existing && keptStartup(existing, palettes)) ?? palettes[0]
   const choose = palettes.length > 1 && detectTerminal(process.env) !== 'warp'
   const wear = accepted(
     await p.confirm({
@@ -523,11 +553,10 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     }),
   )
   const opts: InitOptions = { terminals, palettes, off: !wear }
-  const fresh = planInit(opts, paths)
-  const plan = kept ? { ...fresh, installed: { ...fresh.installed, startup: kept } } : fresh
+  const plan = existing ? planAgain(existing, opts, paths) : planInit(opts, paths)
   p.note(
     [
-      `Install ${palettes.length} palettes — ${seriesOf(plan.catalog, palettes).join(', ')}`,
+      `Install ${palettes.length} palettes — ${seriesOf(catalog, palettes).join(', ')}`,
       `Copy ${plan.copies.length} files under ${configHome}`,
       `Write ${plan.settings.file}`,
       ...plan.edits.map((e) => `Edit ${e.file} — a ttheme block: source ttheme.zsh`),
@@ -554,5 +583,5 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     pickDefault(configHome)
   }
   const installed = readInstalled(configHome)
-  receipt({ ...plan, installed }, opts, paintStartup(plan.catalog, installed), moved && prefs.running())
+  receipt({ ...plan, catalog, installed }, opts, paintStartup(catalog, installed), moved && prefs.running())
 }

@@ -4,7 +4,16 @@ import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { test } from 'node:test'
 
-import { applyInit, type InitOptions, type InitPaths, installedState, planInit, planUpgrade } from './init.ts'
+import {
+  againCatalog,
+  applyInit,
+  type InitOptions,
+  type InitPaths,
+  installedState,
+  planAgain,
+  planInit,
+  planUpgrade,
+} from './init.ts'
 
 function manifestFixture() {
   const palette = (name: string, order: number, role?: 'default') => ({
@@ -27,6 +36,39 @@ function manifestFixture() {
     gate: [],
     palettes: [palette('neutral', 1, 'default'), palette('miku', 2)],
   }
+}
+
+function withMarkets(paths: InitPaths): string {
+  const dust = join(paths.home, 'dust')
+  mkdirSync(join(dust, 'palettes'), { recursive: true })
+  writeFileSync(
+    join(dust, 'ttheme-market.json'),
+    JSON.stringify({ version: '0.0.0', owner: 'kec', name: 'moss', palettes: [] }),
+  )
+  writeFileSync(
+    join(dust, 'palettes', 'fern.toml'),
+    [
+      '[meta]',
+      'name = "fern"',
+      'signature = ["cursor", "foreground", "background"]',
+      '',
+      '[colors]',
+      'background = "#101010"',
+      'foreground = "#f0f0f0"',
+      'cursor = "#ff8800"',
+      'selection_background = "#303030"',
+      `ansi = [${Array.from({ length: 16 }, (_, i) => `"#${i.toString(16).repeat(6)}"`).join(', ')}]`,
+      '',
+    ].join('\n'),
+  )
+  const cache = join(paths.configHome, 'ttheme', 'markets')
+  mkdirSync(cache, { recursive: true })
+  const [, miku] = manifestFixture().palettes
+  writeFileSync(
+    join(cache, 'alice--pastel.json'),
+    JSON.stringify({ ...manifestFixture(), owner: 'alice', name: 'pastel', palettes: [{ ...miku, name: 'dusk' }] }),
+  )
+  return dust
 }
 
 function makeFixture(): InitPaths {
@@ -210,4 +252,57 @@ test('an upgrade drops palettes the catalog no longer has, and a default among t
 
 test('there is no install to upgrade before the first init', () => {
   assert.equal(installedState(makeFixture().configHome), undefined)
+})
+
+test('setting it up again keeps the markets, their auto-update, the handle and what was installed from them', () => {
+  const paths = makeFixture()
+  applyInit(planInit(options({ palettes: ['miku'] }), paths))
+  const dust = withMarkets(paths)
+  const installedPath = join(paths.configHome, 'ttheme', 'installed.json')
+  const markets = ['official', 'alice/pastel#v1', dust]
+  const palettes = ['miku', 'alice@pastel/dusk', 'kec@moss/fern']
+  writeFileSync(
+    installedPath,
+    JSON.stringify({
+      terminals: ['ghostty'],
+      author: 'kec',
+      startup: 'alice@pastel/dusk',
+      markets,
+      updates: { 'alice/pastel#v1': true },
+      palettes,
+    }),
+  )
+  const state = installedState(paths.configHome)
+  assert.ok(state)
+  assert.deepEqual(
+    againCatalog(state, paths)
+      .palettes.filter((e) => !e.default)
+      .map((e) => e.name),
+    palettes,
+  )
+  applyInit(planAgain(state, options({ terminals: ['ghostty', 'kitty'], palettes }), paths))
+  assert.deepEqual(installedState(paths.configHome), {
+    terminals: ['ghostty', 'kitty'],
+    author: 'kec',
+    startup: 'alice@pastel/dusk',
+    markets,
+    updates: { 'alice/pastel#v1': true },
+    palettes,
+  })
+  assert.match(
+    readFileSync(join(paths.configHome, 'ghostty', 'config'), 'utf8'),
+    /^theme = ttheme-alice--pastel--dusk$/m,
+  )
+})
+
+test('setting it up again offers no official palette once the official catalog was removed', () => {
+  const paths = makeFixture()
+  withMarkets(paths)
+  const state = { terminals: ['ghostty' as const], markets: ['alice/pastel'], palettes: [] }
+  writeFileSync(join(paths.configHome, 'ttheme', 'installed.json'), JSON.stringify(state))
+  const catalog = againCatalog(state, paths)
+  assert.deepEqual(
+    catalog.palettes.map((e) => e.name),
+    ['alice@pastel/dusk'],
+  )
 })
