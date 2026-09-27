@@ -30,7 +30,7 @@ function sequenceAt(text: string, at: number): number {
   return end < text.length ? end - at + 1 : 0
 }
 
-function take(text: string, room: number): { head: string; used: number; rest: string } {
+function take(text: string, room: number): { head: string; used: number } {
   let head = ''
   let used = 0
   let i = 0
@@ -50,7 +50,7 @@ function take(text: string, room: number): { head: string; used: number; rest: s
     used += width
     i += ch.length
   }
-  return { head, used, rest: text.slice(i) }
+  return { head, used }
 }
 
 export function fit(text: string, width: number, pad = true): string {
@@ -83,9 +83,11 @@ export function wrapText(text: string, width: number): string[] {
       lines.push(line)
     }
     while (cells(word) > width) {
-      const { head, rest } = take(word, width)
-      lines.push(head)
-      word = rest
+      const { head } = take(word, width)
+      const cut = Math.max(head.lastIndexOf('/') + 1, head.lastIndexOf('#'))
+      const at = cut > 0 ? cut : head.length
+      lines.push(word.slice(0, at))
+      word = word.slice(at)
     }
     line = word
   }
