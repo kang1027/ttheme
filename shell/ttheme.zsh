@@ -2249,7 +2249,7 @@ if (( $+functions[compdef] )); then
     local -a reply
     if (( CURRENT == 2 )); then
       compadd -- $TTHEME_VERBS help
-    elif [[ $words[2] == remove || ( $words[2] == (use|default|edit|check|share) && CURRENT == 3 ) ]]; then
+    elif [[ $words[2] == remove || ( $words[2] == (use|default|edit|check|share) && $CURRENT == 3 ) ]]; then
       compadd -- $TTHEME_ORDER
     elif [[ $words[2] == new && $words[CURRENT-1] == --from ]]; then
       compadd -- $TTHEME_ORDER
@@ -2257,9 +2257,9 @@ if (( $+functions[compdef] )); then
       _files -/
     elif [[ $words[2] == new ]]; then
       compadd -- --from --in
-    elif [[ $words[2] == market && CURRENT == 3 ]]; then
+    elif [[ $words[2] == market && $CURRENT == 3 ]]; then
       compadd -- add remove search init
-    elif [[ $words[2] == market && $words[3] == (add|init) && CURRENT == 4 ]]; then
+    elif [[ $words[2] == market && $words[3] == (add|init) && $CURRENT == 4 ]]; then
       _files -/
     elif [[ $words[2] == add && $words[CURRENT-1] == --market ]]; then
       _files -/
