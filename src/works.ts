@@ -40,8 +40,10 @@ export function kinKeys(site: Site, post: Post): string[] {
 }
 
 export function sameSet(a: Post, b: Post): boolean {
-  const credit = a.owner || a.artist
-  return credit !== '' && credit === (b.owner || b.artist) && a.width === b.width && a.height === b.height
+  const credit = a.owner || a.named.artist[0] || ''
+  return (
+    credit !== '' && credit === (b.owner || b.named.artist[0] || '') && a.width === b.width && a.height === b.height
+  )
 }
 
 export function shape(image: Rgba): string {

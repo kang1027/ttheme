@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { LINK, linked } from './ansi.ts'
 import {
   backdropTone,
   backgroundsDir,
@@ -20,22 +21,31 @@ import {
   blockSet,
   cacheDir,
   cacheRoot,
+  credit,
   exposed,
   fetchBytes,
+  fetchCredits,
+  fetchLent,
   fetchPost,
+  fileOf,
+  LENDER,
+  lend,
   MAX_PIXELS,
   rated,
   ratingSet,
   rendition,
   SITES,
+  sourcePage,
+  uncredited,
 } from './booru.ts'
 import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
 import type { PaletteEntry } from './emit/manifest.ts'
+import { colorless } from './osc.ts'
 import { refreshProfiles } from './palettes.ts'
 import { pending, progress } from './pending.ts'
 import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
 import type { SharedPicture } from './theme.ts'
-import { blurOf } from './wiring.ts'
+import { blurOf, linkable } from './wiring.ts'
 
 const TIMEOUT = 90_000
 
@@ -87,6 +97,21 @@ async function install(
   if (!post) {
     throw new Error('the post is gone')
   }
+  if (site !== LENDER && post.md5) {
+    try {
+      lend([post], await fetchLent([post.md5], signal))
+    } catch {}
+  }
+  const credited = uncredited(site, post)
+    ? fetchCredits(site, post.id, signal).then(
+        (found) => {
+          if (found) {
+            credit(post, found)
+          }
+        },
+        () => {},
+      )
+    : undefined
   if (
     !rated(site, post, ratingSet(process.env.TTHEME_FIND_RATING)) ||
     exposed(post, blockSet(process.env.TTHEME_FIND_BLOCK)).length > 0
@@ -103,7 +128,8 @@ async function install(
     bytes = new Uint8Array(readFileSync(orig))
   } else {
     step('Downloading')
-    bytes = await fetchBytes(site, version.file, signal, (got, size) => step('Downloading', progress(got, size)))
+    const from = fileOf(site, post, version)
+    bytes = await fetchBytes(from.site, from.url, signal, (got, size) => step('Downloading', progress(got, size)))
     mkdirSync(dirname(orig), { recursive: true })
     writeFileSync(orig, bytes)
   }
@@ -124,6 +150,7 @@ async function install(
       }
     } catch {}
   }
+  await credited
   const colors = colorsOf(entry)
   step('Drawing')
   installBackdrop(
@@ -137,6 +164,8 @@ async function install(
       ext: version.ext,
       bytes,
       from: `${site.name} ${shared.id} ${site.pageUrl(shared.id)}`,
+      artist: post.named.artist,
+      source: sourcePage(post.source),
       cut,
     },
     { width: 0, height: 0 },
@@ -146,6 +175,16 @@ async function install(
   if (picture) {
     writeTune(backgroundsDir(configHome), picture, shared, aligns, homedir())
   }
+}
+
+function postRef(shared: SharedPicture, links: boolean): string {
+  const site = SITES.find((s) => s.key === shared.site)
+  const ref = `${site?.name ?? shared.site} ${shared.id}`
+  if (!site || !links) {
+    return ref
+  }
+  const mark = colorless() ? LINK : `\x1b[${30 + site.ansi}m${LINK}\x1b[39m`
+  return `${mark} ${linked(ref, site.pageUrl(shared.id))}`
 }
 
 export async function bringPictures(
@@ -158,10 +197,11 @@ export async function bringPictures(
     return
   }
   const aligns = !terminals.includes('iterm2')
+  const links = process.stdout.isTTY && linkable(process.env)
   const got = new Set<PaletteEntry>()
   const line = pending()
   for (const [at, { entry, shared }] of due.entries()) {
-    const label = `${entry.name} · ${SITES.find((s) => s.key === shared.site)?.name ?? shared.site} ${shared.id}`
+    const label = `${entry.name} · ${postRef(shared, links)}`
     const count = due.length > 1 ? ` · ${at + 1}/${due.length}` : ''
     const step = (stage: string, detail?: string): void =>
       line.set(`${stage} ${label}${detail ? ` · ${detail}` : ''}${count}`)

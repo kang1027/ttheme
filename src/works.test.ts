@@ -15,7 +15,7 @@ function post(fields: Partial<Post>): Post {
     preview: '',
     ext: 'jpg',
     owner: '',
-    artist: '',
+    named: { artist: [], character: [], copyright: [] },
     score: 0,
     rating: 's',
     md5: '',

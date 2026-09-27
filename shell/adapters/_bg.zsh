@@ -86,10 +86,11 @@ __tt_bg_load() {
   (( ${+bgsrc[$name]} )) && return 0
   [[ $name == *:* ]] && key=${name##*:}
   file=${${pal/@/--}/\//--}
-  bgfrom[$name]="" bgtunef[$name]=$file.tune.conf bgofff[$name]=$file.off.conf bgimages[$name]=1
+  bgfrom[$name]="" bgurl[$name]="" bgby[$name]="" bgtunef[$name]=$file.tune.conf bgofff[$name]=$file.off.conf bgimages[$name]=1
   if [[ -n $key ]]; then
     pd=(${=bgpic[$pal:$key]})
-    lines=("# from ${pd[4,-1]}" "background-image = $pd[2]" "background-image-fit = cover" "background-image-position = top-right" "background-image-opacity = $pd[3]" "config-file = ?$pd[1].tune.conf" "config-file = ?$pd[1].off.conf")
+    lines=("# from ${pd[5,-1]}" "background-image = $pd[2]" "background-image-fit = cover" "background-image-position = top-right" "background-image-opacity = $pd[3]" "config-file = ?$pd[1].tune.conf" "config-file = ?$pd[1].off.conf")
+    [[ $pd[4] == - ]] || lines+=("# by $pd[4]")
     bgimages[$name]=${bgimages[$pal]:-1}
   elif [[ -r $dir/$file.conf ]]; then
     lines=("${(@f)$(<$dir/$file.conf)}")
@@ -115,7 +116,8 @@ __tt_bg_load() {
     fi
     for line in "${src[@]}"; do
       case $line in
-        '# from '*) (( pass == 1 )) && bgfrom[$name]=${(j: :)${${=line#\# from }[1,2]}} ;;
+        '# from '*) (( pass == 1 )) && bgfrom[$name]=${(j: :)${${=line#\# from }[1,2]}} bgurl[$name]=${${=line#\# from }[3]} ;;
+        '# by '*) (( pass == 1 )) && bgby[$name]=${${line#\# by }//,/, } ;;
         'background-image = '*|'background-image='*) img=${${line#*=}# } ;;
         'background-image-fit = '*|'background-image-fit='*) fit=${${line#*=}# } ;;
         'background-image-opacity = '*|'background-image-opacity='*) op=${${line#*=}# } ;;

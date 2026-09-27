@@ -31,17 +31,29 @@ REPLY=; __tt_bg_place 2045 1994 100 40 8 16 60 9 contain
 [[ $REPLY == "52 17 49 24 5 0 2039 1994" ]] || { print -u2 "__tt_bg_place broke on a sized corner: $REPLY"; exit 1 }
 REPLY=; __tt_bg_frame 2056 2560 1600 1000 199 5 contain 62
 [[ $REPLY == "1598 1990 1 -733" ]] || { print -u2 "__tt_bg_frame broke on a zoom around the face: $REPLY"; exit 1 }
-typeset -A bgfrom=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgdim=() bgtunef=() bgofff=() bgimages=() bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() bgedit=()
+typeset -A bgfrom=() bgurl=() bgby=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgdim=() bgtunef=() bgofff=() bgimages=() bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() bgedit=()
 bgd=$XDG_CONFIG_HOME/ttheme/backgrounds
 mkdir -p $bgd && : > $bgd/kagami@fill-42.png && : > $bgd/kagami@60-bottom-right.png && : > $bgd/kagami@130-bottom-right-1600x1000.png
-base=("# from safebooru 416805 https://safebooru.org/index.php?page=post&s=view&id=416805" "background-image = kagami@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2")
+base=("# by akoiro,potate" "# from safebooru 416805 https://safebooru.org/index.php?page=post&s=view&id=416805" "background-image = kagami@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2")
 print -l $base > $bgd/kagami.conf
 print -l "background-image = kagami@130-bottom-right-1600x1000.png" "background-image-fit = cover" "background-image-position = bottom-right" "background-image-opacity = 0.252" > $bgd/kagami.tune.conf
 __tt_bg_load kagami
 [[ $bgsrc[kagami] == "$bgd/kagami.png" && $bgfill[kagami] == "$bgd/kagami@fill-42.png" && $bgfocus[kagami] == 42 && $bgsize[kagami] == 130 && $bgpos[kagami] == 9 && $bgop[kagami] == 0.252 &&
   $bgshot[kagami] == "$bgd/kagami@130-bottom-right-1600x1000.png" && $bgdef[kagami] == "fill 5 0.2" && $bgoff[kagami] == 0 &&
-  $bgfrom[kagami] == "safebooru 416805" ]] ||
-  { print -u2 "__tt_bg_load misread the confs: $bgsrc[kagami] $bgfill[kagami]@$bgfocus[kagami] $bgsize[kagami] $bgpos[kagami] $bgop[kagami] $bgshot[kagami] ($bgdef[kagami]) off=$bgoff[kagami] from=$bgfrom[kagami]"; exit 1 }
+  $bgfrom[kagami] == "safebooru 416805" && $bgby[kagami] == "akoiro, potate" &&
+  $bgurl[kagami] == "https://safebooru.org/index.php?page=post&s=view&id=416805" ]] ||
+  { print -u2 "__tt_bg_load misread the confs: $bgsrc[kagami] $bgfill[kagami]@$bgfocus[kagami] $bgsize[kagami] $bgpos[kagami] $bgop[kagami] $bgshot[kagami] ($bgdef[kagami]) off=$bgoff[kagami] from=$bgfrom[kagami] by=$bgby[kagami] url=$bgurl[kagami]"; exit 1 }
+tpick=kagami color=0
+TTHEME_ADAPTER=ghostty __tt_pv_bg_title 80
+[[ $REPLY == "Background · akoiro, potate · ⧉ "$'\e]8;;'"$bgurl[kagami]"$'\e\\'"safebooru 416805"$'\e]8;;\e\\' ]] ||
+  { print -u2 "the tuning title did not link its post: ${(q+)REPLY}"; exit 1 }
+TTHEME_ADAPTER=terminal-app __tt_pv_bg_title 80
+[[ $REPLY == "Background · akoiro, potate · safebooru 416805" ]] ||
+  { print -u2 "the tuning title linked its post where the terminal cannot open it: ${(q+)REPLY}"; exit 1 }
+TTHEME_ADAPTER=ghostty __tt_pv_bg_title 30
+[[ $REPLY == "Background · akoiro, potate" ]] ||
+  { print -u2 "a narrow tuning title did not keep the artist over the post: ${(q+)REPLY}"; exit 1 }
+tpick=""
 bgsize[kagami]=100 bgoff[kagami]=1
 __tt_bg_write kagami || { print -u2 "__tt_bg_write failed"; exit 1 }
 [[ "$(<$bgd/kagami.conf)" == "$(print -l $base "config-file = ?kagami.tune.conf" "config-file = ?kagami.off.conf")" ]] ||
@@ -109,8 +121,8 @@ out=; __tt_pv_foot 200
 msg=${(l:200::x:)} msgt=100 out=; __tt_pv_foot 80
 plain=${out//$'\e[K'/}
 (( ${(m)#plain} <= 80 )) || { print -u2 "a long preview message overran the bar: ${(m)#plain} columns"; exit 1 }
-print -l "# image safebooru_2 2/3" "# picture safebooru_1 kagami.aaaaaaaa kagami.aaaaaaaa@fill-40.png 0.2 safebooru 1 x" \
-  "# picture safebooru_2 kagami.1a2b3c4d kagami.1a2b3c4d@fill-42.png 0.2" "# picture safebooru_3 kagami.cccccccc kagami.cccccccc@fill-40.png 0.3" \
+print -l "# image safebooru_2 2/3" "# picture safebooru_1 kagami.aaaaaaaa kagami.aaaaaaaa@fill-40.png 0.2 akoiro safebooru 1 x" \
+  "# picture safebooru_2 kagami.1a2b3c4d kagami.1a2b3c4d@fill-42.png 0.2 -" "# picture safebooru_3 kagami.cccccccc kagami.cccccccc@fill-40.png 0.3 -" \
   "background-image = kagami.1a2b3c4d@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2" \
   "config-file = ?kagami.1a2b3c4d.tune.conf" "config-file = ?kagami.1a2b3c4d.off.conf" > $bgd/kagami.conf
 : > $bgd/kagami.aaaaaaaa@fill-40.png && : > $bgd/kagami.cccccccc@fill-40.png
@@ -119,6 +131,9 @@ __tt_pv_tune_open kagami
 __tt_pv_bg_pick 1
 [[ $tpick == kagami:safebooru_3 && $bgop[$tpick] == 0.3 && $bgtunef[$tpick] == kagami.cccccccc.tune.conf ]] ||
   { print -u2 "the picture strip did not move to the next picture: $tpick op=$bgop[$tpick] tune=$bgtunef[$tpick]"; exit 1 }
+__tt_bg_load kagami:safebooru_1
+[[ $bgby[kagami:safebooru_1] == akoiro && $bgfrom[kagami:safebooru_1] == "safebooru 1" && -z $bgby[$tpick] ]] ||
+  { print -u2 "a held picture lost its artist or post: by=$bgby[kagami:safebooru_1] from=$bgfrom[kagami:safebooru_1] ($tpick by=$bgby[$tpick])"; exit 1 }
 bgop[$tpick]=0.5
 __tt_pv_untune
 [[ -z $tune && $bgop[kagami:safebooru_3] == 0.3 && ${#bgswap} == 0 && ${#bgedit} == 0 ]] ||

@@ -63,6 +63,8 @@ export interface Original {
   ext: string
   bytes: Uint8Array
   from?: string
+  artist?: string[]
+  source?: string
   cut?: boolean
 }
 
@@ -336,6 +338,8 @@ export interface Picture {
   blur?: number
   window?: { width: number; height: number }
   from?: string
+  artist?: string[]
+  source?: string
   original?: string
   cut?: string
 }
@@ -382,14 +386,22 @@ export function readStore(dir: string): Store {
   return store
 }
 
+function byline(picture: Picture): string {
+  return (picture.artist ?? []).map((name) => name.replace(/[\s,]+/g, '_')).join(',')
+}
+
 function confText(dir: string, rack: Rack): string {
   const at = rack.pictures.findIndex((picture) => picture.key === rack.active)
   const picture = rack.pictures[at] as Picture
   return [
+    ...(picture.artist?.length ? [`# by ${byline(picture)}`] : []),
     ...(picture.from ? [`# from ${picture.from}`] : []),
     `# image ${picture.key} ${at + 1}/${rack.pictures.length}`,
     ...rack.pictures.map((held) =>
-      [`# picture ${held.key} ${held.stem} ${held.fill} ${held.opacity}`, ...(held.from ? [held.from] : [])].join(' '),
+      [
+        `# picture ${held.key} ${held.stem} ${held.fill} ${held.opacity} ${held.artist?.length ? byline(held) : '-'}`,
+        ...(held.from ? [held.from] : []),
+      ].join(' '),
     ),
     `background-image = ${join(dir, picture.fill)}`,
     'background-image-fit = cover',
@@ -640,6 +652,8 @@ export function installBackdrop(
     blur: blurring,
     window: size,
     ...(source.from ? { from: source.from } : {}),
+    ...(source.artist?.length ? { artist: source.artist } : {}),
+    ...(source.source ? { source: source.source } : {}),
     original: `${original}.${source.ext}`,
     ...(source.cut ? { cut: `${original}.cut.png` } : {}),
   }

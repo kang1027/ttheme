@@ -82,6 +82,12 @@ export function detectTerminal(env: Record<string, string | undefined>): string 
   return 'unknown'
 }
 
+const LINKABLE = new Set(['ghostty', 'kitty', 'wezterm', 'alacritty', 'iterm2', 'windows-terminal', 'foot'])
+
+export function linkable(env: Record<string, string | undefined>): boolean {
+  return LINKABLE.has(detectTerminal(env))
+}
+
 export function ghosttyBlock(tthemeDir: string, palette: string | undefined, user = ''): string {
   const lines: string[] = []
   if (!userSets(user, 'command')) {

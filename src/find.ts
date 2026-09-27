@@ -27,11 +27,14 @@ import { backdropTone, fillSize, origins, type Tone, type Tune } from './backdro
 import {
   BLOCKS,
   blockSet,
+  type Credit,
   cacheDir,
+  credit,
   exposed,
   extension,
   fetchBytes,
   fetchCount,
+  fetchCredits,
   fetchLent,
   fetchPost,
   fetchPosts,
@@ -64,9 +67,11 @@ import {
   SIZES,
   type Site,
   siteSet,
+  sourcePage,
   sweepCache,
   tagList,
   tagsOf,
+  uncredited,
 } from './booru.ts'
 import { booruTags, find, readAvailable, siteTags } from './catalog.ts'
 import { rgb } from './color.ts'
@@ -454,8 +459,9 @@ class Finder {
   private prefetching = 0
   private readonly inflight = new Map<string, Promise<number>>()
   private readonly owners = new Map<string, Map<string, string[]>>()
-  private readonly probed = new Map<string, Record<string, boolean>>()
+  private readonly kept = new Map<string, Record<string, unknown>>()
   private readonly unsaved = new Set<string>()
+  private readonly crediting = new Map<number, Promise<void>>()
   private thumbQueue: Pick[] = []
   private thumbing = 0
   private readonly clarity = new Map<string, { clear: number; fill: number }>()
@@ -639,8 +645,8 @@ class Finder {
       width: version.width,
       height: version.height,
       reduced: version !== post,
-      owner: post.owner,
-      artist: site === LOCAL ? sourceLabel(post.source) : post.artist,
+      page: site === LOCAL ? '' : site.pageUrl(post.id),
+      artist: site === LOCAL ? sourceLabel(post.source) : (post.named.artist[0] ?? ''),
       score: post.score,
       variants,
       mates: this.owners.get(site.key)?.get(post.owner) ?? [],
@@ -736,7 +742,7 @@ class Finder {
     this.write('\x1b_Ga=d,d=A,q=2\x1b\\\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H')
     stdin.setRawMode(false)
     stdin.pause()
-    this.saveProbes()
+    this.saveKept()
     this.renders.close()
     rmSync(this.scratch, { recursive: true, force: true })
     sweepCache()
@@ -748,7 +754,7 @@ class Finder {
   }
 
   get saved(): string | undefined {
-    return this.view.saved
+    return this.view.saved?.text
   }
 
   get installs(): number {
@@ -1024,12 +1030,12 @@ class Finder {
       ext: image.ext,
       preview: url,
       owner: '',
-      artist: '',
       score: 0,
       rating: 's',
       md5: createHash('md5').update(image.bytes).digest('hex'),
       source: image.source,
       tags: [],
+      named: { artist: [], character: [], copyright: [] },
       solo: undefined,
       family: 0,
       smaller: [],
@@ -1735,8 +1741,8 @@ class Finder {
     const { site, post } = pick
     const named = post.named
     const rating = ratingOf(site, post)
-    const listed = new Set([...(named?.artist ?? []), ...(named?.character ?? []), ...(named?.copyright ?? [])])
-    const source = post.source
+    const listed = new Set([...named.artist, ...named.character, ...named.copyright])
+    const source = sourcePage(post.source)
     const link = /^https?:\/\//i.test(source)
       ? source
       : site === LOCAL && source.startsWith('/')
@@ -1746,9 +1752,9 @@ class Finder {
       page: site === LOCAL ? '' : site.pageUrl(post.id),
       source,
       ...(link ? { link } : {}),
-      artists: named?.artist ?? (post.artist ? [post.artist] : []),
-      characters: named?.character ?? [],
-      series: named?.copyright ?? [],
+      artists: named.artist,
+      characters: named.character,
+      series: named.copyright,
       tags: post.tags.filter((tag) => !listed.has(tag)),
       ...(rating ? { rating } : {}),
       ...(post.posted ? { posted: post.posted } : {}),
@@ -1903,12 +1909,15 @@ class Finder {
       if (gen !== this.gen) {
         return
       }
-      board.sources = owned.flatMap(({ plan: { site, tags }, owners }) => [
-        ...(tagsOf(tags) + 1 <= site.tagBudget
-          ? [...owners.keys()].map((owner) => ({ site, tags: `${tags} user:${owner}`, page: 0, done: false }))
-          : []),
-        { site, tags, page: 0, done: false },
-      ])
+      board.sources = owned.flatMap(({ plan: { site, tags }, owners }) => {
+        const by = tagsOf(tags) + 1 <= site.tagBudget ? site.uploadedBy : undefined
+        return [
+          ...(by
+            ? [...owners.keys()].map((owner) => ({ site, tags: `${tags} ${by(owner)}`, page: 0, done: false }))
+            : []),
+          { site, tags, page: 0, done: false },
+        ]
+      })
       this.show()
       this.draw()
       await this.pump()
@@ -2243,7 +2252,7 @@ class Finder {
     } catch (error) {
       this.fail(gen, error)
     } finally {
-      this.saveProbes()
+      this.saveKept()
       if (this.pumping === gen) {
         this.pumping = 0
       }
@@ -2282,17 +2291,18 @@ class Finder {
     return this.view.preset === 'all' || site.vouched || this.transparent(site, post)
   }
 
-  private probes(site: Site): Record<string, boolean> {
-    let known = this.probed.get(site.key)
+  private keep<T>(site: Site, name: string): Record<string, T> {
+    const at = `${site.key}/${name}`
+    let known = this.kept.get(at)
     if (!known) {
-      known = readCache<boolean>(site, 'probes.json')
-      this.probed.set(site.key, known)
+      known = readCache<T>(site, name)
+      this.kept.set(at, known)
     }
-    return known
+    return known as Record<string, T>
   }
 
   private async transparent(site: Site, post: Post): Promise<boolean> {
-    const known = this.probes(site)
+    const known = this.keep<boolean>(site, 'probes.json')
     const cached = known[post.id]
     if (cached !== undefined) {
       return cached
@@ -2302,18 +2312,19 @@ class Finder {
       const from = fileOf(site, post)
       const alpha = (found === undefined ? await headOf(from.site, from.url, this.signal) : found)?.alpha === true
       known[post.id] = alpha
-      this.unsaved.add(site.key)
+      this.unsaved.add(`${site.key}/probes.json`)
       return alpha
     } catch {
       return false
     }
   }
 
-  private saveProbes(): void {
-    for (const key of this.unsaved) {
+  private saveKept(): void {
+    for (const at of this.unsaved) {
+      const [key, name] = at.split('/') as [string, string]
       const site = SITES.find((s) => s.key === key)
       if (site) {
-        writeCache(site, 'probes.json', this.probes(site))
+        writeCache(site, name, this.keep(site, name))
       }
     }
     this.unsaved.clear()
@@ -2365,13 +2376,48 @@ class Finder {
     }
   }
 
+  private credit(pick: Pick, signal: AbortSignal): Promise<void> {
+    const { site, post } = pick
+    if (!uncredited(site, post)) {
+      return Promise.resolve()
+    }
+    const key = postKey(site, post.id)
+    let job = this.crediting.get(key)
+    if (!job) {
+      job = this.credits(pick, signal).finally(() => this.crediting.delete(key))
+      this.crediting.set(key, job)
+    }
+    return job
+  }
+
+  private async credits({ site, post }: Pick, signal: AbortSignal): Promise<void> {
+    const known = this.keep<Credit>(site, 'credits.json')
+    let found = known[post.id]
+    if (!found) {
+      try {
+        found = await fetchCredits(site, post.id, signal)
+      } catch {
+        return
+      }
+      if (!found?.owner) {
+        return
+      }
+      known[post.id] = found
+      this.unsaved.add(`${site.key}/credits.json`)
+    }
+    credit(post, found)
+    this.show()
+    this.inform()
+    this.draw()
+  }
+
   private async mateOwners(site: Site): Promise<Map<string, string[]>> {
     const cached = this.owners.get(site.key)
     if (cached) {
       return cached
     }
     const found = origins(this.home)
-    const known = readCache<string>(site, 'owners.json')
+    const known = this.keep<string>(site, 'owners.json')
     const siblings = this.catalog.palettes.flatMap((sibling) => {
       const origin = found.get(sibling.name)
       return sibling.group === this.entry.group && sibling.name !== this.entry.name && origin?.site === site.key
@@ -2398,7 +2444,7 @@ class Finder {
         byPalette.set(sibling.name, sibling.owner)
       }
     }
-    writeCache(site, 'owners.json', known)
+    this.unsaved.add(`${site.key}/owners.json`)
     const owners = mates(byPalette)
     this.owners.set(site.key, owners)
     return owners
@@ -2488,13 +2534,17 @@ class Finder {
   private async load(tile: Tile): Promise<void> {
     const view = this.view
     const pick = this.posts.get(tile.key)
-    if (!pick || !rendition(pick.post)) {
+    if (!pick) {
+      return
+    }
+    const control = new AbortController()
+    this.fetch = control
+    void this.credit(pick, control.signal)
+    if (!rendition(pick.post)) {
       return
     }
     const { site } = pick
     const board = this.board
-    const control = new AbortController()
-    this.fetch = control
     try {
       await locate(site, pick.post, control.signal)
       const version = rendition(pick.post) as Rendition
@@ -2613,12 +2663,12 @@ class Finder {
       return
     }
     for (const index of [view.focus + this.direction, view.focus - this.direction]) {
-      if (this.prefetching >= PRELOAD) {
-        return
-      }
       const tile = view.tiles[index]
       const pick = tile && this.posts.get(tile.key)
-      if (!pick || !rendition(pick.post)) {
+      if (pick) {
+        void this.credit(pick, this.signal)
+      }
+      if (this.prefetching >= PRELOAD || !pick || !rendition(pick.post)) {
         continue
       }
       const { site, post } = pick
@@ -2749,6 +2799,7 @@ class Finder {
     view.error = undefined
     this.flush()
     const tune = toTune(view.tune, view.untuned)
+    const post = this.posts.get(current.key)?.post
     try {
       await this.renders.run({
         job: 'backdrop',
@@ -2762,21 +2813,26 @@ class Finder {
           id: current.id,
           ext: current.ext,
           from: `${current.site.name} ${current.id} ${current.site.pageUrl(current.id)}`,
+          artist: post?.named.artist ?? [],
+          source: sourcePage(post?.source ?? ''),
         },
         width: this.cols * this.cell.w,
         height: this.rows * this.cell.h,
         blur: this.blurring,
         ...(tune ? { tune, aligns: !readInstalled(this.home).terminals.includes('iterm2'), user: homedir() } : {}),
       })
-      const known = readCache<string>(current.site, 'owners.json')
-      known[current.id] = this.posts.get(current.key)?.post.owner ?? ''
-      writeCache(current.site, 'owners.json', known)
+      this.keep<string>(current.site, 'owners.json')[current.id] = post?.owner ?? ''
+      this.unsaved.add(`${current.site.key}/owners.json`)
       refreshProfiles(this.home)
       const { size, at, opacity } = view.tune
       const framing = tune
         ? ` · ${size === 'fill' ? 'fill' : `${size}%`} · ${POSITIONS[at - 1]} · ${opacity.toFixed(2)}`
         : ''
-      view.saved = `Background · ${this.entry.name} ← ${current.site.name} ${current.id}${framing}`
+      const by = post?.named.artist.length ? `${post.named.artist.join(', ')} · ` : ''
+      view.saved = {
+        text: `Background · ${this.entry.name} ← ${by}${current.site.name} ${current.id}${framing}`,
+        key: tile.key,
+      }
       view.installed.push(tile.key)
       this.fetch?.abort()
       clearTimeout(this.settle)

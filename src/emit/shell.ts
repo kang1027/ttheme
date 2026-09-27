@@ -1,4 +1,5 @@
 import pkg from '../../package.json' with { type: 'json' }
+import { SITES } from '../booru.ts'
 import { SCENES } from '../scenes.ts'
 import { alphabetical } from '../theme.ts'
 import { helpText, VERB_SPECS } from '../verbs.ts'
@@ -100,6 +101,9 @@ export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminal
       ...scene.lines.map((line) => `  ${quote(line)}`),
       ')',
     ]),
+    '',
+    "# each booru's ANSI color, which marks a link to one of its posts",
+    `typeset -gA TTHEME_SITE_ANSI=(${SITES.map((site) => `${site.name} ${site.ansi}`).join(' ')})`,
     '',
     '# the six colors a list row shows: foreground, the signature, then red and green',
     'typeset -gA TTHEME_SWATCH=(',

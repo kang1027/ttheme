@@ -65,7 +65,7 @@ interface Backdrop {
   home: string
   colors: Colors
   tone: Tone
-  origin: { site: string; id: number; ext: string; from: string }
+  origin: { site: string; id: number; ext: string; from: string; artist: string[]; source: string }
   width: number
   height: number
   blur: number

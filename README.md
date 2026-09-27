@@ -215,6 +215,14 @@ Terminal background images are downloaded from the booru you pick only when you
 ask `find` for one, built on your own machine and written to
 `~/.config/ttheme/backgrounds/`; none ship in this repository or on npm.
 
+Every background picture belongs to the artist who drew it. ttheme never passes
+one on: a palette or a share code names a booru post by its number, and each
+machine fetches it from that booru itself. `find` names who drew each post and
+links the post and the artwork's own page, an installed picture keeps its
+artist and source, and `preview` names the artist over its tuning panel. The
+pictures are for your own terminal — when you show one off, credit the artist
+and link the artwork's page, not the booru's copy.
+
 ## License
 
 [MIT](LICENSE)

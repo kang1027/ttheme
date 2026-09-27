@@ -26,6 +26,7 @@ import {
   parseTagList,
   parseZerochan,
   parseZerochanCount,
+  parseZerochanPage,
   postRef,
   rated,
   ratingSet,
@@ -35,6 +36,7 @@ import {
   SITES,
   type Site,
   siteSet,
+  sourcePage,
   sweepCache,
   tagList,
   tagsOf,
@@ -329,7 +331,7 @@ test('parseMoebooru reads the artist out of the tag types the same answer carrie
       tags: { hiiragi_kagami: 'character', lucky_star: 'copyright', kantoku: 'artist' },
     }),
   )
-  assert.equal(found?.artist, 'kantoku')
+  assert.deepEqual(found?.named.artist, ['kantoku'])
   assert.equal(found?.score, 42)
 })
 
@@ -357,7 +359,7 @@ test('parseDanbooru takes the artist, the score, the 360 px preview and only the
       },
     ]),
   )
-  assert.equal(found?.artist, 'hinohari')
+  assert.deepEqual(found?.named.artist, ['hinohari'])
   assert.equal(found?.score, 7)
   assert.deepEqual(
     found?.smaller.map((v) => [v.width, v.ext]),
@@ -460,6 +462,87 @@ test('a moebooru post borrows the tags danbooru holds for the same file, headcou
       [['x'], undefined],
     ],
   )
+})
+
+test('a post takes from danbooru only the credits it lacks, one role at a time', () => {
+  const posts = parseMoebooru(
+    JSON.stringify({
+      posts: [listed({ id: 1, md5: 'aa', tags: 'reimu', source: 'https://x.com/a/status/1' })],
+      tags: { reimu: 'character' },
+    }),
+  )
+  const [zc] = parseZerochan(JSON.stringify({ items: [{ id: 5, width: 800, height: 1200, md5: 'bb', tags: [] }] }))
+  lend(
+    [...posts, ...(zc ? [zc] : [])],
+    parseLent(
+      JSON.stringify([
+        {
+          md5: 'aa',
+          tag_string_artist: 'hrbzz',
+          tag_string_character: 'hakurei_reimu',
+          source: 'https://pixiv.net/artworks/2',
+        },
+        { md5: 'bb', tag_string_artist: 'potate', tag_string_copyright: 'vocaloid', source: 'https://pixiv.net/3' },
+      ]),
+    ),
+  )
+  assert.deepEqual(
+    [posts[0]?.named, posts[0]?.source],
+    [{ artist: ['hrbzz'], character: ['reimu'], copyright: [] }, 'https://x.com/a/status/1'],
+  )
+  assert.deepEqual(
+    [zc?.named, zc?.source],
+    [{ artist: ['potate'], character: [], copyright: ['vocaloid'] }, 'https://pixiv.net/3'],
+  )
+})
+
+test('a pixiv file or old illust link is credited as the artwork page it came from', () => {
+  for (const file of [
+    'https://i.pximg.net/img-original/img/2023/11/30/20/19/54/113837973_p0.jpg',
+    'https://i.pximg.net/c/600x1200_90/img-master/img/2023/11/30/20/19/54/113837973_p1_master1200.jpg',
+    'https://i3.pixiv.net/img-original/img/2014/01/02/03/04/05/113837973_p0.png',
+    'http://i2.pixiv.net/img07/img/swordsouls/113837973.png',
+    'https://www.pixiv.net/member_illust.php?mode=medium&illust_id=113837973',
+  ]) {
+    assert.equal(sourcePage(file), 'https://www.pixiv.net/artworks/113837973', file)
+  }
+  for (const kept of [
+    'https://www.pixiv.net/en/artworks/149948109',
+    'https://x.com/oda_koden/status/2103440708585783307',
+    'https://booth.pximg.net/fcecdcff-8acd-4cc/i/2310/abc.jpg',
+    'pixiv 12345',
+    '',
+  ]) {
+    assert.equal(sourcePage(kept), kept)
+  }
+})
+
+test('a zerochan post page names its artist, cast and series by tag type, with its uploader and day', () => {
+  const page = `
+    <script type="application/ld+json">{ "datePublished": "2026-07-29T19:49:12+00:00" }</script>
+    <ul id="tags">
+      <li class="mangaka" data-tag="Akoiro" title="Added by Roy4127" data-user="Roy4127"><a>Akoiro</a></li>
+      <li class="character primary" data-tag="Hakurei Reimu" data-user="Roy4127"><a>Hakurei Reimu</a></li>
+      <li class="series fav" data-tag="Steins;Gate" data-user="Roy4127"><a>Steins;Gate</a></li>
+      <li class="game" data-tag="Touhou &amp; Friends" data-user="Roy4127"><a>Touhou</a></li>
+      <li class="theme" data-tag="Red Skirt" data-user="Roy4127"><a>Red Skirt</a></li>
+      <li class="source" data-tag="Fanart" data-user="Roy4127"><a>Fanart</a></li>
+    </ul>
+    <script>var uploader = {
+      name: 'Roy4127',
+      status: 2,
+    }</script>`
+  assert.deepEqual(parseZerochanPage(page), {
+    named: { artist: ['akoiro'], character: ['hakurei_reimu'], copyright: ['steins;gate', 'touhou_&_friends'] },
+    source: '',
+    owner: 'Roy4127',
+    posted: '2026-07-29',
+  })
+  assert.deepEqual(parseZerochanPage(''), {
+    named: { artist: [], character: [], copyright: [] },
+    source: '',
+    owner: '',
+  })
 })
 
 test('a file danbooru also holds is fetched from its cdn, and a list that named no file takes that one', () => {

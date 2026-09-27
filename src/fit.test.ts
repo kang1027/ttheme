@@ -20,7 +20,7 @@ function pick(key: string, id: number, width: number, height: number, tags: stri
     preview: '',
     ext: 'png',
     owner: '',
-    artist: '',
+    named: { artist: [], character: [], copyright: [] },
     rating: 'g',
     md5: '',
     source: '',

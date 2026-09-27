@@ -66,17 +66,25 @@ export interface Named {
   copyright: string[]
 }
 
+const ROLES = ['artist', 'character', 'copyright'] as const
+
+export interface Credit {
+  named: Named
+  source: string
+  owner: string
+  posted?: string
+}
+
 export interface Post extends Rendition {
   id: number
   preview: string
   owner: string
-  artist: string
   score: number
   rating: string
   md5: string
   source: string
   tags: string[]
-  named?: Named
+  named: Named
   posted?: string
   solo: boolean | undefined
   family: number
@@ -113,6 +121,8 @@ export interface Site {
   count(text: string): number
   guesses?(post: Post): string[]
   counts?(tags: string): boolean
+  uploadedBy?(owner: string): string
+  credits?(page: string): Credit
 }
 
 function listing(dir: string): string[] {
@@ -172,10 +182,9 @@ interface Raw {
   file: string
   ext: string
   owner: unknown
-  artist: string
   md5: unknown
   tags: string
-  named?: Named
+  named: Named
   solo: boolean | undefined
   versions: Rendition[]
 }
@@ -196,13 +205,12 @@ function post(p: Record<string, unknown>, raw: Raw): Post[] {
       preview,
       ext: raw.ext,
       owner: String(raw.owner ?? ''),
-      artist: raw.artist,
       score: Number(p.score) || 0,
       rating: String(p.rating ?? ''),
       md5: String(raw.md5 ?? ''),
       source: String(p.source ?? ''),
       tags: words(raw.tags),
-      ...(raw.named ? { named: raw.named } : {}),
+      named: raw.named,
       ...(day(p.created_at) ? { posted: day(p.created_at) } : {}),
       solo: raw.solo,
       family: Number(p.parent_id) || (p.has_children === true ? Number(p.id) : 0),
@@ -222,12 +230,9 @@ export function parseMoebooru(text: string): Post[] {
       file,
       ext: String(p.file_ext || extension(file)).toLowerCase(),
       owner: p.author,
-      artist: typed('artist')[0] ?? '',
       md5: p.md5,
       tags,
-      ...(types.size > 0
-        ? { named: { artist: typed('artist'), character: typed('character'), copyright: typed('copyright') } }
-        : {}),
+      named: { artist: typed('artist'), character: typed('character'), copyright: typed('copyright') },
       solo: undefined,
       versions: [
         version(p.jpeg_url, p.jpeg_width, p.jpeg_height),
@@ -247,7 +252,6 @@ export function parseDanbooru(text: string): Post[] {
       file,
       ext: String(p.file_ext || extension(file)).toLowerCase(),
       owner: '',
-      artist: String(p.tag_string_artist ?? '').split(/\s+/)[0] ?? '',
       md5: p.md5,
       tags,
       named: {
@@ -264,8 +268,12 @@ export function parseDanbooru(text: string): Post[] {
   })
 }
 
+function zerochanTag(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '_')
+}
+
 function zerochanTags(raw: unknown): string[] {
-  return (Array.isArray(raw) ? raw : []).map((tag) => String(tag).toLowerCase().replace(/\s+/g, '_'))
+  return (Array.isArray(raw) ? raw : []).map((tag) => zerochanTag(String(tag)))
 }
 
 function sampleName(tag: unknown): string {
@@ -296,18 +304,52 @@ export function parseZerochan(text: string): Post[] {
         ext: extension(file),
         preview: `${ZEROCHAN_SAMPLES}/${sampleName(item.tag ?? item.primary)}.600.${id}.jpg`,
         owner: '',
-        artist: '',
         score: 0,
         rating: tags.some((tag) => EXPOSED.nudity.has(tag)) ? 'q' : 'g',
         md5: String(item.md5 ?? item.hash ?? ''),
         source: String(item.source ?? ''),
         tags,
+        named: { artist: [], character: [], copyright: [] },
         solo: tags.includes('solo'),
         family: 0,
         smaller: [],
       },
     ]
   })
+}
+
+const ZEROCHAN_ROLES: Record<string, keyof Named> = {
+  mangaka: 'artist',
+  studio: 'artist',
+  character: 'character',
+  series: 'copyright',
+  game: 'copyright',
+}
+
+function unescaped(text: string): string {
+  return text.replace(/&(?:#(\d+)|amp|quot|apos|lt|gt);/g, (entity, code: string | undefined) =>
+    code
+      ? String.fromCharCode(Number(code))
+      : ({ '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>' }[entity] ?? entity),
+  )
+}
+
+export function parseZerochanPage(html: string): Credit {
+  const named: Named = { artist: [], character: [], copyright: [] }
+  for (const [, kind, tag] of html.matchAll(/<li class="([a-z]+)[^"]*"[^>]*\bdata-tag="([^"]*)"/g)) {
+    const role = ZEROCHAN_ROLES[kind as string]
+    const name = zerochanTag(unescaped(tag as string))
+    if (role && !named[role].includes(name)) {
+      named[role].push(name)
+    }
+  }
+  const posted = day(/"datePublished":\s*"([^"]+)"/.exec(html)?.[1])
+  return {
+    named,
+    source: '',
+    owner: unescaped(/\buploader = \{\s*name: '([^']*)'/.exec(html)?.[1] ?? ''),
+    ...(posted ? { posted } : {}),
+  }
 }
 
 export function parseZerochanCount(text: string): number {
@@ -482,6 +524,7 @@ function moebooru(raw: Spec): Site {
     pageUrl: (id) => `${spec.origin}/post/show/${id}`,
     parse: parseMoebooru,
     count: parseCount,
+    uploadedBy: (owner) => `user:${owner}`,
   }
 }
 
@@ -509,6 +552,7 @@ function danbooru(raw: Spec): Site {
     pageUrl: (id) => `${spec.origin}/posts/${id}`,
     parse: parseDanbooru,
     count: parseCounts,
+    uploadedBy: (owner) => `user:${owner}`,
   }
 }
 
@@ -550,6 +594,7 @@ function zerochan(raw: Spec): Site {
     pageUrl: (id) => `${spec.origin}/${id}`,
     parse: parseZerochan,
     count: parseZerochanCount,
+    credits: parseZerochanPage,
     counts: (tags) => zerochanPath(tags).split(',').length === 1 && !('d' in zerochanParams(tags)),
     guesses: (post) =>
       (post.tags.includes('transparent_background') ? ['png', 'jpg'] : ['jpg', 'png']).map((ext) =>
@@ -840,16 +885,48 @@ export async function fetchPost(site: Site, id: number, signal: AbortSignal): Pr
   return found
 }
 
+export async function fetchCredits(site: Site, id: number, signal: AbortSignal): Promise<Credit | undefined> {
+  return site.credits?.(await listed(site, site.pageUrl(id), signal))
+}
+
+const PIXIV_FILE =
+  /^https?:\/\/(?:i\.pximg\.net|i\d*\.pixiv\.net|img\d*\.pixiv\.net)\/\S*\/(\d+)(?:_p\d+)?(?:_\w+)?\.\w+(?:[?#]\S*)?$/i
+const PIXIV_ILLUST = /^https?:\/\/(?:www\.)?pixiv\.net\/member_illust\.php\?\S*\billust_id=(\d+)/i
+
+export function sourcePage(source: string): string {
+  const id = PIXIV_FILE.exec(source)?.[1] ?? PIXIV_ILLUST.exec(source)?.[1]
+  return id ? `https://www.pixiv.net/artworks/${id}` : source
+}
+
+export function uncredited(site: Site, post: Post): boolean {
+  return site.credits !== undefined && post.named.artist.length === 0
+}
+
+export function credit(post: Post, found: Partial<Credit>): void {
+  for (const role of ROLES) {
+    const named = found.named?.[role] ?? []
+    if (post.named[role].length === 0 && named.length > 0) {
+      post.named[role] = named
+    }
+  }
+  post.source ||= found.source ?? ''
+  post.owner ||= found.owner ?? ''
+  if (!post.posted && found.posted) {
+    post.posted = found.posted
+  }
+}
+
 export interface Lent {
   tags: string[]
   named: Named
+  source: string
   file: string
 }
 
 export function lentUrl(md5s: readonly string[]): string {
   const params = new URLSearchParams({
     limit: String(2 * PAGE),
-    only: 'md5,tag_string,tag_string_artist,tag_string_character,tag_string_copyright,file_url',
+    only: 'md5,tag_string,tag_string_artist,tag_string_character,tag_string_copyright,source,file_url',
     tags: `md5:${md5s.join(',')}`,
   })
   return `${LENDER.origin}/posts.json?${params}`
@@ -870,6 +947,7 @@ export function parseLent(text: string): Map<string, Lent> {
                   character: words(p.tag_string_character),
                   copyright: words(p.tag_string_copyright),
                 },
+                source: String(p.source ?? ''),
                 file: absolute(String(p.file_url ?? '')),
               },
             ],
@@ -886,7 +964,7 @@ export function lend(posts: readonly Post[], lent: ReadonlyMap<string, Lent>): v
       continue
     }
     post.tags = [...new Set([...post.tags, ...found.tags])]
-    post.named ??= found.named
+    credit(post, found)
     post.solo = found.tags.includes('solo')
     if (found.file.includes('/original/')) {
       post.mirror = {

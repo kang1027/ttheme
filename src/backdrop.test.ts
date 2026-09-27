@@ -123,6 +123,7 @@ function install(configHome: string, id: number): void {
       ext: 'png',
       bytes: new Uint8Array([id]),
       from: `safebooru ${id} https://example.test/${id}`,
+      ...(id === 1 ? { artist: ['akoiro', 'potate fluffy'], source: 'https://www.pixiv.net/artworks/1' } : {}),
     },
     { width: 40, height: 20 },
     0,
@@ -302,13 +303,20 @@ test('dropping a picture takes its files, tuning and original with it', () => {
   assert.equal(readdirSync(dir).filter((file) => file.startsWith('kagami.') && file.endsWith('.png')).length, 2)
 })
 
-test('the conf lists every picture preview can switch to, and one not shown drops by key', () => {
+test('the conf lists every picture preview can switch to with its artist, and one not shown drops by key', () => {
   const configHome = mkdtempSync(join(tmpdir(), 'ttheme-images-'))
   const dir = backgroundsDir(configHome)
   install(configHome, 1)
   install(configHome, 2)
-  const listed = [...readFileSync(join(dir, 'kagami.conf'), 'utf8').matchAll(/^# picture (\S+) /gm)].map((m) => m[1])
-  assert.deepEqual(listed, ['safebooru_1', 'safebooru_2'])
+  const conf = () => readFileSync(join(dir, 'kagami.conf'), 'utf8')
+  const listed = [...conf().matchAll(/^# picture (\S+) \S+ \S+ \S+ (\S+) (.*)$/gm)].map((m) => m.slice(1))
+  assert.deepEqual(listed, [
+    ['safebooru_1', 'akoiro,potate_fluffy', 'safebooru 1 https://example.test/1'],
+    ['safebooru_2', '-', 'safebooru 2 https://example.test/2'],
+  ])
+  assert.doesNotMatch(conf(), /^# by /m)
+  showImage(configHome, 'kagami', 'safebooru_1')
+  assert.match(conf(), /^# by akoiro,potate_fluffy$/m)
   assert.deepEqual(dropImage(configHome, 'kagami', 'safebooru_1'), { key: 'safebooru_1', left: 1 })
   assert.equal(shown(dir), 'safebooru_2')
 })

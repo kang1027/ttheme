@@ -19,8 +19,23 @@ export function ansiSquares(colors: string[], after = '\x1b[39m'): string {
 
 export { cells }
 
+export const LINK = '⧉'
+
+export function linked(text: string, url: string | undefined): string {
+  return url ? `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\` : text
+}
+
 function sequenceAt(text: string, at: number): number {
-  if (text[at] !== '\x1b' || text[at + 1] !== '[') {
+  if (text[at] !== '\x1b') {
+    return 0
+  }
+  if (text[at + 1] === ']') {
+    const bell = text.indexOf('\x07', at + 2)
+    const st = text.indexOf('\x1b\\', at + 2)
+    const end = bell !== -1 && (st === -1 || bell < st) ? bell + 1 : st !== -1 ? st + 2 : 0
+    return end ? end - at : 0
+  }
+  if (text[at + 1] !== '[') {
     return 0
   }
   let end = at + 2

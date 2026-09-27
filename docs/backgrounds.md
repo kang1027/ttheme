@@ -76,10 +76,13 @@ you have already seen comes back the moment you tab to it. Newer series carry
 few of those tags, so `TTHEME_FIND_CUTOUTS` names the ones to look for, site by
 site.
 
-Under each thumbnail is its post id and size, and under that whoever made it:
-the artist, which every booru names through its tag types at no extra
-request, and the uploader as `@name` where a post has no artist tag; zerochan's
-list names neither. A score follows as
+Under each thumbnail is its post id — a link to the post's page, marked `⧉` in
+the site's color the way Claude Code marks a link, and opened with a click
+(cmd+click in Ghostty and iTerm2); the same mark sets off every post number
+find, preview's tuning panel and `ttheme add` show — and size, and under that the artist: named
+by the site's own tag types, by danbooru's tags for the same file, or, on a
+zerochan post danbooru does not hold, by the post's page once you have tried it
+or the post beside it on — a `—` until one is known. A score follows as
 `★22` on the sites that keep one. When the same hand uploads the same picture at
 the same size over and over, find folds that run into one tile marked `×9`,
 wherever the order puts its pictures, and folds in the same way a picture
@@ -173,12 +176,17 @@ palette, cropped with headroom above the face, at the opacity the contrast gate
 allows — over one of preview's five sample scenes (⇧←→ switch them), with the
 share of transparent pixels next to its size (`opaque` when there are none).
 Under that line the post's page, the source the artwork came from and its artist
-always show, a `—` where the post names none; the page, the source and the post
+always show, a `—` where the post names none; a source that is a pixiv image
+file (which pixiv refuses to open from a link) is named by its artwork page; the page, the source and the post
 id are links, opened with a click (cmd+click in Ghostty and iTerm2). `i` puts
 the rest of the post's details where the scene was — characters, series, the
-other tags, rating, score, the day it was posted, file type and size, uploader —
-and `i` again brings the scene back; they come with the posts' own answers, so
-nothing more is fetched. `t` opens the same tuning panel preview has (see
+other tags, rating, score, the day it was posted, file type and size, uploader,
+each row kept with a `—` where the post names none — and `i` again brings the
+scene back. They come with the posts' own answers, except on zerochan, whose
+list types no tags: a post danbooru holds takes danbooru's names and leaves its
+uploader and day at `—`, and one it does not fetches its page once — beside the
+picture, and ahead of time for the posts on either side — for its artist,
+characters, series, uploader and day. `t` opens the same tuning panel preview has (see
 [Tuning](#tuning)) over the picture: size, position and opacity change what you
 see in place, stay as you move to the next post, and are installed with the
 picture, so preview opens it the way you left it. On macOS an opaque picture is
@@ -192,7 +200,9 @@ konachan, 850 px on danbooru; zerochan names none, so its larger posts are left
 out — and its size carries `↓`; those
 copies are JPEGs, so a cutout tried on that way comes out opaque. `←`/`→` try
 the neighbours, which find fetches ahead of you two at a time, and enter installs
-and returns to the grid with the tile marked `✓`, the tab, search and scroll as
+— keeping the artist and the artwork's page with the picture, which the tuning
+panel's title names (`Background · akoiro · danbooru 12267381`) — and returns
+to the grid with the tile marked `✓`, the tab, search and scroll as
 you left them; esc then hands the last one installed to the preview, which
 carries on straight into the tuning panel below. `c` switches
 between every post and the cutouts, esc goes back. Unless the settings say otherwise,

@@ -976,6 +976,19 @@ __tt_pv_row() {
   fi
 }
 
+__tt_pv_bg_title() {
+  local by=${bgby[$tpick]} ref=${bgfrom[$tpick]} url=${bgurl[$tpick]} mark="" sgr=""
+  local -i room=$1
+  [[ -n $ref && $url == http(s|)://* && $TTHEME_ADAPTER == (ghostty|kitty|wezterm|alacritty|iterm2|windows-terminal|foot) ]] && mark="⧉ "
+  REPLY=Background${by:+ · $by}${ref:+ · $mark$ref}$2
+  (( ${#REPLY} > room )) && REPLY=Background${by:+ · $by}
+  (( ${#REPLY} > room )) && REPLY=Background
+  [[ -n $mark && $REPLY == *"$mark$ref"* ]] || return 0
+  (( color )) && [[ -n ${TTHEME_SITE_ANSI[${ref%% *}]} ]] && sgr=$'\e[3'${TTHEME_SITE_ANSI[${ref%% *}]}m
+  REPLY=${REPLY/"$mark$ref"/$sgr⧉${sgr:+$'\e[39m'} $'\e]8;;'$url$'\e\\'$ref$'\e]8;;\e\\'}
+  return 0
+}
+
 __tt_pv_head() {
   local b=$'\e[1m' d=$'\e[2m' z=$'\e[0m' right=$6
   (( color )) || b= d= z=
@@ -1571,10 +1584,8 @@ __tt_pv_draw() {
       __tt_pv_help
     elif [[ -n $tune ]]; then
       (( bgoff[$tpick] )) && state=off
-      src=Background
-      [[ -n ${bgfrom[$tpick]} ]] && src+=" · ${bgfrom[$tpick]}"
-      (( ${#tune} + ${#src} + 6 > sw )) && src=Background
-      __tt_pv_head 1 $sc $se $tune "$src" $state
+      __tt_pv_bg_title $(( sw - ${#tune} - 6 ))
+      __tt_pv_head 1 $sc $se $tune "$REPLY" $state
       __tt_pv_bg_panel $tpick 4 $sc $se
     elif (( conf )); then
       __tt_tilde "$TTHEME_CONFIG"
@@ -1592,16 +1603,15 @@ __tt_pv_draw() {
   else
     if [[ -n $tune ]]; then
       (( bgoff[$tpick] )) && state=off
-      src=Background
-      [[ -n ${bgfrom[$tpick]} ]] && src+=" · ${bgfrom[$tpick]}"
       pk=(${=bgpics[$tune]})
+      src=""
       if (( ${#pk} > 1 )); then
         k=${pk[(Ie)${${tpick#$tune}#:}]}
         (( k )) || k=${pk[(Ie)${bgact[$tune]}]}
-        src+=" · $k/${#pk}"
+        src=" · $k/${#pk}"
       fi
-      (( ${#tune} + ${#src} + 6 > lw )) && src=Background
-      __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$src" $state
+      __tt_pv_bg_title $(( lw - ${#tune} - 6 )) "$src"
+      __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$REPLY" $state
       __tt_pv_bg_panel $tpick $(( ph - 8 )) 1 $lw
     elif (( conf )); then
       __tt_pv_head $(( ph - 7 )) 1 $lw Config
@@ -1898,7 +1908,7 @@ __tt_preview() {
   local tune="" tpick="" tf=1 help=0 msg="" msgt=0 an="" bgrel=0 bgmx=0 bgmy=0 bganchor=0 bgcut="" bgnext=0 bgbytes=0 bgstrip="" pvscene="" pvscenes=""
   local -i scene=0
   local -a bgorder=()
-  local -A bgfrom=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
+  local -A bgfrom=() bgurl=() bgby=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
   local -A bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() pvseek=()
   local conf=0 cf=1
   local -a plabel=(" This tab " " Default ") csnap=()

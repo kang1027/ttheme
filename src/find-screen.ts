@@ -1,4 +1,5 @@
 import columns from 'fast-string-width'
+import { LINK, linked } from './ansi.ts'
 import type { Framing } from './backdrop.ts'
 import { BLOCKS, type Block, KEY_SPAN, type Kind, type Narrow, type Rating, SITES } from './booru.ts'
 import { type Hex, mix, rgb } from './color.ts'
@@ -47,7 +48,7 @@ export interface Tile {
   width: number
   height: number
   reduced: boolean
-  owner: string
+  page: string
   artist: string
   score: number
   variants: number
@@ -139,7 +140,7 @@ export interface FindView {
   editing?: string
   suggest?: { value: string; count: number; palette?: string }[]
   pick?: number
-  saved?: string
+  saved?: { text: string; key: number }
   note?: string
   hint?: string
   error?: string
@@ -337,8 +338,37 @@ function clip(text: string, room: number): string {
 
 type Part = [string, string, string?]
 
-function linked(text: string, link: string | undefined): string {
-  return link ? `\x1b]8;;${link}\x1b\\${text}\x1b]8;;\x1b\\` : text
+function siteColor(ansi: number): string {
+  return `\x1b[${30 + ansi}m`
+}
+
+function reference(text: string, sgr: string, url: string | undefined, mark: string): Part[] {
+  return url
+    ? [
+        [`${LINK} `, mark],
+        [text, sgr, url],
+      ]
+    : [[text, sgr]]
+}
+
+function partsWidth(parts: readonly Part[]): number {
+  return parts.reduce((n, [text]) => n + width(text), 0)
+}
+
+function clipParts(parts: readonly Part[], room: number): Part[] {
+  const out: Part[] = []
+  let left = room
+  for (const [text, sgr, link] of parts) {
+    const w = width(text)
+    if (w <= left) {
+      out.push([text, sgr, link])
+      left -= w
+      continue
+    }
+    out.push([`${clip(text, left)}…`, sgr, link])
+    break
+  }
+  return out
 }
 
 class Line {
@@ -396,7 +426,7 @@ function dims(tile: Tile): Part {
 
 interface Foot {
   badge?: string
-  lead?: Part
+  lead?: Part[]
   keys?: [string, string][]
   right?: [string, string]
 }
@@ -406,7 +436,7 @@ function foot(line: Line, cols: number, accent: string, spec: Foot): void {
   let lead = spec.lead
   let right = spec.right
   const size = () => {
-    const segs = [...(lead ? [width(lead[0])] : []), ...keys.map(([k, l]) => width(k) + 1 + width(l))]
+    const segs = [...(lead ? [partsWidth(lead)] : []), ...keys.map(([k, l]) => width(k) + 1 + width(l))]
     const left =
       (spec.badge ? width(spec.badge) + 4 : 0) + segs.reduce((n, w) => n + w, 0) + 3 * Math.max(0, segs.length - 1)
     return left + (right ? 3 + width(right[0]) + 1 + width(right[1]) : 0)
@@ -423,15 +453,14 @@ function foot(line: Line, cols: number, accent: string, spec: Foot): void {
     }
   }
   if (lead && size() > cols) {
-    const keep = Math.max(0, width(lead[0]) - (size() - cols) - 1)
-    lead = [`${clip(lead[0], keep)}…`, lead[1]]
+    lead = clipParts(lead, Math.max(0, partsWidth(lead) - (size() - cols) - 1))
   }
   let c = 0
   if (spec.badge) {
     c = line.put(0, ` ${spec.badge} `, `\x1b[7;1m${accent}`) + 2
   }
   const segs: Part[][] = [
-    ...(lead ? [[lead]] : []),
+    ...(lead ? [lead] : []),
     ...keys.map(([k, l]): Part[] => [
       [k, B],
       [` ${l}`, D],
@@ -555,17 +584,18 @@ function bare(url: string): string {
   return url.replace(/^https?:\/\/(?:www\.)?/, '')
 }
 
-function credits(lines: Line[], row: number, col: number, view: FindView): void {
+function credits(lines: Line[], row: number, col: number, view: FindView, accent: string): void {
   const info = view.info
   const artists = info?.artists ?? []
-  const said: [string, Part][] = [
-    ['Post', info?.page ? [bare(info.page), '', info.page] : ['—', D]],
-    ['Source', info?.source ? [bare(info.source), '', info.link] : ['—', D]],
-    ['Artist', artists.length > 0 ? [artists.join('  '), ''] : ['—', D]],
+  const site = siteColor(view.tiles[view.focus]?.siteAnsi ?? view.siteAnsi)
+  const said: [string, Part[]][] = [
+    ['Post', info?.page ? reference(bare(info.page), '', info.page, site) : [['—', D]]],
+    ['Source', info?.source ? reference(bare(info.source), '', info.link, accent) : [['—', D]]],
+    ['Artist', [artists.length > 0 ? [artists.join('  '), ''] : ['—', D]]],
   ]
   said.forEach(([label, value], i) => {
     lines[row + i]?.put(col, label, D)
-    lines[row + i]?.run(col + 12, [value])
+    lines[row + i]?.run(col + 12, value)
   })
 }
 
@@ -582,20 +612,21 @@ function details(lines: Line[], row: number, col: number, room: number, maxRow: 
     `${tile.width}×${tile.height}${info.ext ? ` ${info.ext.toUpperCase()}` : ''}`,
     ...(shown ? [megabytes(shown.bytes)] : []),
   ].join(' · ')
-  const rated = [info.rating, tile.score > 0 ? `★${tile.score}` : '', info.posted].filter(Boolean).join(' · ')
+  const rated = [info.rating ?? '—', tile.score > 0 ? `★${tile.score}` : '', info.posted ?? '']
+    .filter(Boolean)
+    .join(' · ')
+  const tagRows = (tags: string[], most: number): Part[][] =>
+    tags.length > 0 ? tagLines(tags, text, most).map((line): Part[] => [[line, '']]) : [[['—', D]]]
   const said: [string, Part[][]][] = [
-    ['Characters', tagLines(info.characters, text, 2).map((line): Part[] => [[line, '']])],
-    ['Series', tagLines(info.series, text, 1).map((line): Part[] => [[line, '']])],
-    ['Tags', tagLines(info.tags, text, 3).map((line): Part[] => [[line, '']])],
-    ['Rating', rated ? [[[rated, '']]] : []],
+    ['Characters', tagRows(info.characters, 2)],
+    ['Series', tagRows(info.series, 1)],
+    ['Tags', tagRows(info.tags, 3)],
+    ['Rating', [[[rated, rated === '—' ? D : '']]]],
     ['File', [[[file, ''], ...(shown ? ([['  ', '']] as Part[]) : []), ...(shown ? transparent(shown) : [])]]],
-    ['Uploader', info.uploader ? [[[info.uploader, '']]] : []],
+    ['Uploader', [[info.uploader ? [info.uploader, ''] : ['—', D]]]],
   ]
   let r = row
   for (const [label, values] of said) {
-    if (values.length === 0) {
-      continue
-    }
     if (r + values.length - 1 > maxRow) {
       return
     }
@@ -631,7 +662,13 @@ function tunePanel(lines: Line[], r0: number, col: number, end: number, view: Fi
   const tile = view.tiles[view.focus]
   lines[r0 - 3]?.run(col, [
     [view.palette, B + accent],
-    [`  Background${tile ? ` · ${tile.site} ${tile.id}` : ''}`, D],
+    ['  Background', D],
+    ...(tile
+      ? [
+          [' · ', D] as Part,
+          ...reference(`${tile.site} ${tile.id}`, D, tile.page || undefined, siteColor(tile.siteAnsi)),
+        ]
+      : []),
   ])
   const track = Math.max(8, end - col - 21)
   const lo = 20
@@ -694,6 +731,21 @@ function badge(view: FindView, label = view.site, ansi = view.siteAnsi): Part {
 
 function named(key: number): string {
   return `${SITES[Math.floor(key / KEY_SPAN)]?.name ?? 'local'} ${key % KEY_SPAN}`
+}
+
+function mention(text: string, key: number, sgr: string): Part[] {
+  const site = SITES[Math.floor(key / KEY_SPAN)]
+  const ref = named(key)
+  const at = text.indexOf(ref)
+  if (!site || at === -1) {
+    return [[text, sgr]]
+  }
+  const parts: Part[] = [
+    [text.slice(0, at), sgr],
+    ...reference(ref, sgr, site.pageUrl(key % KEY_SPAN), siteColor(site.ansi)),
+    [text.slice(at + ref.length), sgr],
+  ]
+  return parts.filter(([part]) => part !== '')
 }
 
 function tabs(line: Line, cols: number, view: FindView): void {
@@ -766,39 +818,37 @@ function where(view: FindView): string {
   return view.site === 'all' ? 'any site' : view.site
 }
 
-function status(view: FindView, loading?: Part): Part | undefined {
+function status(view: FindView, loading?: Part): Part[] | undefined {
   if (view.installing !== undefined) {
-    return [`${spin(view)} Installing ${view.palette} ← ${named(view.installing)}`, YELLOW]
+    return mention(`${spin(view)} Installing ${view.palette} ← ${named(view.installing)}`, view.installing, YELLOW)
   }
   if (view.hint) {
-    return [view.hint, GREEN]
+    return [[view.hint, GREEN]]
   }
   if (view.error) {
-    return [view.error, YELLOW]
+    return [[view.error, YELLOW]]
   }
   if (view.waiting !== undefined) {
-    return [`${view.slow ?? view.site} asked to slow down · ${view.waiting}s`, YELLOW]
+    return [[`${view.slow ?? view.site} asked to slow down · ${view.waiting}s`, YELLOW]]
   }
   if (view.fetching) {
-    return [
-      `${spin(view)} Fetching ${view.fetching.id % KEY_SPAN} · ${progress(view.fetching.got, view.fetching.size)}`,
-      YELLOW,
-    ]
+    const { id, got, size } = view.fetching
+    return mention(`${spin(view)} Fetching ${named(id)} · ${progress(got, size)}`, id, YELLOW)
   }
   if (view.cutting !== undefined) {
-    return [`${spin(view)} Cutting out ${view.cutting % KEY_SPAN}`, YELLOW]
+    return mention(`${spin(view)} Cutting out ${named(view.cutting)}`, view.cutting, YELLOW)
   }
   if (view.preparing !== undefined) {
-    return [`${spin(view)} Preparing ${view.preparing % KEY_SPAN}`, YELLOW]
+    return mention(`${spin(view)} Preparing ${named(view.preparing)}`, view.preparing, YELLOW)
   }
   if (loading) {
-    return loading
+    return [loading]
   }
   if (view.saved) {
-    return [view.saved, GREEN]
+    return mention(view.saved.text, view.saved.key, GREEN)
   }
   if (view.note) {
-    return [view.note, D]
+    return [[view.note, D]]
   }
   return undefined
 }
@@ -919,20 +969,26 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
           z: -1,
         })
       }
-      inside[r0 + 10]?.run(c0 + 1, [
+      const row: Part[] = [
         ...(view.installed.includes(tile.key) ? ([['✓ ', GREEN]] as Part[]) : []),
-        ...(view.site === 'all' ? ([['● ', `\x1b[${30 + tile.siteAnsi}m`]] as Part[]) : []),
-        [String(tile.id), on ? B : ''],
+        ...(tile.page || view.site !== 'all'
+          ? reference(String(tile.id), on ? B : '', tile.page || undefined, siteColor(tile.siteAnsi))
+          : ([
+              ['● ', siteColor(tile.siteAnsi)],
+              [String(tile.id), on ? B : ''],
+            ] as Part[])),
         [' ', ''],
         dims(tile),
-      ])
+      ]
+      const room = TILE.cols - (tile.mates.length > 0 ? 1 : 0)
+      inside[r0 + 10]?.run(
+        c0 + 1,
+        partsWidth(row) > room ? row.map(([text, sgr, link]): Part => [text.replace(/^(\S) $/, '$1'), sgr, link]) : row,
+      )
       if (tile.mates.length > 0) {
         inside[r0 + 10]?.put(c0 + TILE.cols, '≈', accent)
       }
-      const credit = tile.artist ? plain(tile.artist) : tile.owner && `@${tile.owner}`
-      if (credit) {
-        inside[r0 + 11]?.put(c0 + 1, credit.slice(0, TILE.cols - 8), D)
-      }
+      inside[r0 + 11]?.put(c0 + 1, tile.artist ? plain(tile.artist).slice(0, TILE.cols - 8) : '—', D)
       const marks: Part[] = []
       if (tile.score > 0) {
         marks.push([`★${tile.score}`, D])
@@ -983,7 +1039,7 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
     badge: 'FIND',
     lead,
     keys:
-      quiet && lead === stage
+      quiet && lead?.[0] === stage
         ? []
         : [
             ['←↑↓→', 'move'],
@@ -1008,7 +1064,7 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
   const meta: Part[] = [
     badge(view, tile.site, tile.siteAnsi),
     ['  ', ''],
-    [String(tile.id), B, view.info?.page || undefined],
+    ...reference(String(tile.id), B, tile.page || undefined, siteColor(tile.siteAnsi)),
     ['  ', ''],
     dims(tile),
   ]
@@ -1017,9 +1073,6 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
   }
   if (shown) {
     meta.push([` · ${megabytes(shown.bytes)}`, D])
-  }
-  if (tile.owner) {
-    meta.push([` · ${tile.owner}`, D])
   }
   if (shown) {
     meta.push(['  ', ''], ...transparent(shown))
@@ -1031,7 +1084,7 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
       [tile.mates.join(' '), D],
     ])
   }
-  credits(lines, 1, 2, view)
+  credits(lines, 1, 2, view, accent)
   if (view.tuning) {
     tunePanel(lines, 8, 2, 2 + Math.min(cols - 4, 60), view, accent)
   } else if (view.details) {
