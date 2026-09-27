@@ -21,7 +21,7 @@ import { SCENES, type Scene, TerminalPreview } from './terminal-preview'
 
 function commands(theme: Theme, market: Market | undefined): string[] {
   if (!market) return [`ttheme add ${theme.name}`, `ttheme use ${theme.name}`]
-  return [`ttheme market add ${market.add}`, `ttheme add ${theme.id}`, `ttheme use ${theme.id}`]
+  return [`ttheme add ${theme.name} --market ${market.add}`, `ttheme use ${theme.id}`]
 }
 
 function lightness(hex: string): string {

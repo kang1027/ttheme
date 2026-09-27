@@ -1,10 +1,10 @@
-◆ [Catalog]  Installed   Markets   Errors                      │ Bocchi the Rock!
-│    Search… ‹hint› 6/6 · 0 picked │ ぼっち・ざ・ろっく!
-│    ○ Select all (6)                                          │ The ttheme catalog
-│ ▌  ▸ Bocchi the Rock! (0/3) ぼっち・ざ・ろっく!              │ 3 palettes · 0 installed
-│    ▸ Lucky☆Star (0/3) らき☆すた                              │
-│                                                              │
-│                                                              │
+◆  Catalog  [Installed]  Markets   Errors                      │ kita
+│    Search… ‹hint› 2/2 · 2 picked │ The ttheme catalog
+│    ● Select all (2)                                          │ Bocchi the Rock!
+│    ▾ Bocchi the Rock! (1/1) ぼっち・ざ・ろっく!              │ ぼっち・ざ・ろっく!
+│ ▌    ● kita                                                  │ Installed
+│    ▸ Lucky☆Star (1/1) らき☆すた                              │
+│                                                              │ Gate 9/9 · passes
 │                                                              │
 │                                                              │
 │                                                              │

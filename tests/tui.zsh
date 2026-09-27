@@ -23,6 +23,9 @@ typeset -ga SCENARIOS=(
   'browse-filter   few    browse   k i'
   'browse-picked   few    browse   Right Down Space'
   'browse-series   few    browse   Space'
+  'browse-installed few   browse   Tab Right Down'
+  'browse-markets  few    browse   Tab Tab'
+  'browse-errors   few    browse   Tab Tab Tab'
   'list-few        few    list'
   'menu-few        few    menu'
   'menu-empty      empty  menu'
@@ -71,7 +74,8 @@ settle() {
 
 normalize() {
   expand -t 8 |
-    sed -e 's/[[:space:]]*$//' -e 's/Search….*/Search… ‹hint›/' |
+    sed -E -e 's/Search…[^│]*( [0-9]+\/[0-9]+[^│]*│)/Search… ‹hint›\1/' -e t -e 's/Search….*/Search… ‹hint›/' |
+    sed -e 's/[[:space:]]*$//' |
     awk 'BEGIN{n=0} {lines[n++]=$0} END{while(n>0 && lines[n-1]=="") n--; for(i=0;i<n;i++) print lines[i]}'
 }
 

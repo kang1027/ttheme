@@ -9,6 +9,7 @@ export const TOPIC = 'ttheme-market'
 
 const OWNER = /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/i
 const REPO_NAME = /^[\w.-]{1,100}$/
+const REF = /^\w[\w.+/-]{0,199}$/
 
 export function installedPath(configHome: string): string {
   return join(configHome, 'ttheme', 'installed.json')
@@ -35,6 +36,28 @@ export function isRemote(source: string): boolean {
   return source !== OFFICIAL && !isLocal(source)
 }
 
+export function repoOf(source: string): string {
+  const at = source.indexOf('#')
+  return isRemote(source) && at >= 0 ? source.slice(0, at) : source
+}
+
+export function refOf(source: string): string | undefined {
+  const at = source.indexOf('#')
+  return isRemote(source) && at >= 0 ? source.slice(at + 1) : undefined
+}
+
+export function sameMarket(a: string, b: string): boolean {
+  return repoOf(a) === repoOf(b)
+}
+
+export function autoUpdates(source: string, updates: Readonly<Record<string, boolean>> | undefined): boolean {
+  return !isLocal(source) && (updates?.[source] ?? source === OFFICIAL)
+}
+
+function refProblem(ref: string): boolean {
+  return !REF.test(ref) || ref.includes('..') || ref.includes('//') || /(?:[./]|\.lock)$/.test(ref)
+}
+
 export function parseSource(arg: string, cwd = process.cwd()): string {
   if (arg === OFFICIAL) {
     return OFFICIAL
@@ -45,18 +68,30 @@ export function parseSource(arg: string, cwd = process.cwd()): string {
   if (arg.startsWith('.') || isAbsolute(arg)) {
     return resolve(cwd, arg)
   }
-  const [owner, repo, ...rest] = arg
+  const [spec = '', ref, ...extra] = arg.split('#')
+  const [owner, repo, ...rest] = spec
     .replace(/^https:\/\/github\.com\//, '')
     .replace(/\.git$/, '')
     .split('/')
-  if (!owner || !OWNER.test(owner) || !repo || !REPO_NAME.test(repo) || rest.length > 0) {
-    throw new Error(`${arg} is not a market — give a repository (alice/ttheme-dust) or a path (./my-market)`)
+  if (
+    !owner ||
+    !OWNER.test(owner) ||
+    !repo ||
+    !REPO_NAME.test(repo) ||
+    rest.length > 0 ||
+    extra.length > 0 ||
+    (ref !== undefined && refProblem(ref))
+  ) {
+    throw new Error(
+      `${arg} is not a market — give a repository (alice/ttheme-dust, #v1 pins a tag or branch) or a path (./my-market)`,
+    )
   }
-  return `${owner.toLowerCase()}/${repo}`
+  return `${owner.toLowerCase()}/${repo}${ref === undefined ? '' : `#${ref}`}`
 }
 
 export function rawUrl(source: string): string {
-  return `https://raw.githubusercontent.com/${source}/HEAD/${INDEX}`
+  const ref = refOf(source)?.split('/').map(encodeURIComponent).join('/') ?? 'HEAD'
+  return `https://raw.githubusercontent.com/${repoOf(source)}/${ref}/${INDEX}`
 }
 
 export function remoteOwner(source: string): string {
@@ -68,7 +103,7 @@ export function marketsDir(configHome: string): string {
 }
 
 export function cachePath(configHome: string, source: string): string {
-  return join(marketsDir(configHome), `${source.replace('/', '--')}.json`)
+  return join(marketsDir(configHome), `${repoOf(source).replace('/', '--')}.json`)
 }
 
 export function localRoot(configHome: string): string {

@@ -1,13 +1,15 @@
 import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import pkg from '../package.json' with { type: 'json' }
+import { runBrowse } from './browse.ts'
 import { build } from './build.ts'
 import { runCheck, runEdit, runNew, runShare } from './craft.ts'
 import { runFind } from './find.ts'
 import { runImage } from './images.ts'
 import { Cancelled, runInit } from './init.ts'
-import { runAdd, runBrowse, runDefault, runList, runOff, runOn, runRemove, runUpdate } from './market.ts'
+import { runAdd, runDefault, runList, runOff, runOn, runRemove, runUpdate } from './market.ts'
 import { runMarket } from './markets.ts'
 import { runRedraw } from './redraw.ts'
+import { autoRefresh } from './refresh.ts'
 import { runUninstall } from './uninstall.ts'
 import { helpText, usageOf, VERB_SPECS, type VerbSpec } from './verbs.ts'
 
@@ -18,7 +20,10 @@ export interface Flags {
   fix?: boolean
   from?: string
   in?: string
+  market?: string
 }
+
+const REFRESHES = new Set(['add', 'remove', 'market', 'default', 'on', 'off'])
 
 export interface Verb extends VerbSpec {
   run?(args: string[], flags: Flags): unknown
@@ -30,7 +35,7 @@ const RUNS: Record<string, Verb['run']> = {
   off: () => runOff(),
   browse: () => runBrowse(),
   list: ([query], { json }) => runList(query, json),
-  add: (names) => runAdd(names),
+  add: (names, { market }) => runAdd(names, market),
   remove: (names) => runRemove(names),
   update: () => runUpdate(),
   market: ([action, arg]) => runMarket(action, arg),
@@ -166,6 +171,9 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     running = call.verb
     if (!call.verb.run) {
       throw new Error('runs in the shell layer — open a new tab once `ttheme init` has wired it')
+    }
+    if (REFRESHES.has(call.verb.name)) {
+      await autoRefresh()
     }
     const code = await call.verb.run(call.args, call.flags)
     return typeof code === 'number' ? code : 0

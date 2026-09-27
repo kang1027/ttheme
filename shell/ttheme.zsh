@@ -537,7 +537,7 @@ __tt_cli() {
 __tt_catalog() {
   local was
   __tt_cli "$@" || return
-  [[ $1 == (list|share|market) ]] && return 0
+  [[ $1 == (list|share) ]] && return 0
   [[ -r $TTHEME_HOME/palettes.zsh ]] || return 0
   was="$TTHEME_STARTUP ${TTHEME_PALETTE[$TTHEME_STARTUP]}"
   __tt_palettes_load && __tt_reloaded
@@ -1829,9 +1829,11 @@ if (( $+functions[compdef] )); then
       compadd -- add remove search init
     elif [[ $words[2] == market && $words[3] == (add|init) && CURRENT == 4 ]]; then
       _files -/
+    elif [[ $words[2] == add && $words[CURRENT-1] == --market ]]; then
+      _files -/
     elif [[ $words[2] == add ]]; then
       reply=(${${${(M)${(f)"$(__tt_cli list --json 2>/dev/null)"}:#*\"name\": *}#*\"name\": \"}%%\"*})
-      compadd -- ${reply:|TTHEME_ORDER}
+      compadd -- --market ${reply:|TTHEME_ORDER}
     fi
   }
   compdef __tt_complete ttheme

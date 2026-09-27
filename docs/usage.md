@@ -22,11 +22,11 @@ New tabs
   config                                         Edit settings in $EDITOR — they apply in new tabs
 
 Palettes
-  browse                                         Pick palettes from the catalog in a live picker
+  browse                                         Pick palettes and markets in a live picker — tab moves between Catalog, Installed, Markets and Errors
   list [--json] [query]                          Show the catalog, marking what is installed
-  add <palette...>                               Install palettes from the catalog, or from a share code: ttheme add tt1:…
+  add [--market <source>] <palette...>           Install palettes from the catalog, or from a share code: ttheme add tt1:…
   remove <palette...>                            Uninstall palettes
-  update                                         Refresh every market you added
+  update                                         Refresh every market you added now — those with auto-update refresh on their own once a day
   market [action] [source]                       The markets you added — add, remove and search them; init makes one of your own
 
 Your own
@@ -136,26 +136,45 @@ still wins:
 ## The catalog
 
 The catalog is not installed wholesale: `init` installs the series you pick, and
-`init --yes` none at all. `ttheme browse` opens the catalog as a live picker —
-groups fold and unfold, typing filters (a query has no spaces, `space` is the
-pick key), the tab repaints as the cursor lands on a palette, `space` marks one
-(a series from its header, everything shown from `Select all`), and enter
-installs exactly what is marked and removes what is not:
+`init --yes` none at all. `ttheme browse` opens it as a live picker in four
+tabs — `tab` moves on, `shift+tab` back, and each tab keeps its own filter:
+
+- **Catalog** is every palette of every market you added. Groups fold and
+  unfold, typing filters (a query has no spaces, `space` is the pick key), the
+  tab repaints as the cursor lands on a palette, and `space` marks one (a series
+  from its header, everything shown from `Select all`).
+- **Installed** is the same list cut down to what you have, so unmarking one
+  there is how you drop it.
+- **Markets** lists the markets you added: `space` marks one for removal (its
+  installed palettes stay), `←` and `→` turn its auto-update off and on, and
+  `ctrl+r` updates it now. Type a repository (`alice/ttheme-pastel`, `#v1` pins
+  it) or a folder and an `Add` row appears; `Find markets on GitHub` lists the
+  repositories with the `ttheme-market` topic, and `space` on one adds it —
+  after asking whether it updates on its own.
+- **Errors** collects what went wrong: a market that failed to update, an index
+  that cannot be read, a palette file of yours that does not parse.
+
+Nothing is written until enter, which applies every tab at once — the markets
+added and removed, the auto-update switches, and exactly the palettes marked
+(installing the new ones, removing the unmarked). esc leaves everything as it
+was. From 94 columns up, the panel on the right describes whatever the cursor is
+on — a palette's market, its gate score and failing rules, its pictures, and
+what enter will do to it; a narrower window gets the same as one line under the
+list:
 
 ```
-◆ Catalog (4/150 · 2 picked)
-│    bo_
-│    ○ Select all (4)
-│    ▾ Bocchi the Rock! (2/4) ぼっち・ざ・ろっく!
-│ ▌    ● bocchi   ■ ■ ■ ■ ■ ■
-│      ● kita     ■ ■ ■ ■ ■ ■
-│      ○ nijika   ■ ■ ■ ■ ■ ■
-│      ○ ryo      ■ ■ ■ ■ ■ ■
-└ ↑↓ move · ←→ fold · space pick · type to filter · enter install · esc cancel
+◆ [Catalog]  Installed   Markets   Errors                      │ kita
+│    ki_                                        1/6 · 2 picked │ The ttheme catalog
+│    ● Select all (1)                                          │ Bocchi the Rock!
+│    ▾ Bocchi the Rock! (1/1) ぼっち・ざ・ろっく!              │ ぼっち・ざ・ろっく!
+│ ▌    ● kita   ■ ■ ■ ■ ■ ■                                    │ Installed
+│                                                              │
+│                                                              │ Gate 9/9 · passes
+└ tab switch · ↑↓ move · ←→ fold · space pick · type to filter · enter apply · esc cancel
 ```
 
-The counts stay honest: `4/150` is what the filter matched out of the catalog,
-`2 picked` is the install set, and `(2/4)` on the series header is how many of
+The counts stay honest: `1/6` is what the filter matched out of the catalog,
+`2 picked` is the install set, and `(1/1)` on the series header is how many of
 its shown palettes are in it. The six squares are the palette's own colors — its
 foreground, the three that identify the character, then its red and green — and
 the focused row is drawn in the palette's selection color, which `ttheme`,
@@ -180,6 +199,13 @@ them and fetches any picture a palette newly lists. A palette that leaves its
 market stays installed from the copy the last change kept
 (`~/.config/ttheme/kept.json`); `list` marks it.
 
+A market with auto-update on does that by itself: when a copy is a day old,
+`browse`, `add`, `remove`, `market`, `default`, `on` and `off` fetch it first —
+`browse` in the background while it is open, the others waiting a few seconds
+at most — and say so (`Updated official 1.0.50 — 153 palettes (3 new)`) when
+something changed. A failed try is kept quiet, shown under Errors, and tried
+again an hour later. Nothing ever runs from the shell or a new tab.
+
 ## Markets
 
 The catalog is every market you added, laid together. The official one
@@ -189,10 +215,18 @@ repository with a `ttheme-market.json` at its root is another:
 ```sh
 ttheme market search              # repositories with the ttheme-market topic
 ttheme market add alice/ttheme-pastel   # a repository — its index names it: alice@pastel
+ttheme market add alice/ttheme-pastel#v1  # the same, pinned to a tag, branch or commit
 ttheme market add ./my-market     # a folder, read in place on every command
-ttheme market                     # what you added, with counts
+ttheme add dusk --market alice/ttheme-pastel  # add the market and install from it in one step
+ttheme market                     # what you added: counts, auto-update, the last update
 ttheme market remove alice@pastel # installed palettes from it keep working
 ```
+
+Adding a repository asks whether it updates on its own (no, without a
+terminal); the official catalog always starts with auto-update on, and a folder
+is read in place, so it needs none. `browse`'s Markets tab switches it later.
+Adding a repository you already have with another `#ref` moves it there,
+keeping its auto-update.
 
 A market is `<owner>@<name>`: the repository's owner and the name its index
 gives. Its palettes are `<owner>@<name>/<palette>` (`ttheme add
@@ -204,9 +238,12 @@ official` drops the official catalog too; `ttheme market add official` brings
 it back.
 
 Installed palettes and the markets you added are listed in
-`~/.config/ttheme/installed.json`; the official catalog is cached in
+`~/.config/ttheme/installed.json`, with an auto-update switch under `updates`
+only where it differs from the default; the official catalog is cached in
 `~/.config/ttheme/catalog.json` and each other market in
-`~/.config/ttheme/markets/<owner>--<repository>.json`.
+`~/.config/ttheme/markets/<owner>--<repository>.json`, whose age is how auto-update
+tells a day has passed. Failed tries are kept in
+`~/.local/state/ttheme/markets.json`.
 
 ## Your own palettes
 

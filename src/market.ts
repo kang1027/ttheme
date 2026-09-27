@@ -3,7 +3,7 @@ import * as p from '@clack/prompts'
 import { available, readCatalog, readKept, search } from './catalog.ts'
 import { adopt } from './craft.ts'
 import { listed, type Manifest } from './emit/manifest.ts'
-import { refresh } from './markets.ts'
+import { addSource, localLine } from './markets.ts'
 import { colorless, paletteOsc, queryTerminalColors, restoreOsc } from './osc.ts'
 import { CODE, readLocal } from './own.ts'
 import { PalettePrompt, type PickerScope, promptFx } from './palette-prompt.ts'
@@ -20,16 +20,34 @@ import {
   writeInstalled,
 } from './palettes.ts'
 import { bringPictures, since } from './pictures.ts'
-import { installedPath, marketSources, shownSource } from './sources.ts'
-import { alphabetical } from './theme.ts'
+import { refreshLine, refreshMarket } from './refresh.ts'
+import { installedPath, isLocal, marketSources, OFFICIAL, shownSource } from './sources.ts'
+import { alphabetical, marketOf } from './theme.ts'
 import { type InitTerminal, TERMINAL_NAMES } from './wiring.ts'
 
-function reload(count: number): void {
+export function reload(count: number): void {
   console.log(`\n${count} palettes installed — open a new tab, or reload your terminal config`)
 }
 
-export async function runAdd(given: string[]): Promise<void> {
+export function inMarket(given: string[], id: string): string[] {
+  return given.map((name) => {
+    if (name.startsWith(CODE)) {
+      return name
+    }
+    const market = marketOf(name)
+    if (market === undefined) {
+      return id === OFFICIAL ? name : `${id}/${name}`
+    }
+    if (market !== id) {
+      throw new Error(`${name} is not in ${id} — give its bare name, or leave --market out`)
+    }
+    return name
+  })
+}
+
+export async function runAdd(asked: string[], market?: string): Promise<void> {
   const home = configHome()
+  const given = market ? inMarket(asked, (await addSource(home, market)).id) : asked
   const catalog = readCatalog(home)
   const names = [...new Set(given.map((n) => (n.startsWith(CODE) ? adopt(home, n, catalog) : n)))]
   const state = readInstalled(home)
@@ -190,7 +208,7 @@ export async function runUpdate(): Promise<void> {
   }
   for (const source of markets) {
     try {
-      console.log(`  ${await refresh(home, source)}`)
+      console.log(`  ${isLocal(source) ? localLine(home, source) : refreshLine(await refreshMarket(home, source))}`)
     } catch (error) {
       const name = shownSource(source)
       console.log(`  ${name}: ${(error as Error).message} — kept the copy from the last update`)
@@ -241,36 +259,4 @@ export async function pickPalettes(
     return undefined
   }
   return catalog.palettes.filter((e) => prompt.picked.has(e.name)).map((e) => e.name)
-}
-
-export async function runBrowse(): Promise<void> {
-  const home = configHome()
-  const catalog = readCatalog(home)
-  const state = readInstalled(home)
-  const wanted = await pickPalettes(available(home, catalog), state.palettes, 'palette')
-  if (!wanted) {
-    console.log('Nothing changed')
-    return
-  }
-  const dropped = state.palettes.filter((n) => !wanted.includes(n))
-  const added = wanted.filter((n) => !state.palettes.includes(n))
-  if (added.length === 0 && dropped.length === 0) {
-    console.log('Nothing changed')
-    return
-  }
-  const next = { ...state, palettes: wanted }
-  commit(home, catalog, state, next)
-  forget(home, catalog, state.terminals, dropped)
-  for (const name of added) {
-    console.log(`  + ${name}`)
-  }
-  for (const name of dropped) {
-    console.log(`  - ${name}`)
-  }
-  await bringPictures(
-    home,
-    available(home, catalog, false).palettes.filter((e) => added.includes(e.name)),
-    next.terminals,
-  )
-  reload(next.palettes.length)
 }

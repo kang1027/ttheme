@@ -6,7 +6,8 @@ import { test } from 'node:test'
 
 import { writeCatalog } from './catalog.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
-import { runAdd, runDefault } from './market.ts'
+import { inMarket, runAdd, runDefault } from './market.ts'
+import { withMarkets } from './markets.ts'
 import { readInstalled, sync, writeInstalled } from './palettes.ts'
 
 function entry(name: string, order: number): PaletteEntry {
@@ -82,4 +83,27 @@ test('default refuses a palette that is not installed', () => {
   const home = installedHome(['gojo'])
   assert.throws(() => inHome(home, () => runDefault('geto')), /geto is not installed/)
   assert.equal(readInstalled(home).startup, undefined)
+})
+
+test('--market names bare palettes after the market it added, and refuses one from another market', () => {
+  assert.deepEqual(inMarket(['dusk', 'alice@pastel/dawn', 'tt1:abc'], 'alice@pastel'), [
+    'alice@pastel/dusk',
+    'alice@pastel/dawn',
+    'tt1:abc',
+  ])
+  assert.deepEqual(inMarket(['kita'], 'official'), ['kita'])
+  assert.throws(() => inMarket(['bob@neon/glow'], 'alice@pastel'), /bob@neon\/glow is not in alice@pastel/)
+})
+
+test('installed.json keeps an auto-update setting only where it differs from the default', () => {
+  const state = { terminals: ['ghostty' as const], palettes: [] }
+  const next = withMarkets(state, ['official', 'alice/pastel', 'bob/neon'], {
+    official: true,
+    'alice/pastel': true,
+    'bob/neon': false,
+    'carol/gone': true,
+  })
+  assert.deepEqual(next.markets, ['official', 'alice/pastel', 'bob/neon'])
+  assert.deepEqual(next.updates, { 'alice/pastel': true })
+  assert.equal(withMarkets(state, ['official'], { official: true }).updates, undefined)
 })

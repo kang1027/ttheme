@@ -24,7 +24,7 @@ export interface MarketIndex extends Manifest {
   name: string
 }
 
-export function readCatalog(configHome: string): Manifest {
+export function readCatalog(configHome: string, warn = true): Manifest {
   const sources = marketSources(configHome)
   const path = catalogPath(configHome)
   let base = emptyManifest()
@@ -34,7 +34,7 @@ export function readCatalog(configHome: string): Manifest {
     }
     base = parseCatalog(readFileSync(path, 'utf8'))
   }
-  const remote = sources.filter(isRemote).flatMap((source) => readCached(configHome, source))
+  const remote = sources.filter(isRemote).flatMap((source) => readCached(configHome, source, warn))
   return { ...base, palettes: [...base.palettes, ...remote] }
 }
 
@@ -46,7 +46,7 @@ export function remoteId(source: string, index: MarketIndex): string {
   return marketId({ owner: remoteOwner(source), name: index.name })
 }
 
-function readCached(configHome: string, source: string): PaletteEntry[] {
+function readCached(configHome: string, source: string, warn: boolean): PaletteEntry[] {
   const path = cachePath(configHome, source)
   if (!existsSync(path)) {
     return []
@@ -55,7 +55,9 @@ function readCached(configHome: string, source: string): PaletteEntry[] {
     const index = readCachedIndex(configHome, source)
     return marketEntries(index, remoteId(source, index))
   } catch (error) {
-    process.stderr.write(`ttheme: skipping ${path} — ${(error as Error).message}\n`)
+    if (warn) {
+      process.stderr.write(`ttheme: skipping ${path} — ${(error as Error).message}\n`)
+    }
     return []
   }
 }
@@ -152,10 +154,16 @@ export class Missing extends Error {}
 
 export class Limited extends Error {}
 
-export async function fetchParsed<T>(url: string, parse: (source: string) => T): Promise<T> {
+export async function fetchParsed<T>(
+  url: string,
+  parse: (source: string) => T,
+  timeout = TIMEOUT,
+  signal?: AbortSignal,
+): Promise<T> {
   let response: Response
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT) })
+    const limit = AbortSignal.timeout(timeout)
+    response = await fetch(url, { signal: signal ? AbortSignal.any([limit, signal]) : limit })
   } catch (error) {
     throw new Error(`cannot reach ${url} — ${error instanceof Error ? error.message : String(error)}`)
   }

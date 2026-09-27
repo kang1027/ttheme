@@ -7,20 +7,18 @@ import {
   fetchParsed,
   Limited,
   type MarketIndex,
-  Missing,
   parseCatalog,
-  parseIndex,
-  REGISTRY_URL,
   readCachedIndex,
   readCatalog,
   remoteId,
-  writeCatalog,
 } from './catalog.ts'
 import { writeAtomic } from './edits.ts'
 import { emptyManifest, listed, type PaletteEntry, paletteEntry } from './emit/manifest.ts'
 import { gateLines, type LocalMarket, localMarkets, palettesDir, readMarketDir, readOwnText } from './own.ts'
 import { configHome, type Installed, readInstalled, sync, writeInstalled } from './palettes.ts'
+import { ago, counted, type Fetched, fetchedAt, fetchMarket, readTries, storeMarket } from './refresh.ts'
 import {
+  autoUpdates,
   cachePath,
   defaultLocal,
   type Identity,
@@ -32,7 +30,9 @@ import {
   marketsOf,
   OFFICIAL,
   parseSource,
-  rawUrl,
+  refOf,
+  repoOf,
+  sameMarket,
   shownSource,
   TOPIC,
 } from './sources.ts'
@@ -88,11 +88,7 @@ export async function handle(home: string, state: Installed): Promise<string> {
   return author
 }
 
-function counted(n: number): string {
-  return `${n} palette${n === 1 ? '' : 's'}`
-}
-
-function idOf(home: string, source: string): string {
+export function idOf(home: string, source: string): string {
   if (source === OFFICIAL) {
     return OFFICIAL
   }
@@ -120,61 +116,129 @@ function officialFor(home: string): PaletteEntry[] {
   return existsSync(path) ? parseCatalog(readFileSync(path, 'utf8')).palettes : official(home)
 }
 
-async function fetchIndex(source: string): Promise<MarketIndex> {
-  try {
-    return await fetchParsed(rawUrl(source), parseIndex)
-  } catch (error) {
-    if (error instanceof Missing) {
-      throw new Error(`github.com/${source} has no ${INDEX} — is the repository public, and has its action run?`)
-    }
-    throw error
-  }
+export function withMarkets(state: Installed, markets: string[], updates: Record<string, boolean>): Installed {
+  const { updates: _, ...rest } = state
+  const kept = Object.entries(updates).filter(
+    ([source, on]) => markets.includes(source) && on !== autoUpdates(source, {}),
+  )
+  return { ...rest, markets, ...(kept.length > 0 ? { updates: Object.fromEntries(kept) } : {}) }
 }
 
-function register(home: string, source: string, name: string): string[] {
+export function nameTaken(home: string, sources: string[], source: string, name: string): string | undefined {
+  return sources.find((s) => s !== source && !sameMarket(s, source) && nameOf(home, s) === name)
+}
+
+function register(home: string, source: string, name: string, auto?: boolean): void {
   const state = readInstalled(home)
   const sources = marketsOf(state.markets)
-  const taken = sources.find((s) => s !== source && nameOf(home, s) === name)
+  const taken = nameTaken(home, sources, source, name)
   if (taken) {
     throw new Error(
       `${name} already names the market at ${shownSource(taken)} — \`ttheme market remove ${name}\` first`,
     )
   }
-  if (!sources.includes(source)) {
-    writeInstalled(home, { ...state, markets: [...sources, source] })
-  }
-  return sources
+  const updates = auto === undefined ? { ...state.updates } : { ...state.updates, [source]: auto }
+  writeInstalled(home, withMarkets(state, sources.includes(source) ? sources : [...sources, source], updates))
 }
 
-async function addMarket(arg: string): Promise<void> {
-  const home = configHome()
-  const source = parseSource(arg)
-  if (marketsOf(readInstalled(home).markets).includes(source)) {
-    console.log(`${shownSource(source)} is already added`)
-    return
+async function askAuto(id: string): Promise<boolean> {
+  if (!tty()) {
+    return false
   }
-  if (source === OFFICIAL) {
-    const catalog = await fetchParsed(REGISTRY_URL, parseCatalog)
-    register(home, source, OFFICIAL)
-    writeCatalog(home, catalog)
-    console.log(`Added the ttheme catalog — ${counted(listed(catalog.palettes).length)} · \`ttheme browse\` picks them`)
-    return
+  const yes = await p.confirm({
+    message: `Update ${id} on its own when its author changes it? ttheme checks once a day, when you run it`,
+    initialValue: false,
+  })
+  if (p.isCancel(yes)) {
+    throw new Error('no answer given — nothing was added')
+  }
+  return yes
+}
+
+async function repin(home: string, was: string, source: string): Promise<Fetched> {
+  const fetched = await fetchMarket(source)
+  const state = readInstalled(home)
+  const sources = marketsOf(state.markets)
+  const taken = nameTaken(home, sources, source, fetched.id)
+  if (taken) {
+    throw new Error(
+      `${fetched.id} already names the market at ${shownSource(taken)} — \`ttheme market remove ${fetched.id}\` first`,
+    )
+  }
+  const { [was]: auto, ...others } = state.updates ?? {}
+  const updates = auto === undefined ? others : { ...others, [source]: auto }
+  writeInstalled(
+    home,
+    withMarkets(
+      state,
+      sources.map((s) => (s === was ? source : s)),
+      updates,
+    ),
+  )
+  storeMarket(home, fetched)
+  return fetched
+}
+
+export async function addSource(home: string, arg: string): Promise<{ source: string; id: string; fresh: boolean }> {
+  const source = parseSource(arg)
+  const sources = marketsOf(readInstalled(home).markets)
+  if (sources.includes(source)) {
+    console.log(`${shownSource(source)} is already added`)
+    return { source, id: idOf(home, source), fresh: false }
+  }
+  const was = isRemote(source) ? sources.find((s) => isRemote(s) && sameMarket(s, source)) : undefined
+  if (was) {
+    const fetched = await repin(home, was, source)
+    console.log(
+      `Moved ${fetched.id} to ${refOf(source) ?? 'its default branch'} · ${shownSource(source)} — ${counted(listed(fetched.entries).length)}`,
+    )
+    return { source, id: fetched.id, fresh: false }
   }
   if (isLocal(source)) {
     const id = marketId(localIdentity(source))
     register(home, source, id)
     const count = readMarketDir(source, id, official(home)).length
     console.log(`Added ${id} · ${shownSource(source)} — ${counted(count)}, read in place`)
-    console.log('\n`ttheme browse` picks them · `ttheme market build` there writes the index others fetch')
+    return { source, id, fresh: true }
+  }
+  const fetched = await fetchMarket(source)
+  const auto = source === OFFICIAL ? undefined : await askAuto(fetched.id)
+  register(home, source, fetched.id, auto)
+  storeMarket(home, fetched)
+  const count = counted(listed(fetched.entries).length)
+  console.log(
+    source === OFFICIAL
+      ? `Added the ttheme catalog — ${count}`
+      : `Added ${fetched.id} · ${shownSource(source)} — ${count}${auto ? ', updating on its own' : ''}`,
+  )
+  return { source, id: fetched.id, fresh: true }
+}
+
+async function addMarket(arg: string): Promise<void> {
+  const home = configHome()
+  const { source, id, fresh } = await addSource(home, arg)
+  if (!fresh) {
     return
   }
-  const index = await fetchIndex(source)
-  const id = remoteId(source, index)
-  register(home, source, id)
-  mkdirSync(join(home, 'ttheme', 'markets'), { recursive: true })
-  writeAtomic(cachePath(home, source), `${JSON.stringify(index, null, 2)}\n`)
-  console.log(`Added ${id} · ${shownSource(source)} — ${counted(index.palettes.length)}`)
-  console.log(`\n\`ttheme browse\` picks them, or \`ttheme add ${id}/<palette>\``)
+  if (isLocal(source)) {
+    console.log('\n`ttheme browse` picks them · `ttheme market build` there writes the index others fetch')
+  } else if (source === OFFICIAL) {
+    console.log('\n`ttheme browse` picks them')
+  } else {
+    console.log(`\n\`ttheme browse\` picks them, or \`ttheme add ${id}/<palette>\``)
+  }
+}
+
+export function dropCache(home: string, source: string): void {
+  if (source === OFFICIAL) {
+    rmSync(catalogPath(home), { force: true })
+  } else if (isRemote(source)) {
+    rmSync(cachePath(home, source), { force: true })
+  }
+}
+
+export function keptNote(kept: string[]): string {
+  return `${counted(kept.length)} installed from it keep${kept.length === 1 ? 's' : ''} working: ${kept.join(', ')} — \`ttheme remove\` drops ${kept.length === 1 ? 'it' : 'them'}`
 }
 
 function removeMarket(name: string): void {
@@ -187,17 +251,14 @@ function removeMarket(name: string): void {
   }
   const id = nameOf(home, source)
   const kept = state.palettes.filter((n) => marketOfPalette(n) === id)
-  const next = { ...state, markets: sources.filter((s) => s !== source) }
+  const remaining = sources.filter((s) => s !== source)
+  const next = withMarkets(state, remaining, state.updates ?? {})
   writeInstalled(home, next)
-  if (source === OFFICIAL) {
-    rmSync(catalogPath(home), { force: true })
-  } else if (isRemote(source)) {
-    rmSync(cachePath(home, source), { force: true })
-  }
+  dropCache(home, source)
   sync(home, readCatalog(home), next)
   console.log(`Removed ${id ?? name} · ${shownSource(source)}`)
   if (kept.length > 0) {
-    console.log(`${counted(kept.length)} installed from it keep working — \`ttheme remove\` drops them`)
+    console.log(keptNote(kept))
   }
 }
 
@@ -209,7 +270,7 @@ function parseSourceOrNot(arg: string): string | undefined {
   }
 }
 
-function countOf(home: string, source: string): number | undefined {
+export function countOf(home: string, source: string): number | undefined {
   try {
     if (source === OFFICIAL) {
       return listed(parseCatalog(readFileSync(catalogPath(home), 'utf8')).palettes).length
@@ -223,6 +284,18 @@ function countOf(home: string, source: string): number | undefined {
   }
 }
 
+export function lastUpdate(home: string, source: string, tries = readTries(), now = Date.now()): string {
+  if (isLocal(source)) {
+    return 'read in place'
+  }
+  const failed = tries[source]
+  const at = fetchedAt(home, source)
+  if (failed && (at === undefined || failed.at > at)) {
+    return `update failed ${ago(failed.at, now)}`
+  }
+  return at === undefined ? 'never updated' : `updated ${ago(at, now)}`
+}
+
 function listMarkets(): void {
   const home = configHome()
   const state = readInstalled(home)
@@ -231,14 +304,21 @@ function listMarkets(): void {
     console.log('No markets — `ttheme market add official` brings the ttheme catalog back')
     return
   }
+  const tries = readTries()
   const rows = sources.map((source) => {
     const name = nameOf(home, source) ?? '?'
     const count = countOf(home, source)
     const installed = state.palettes.filter((n) => marketOfPalette(n) === name).length
+    const auto = isLocal(source) ? [] : [`auto-update ${autoUpdates(source, state.updates) ? 'on' : 'off'}`]
     return {
       name,
       where: shownSource(source),
-      note: count === undefined ? 'Unreadable' : `${counted(count)}${installed > 0 ? ` · ${installed} installed` : ''}`,
+      note: [
+        count === undefined ? 'Unreadable' : counted(count),
+        ...(installed > 0 ? [`${installed} installed`] : []),
+        ...auto,
+        lastUpdate(home, source, tries),
+      ].join(' · '),
     }
   })
   const nameWidth = Math.max(...rows.map((r) => r.name.length))
@@ -248,7 +328,7 @@ function listMarkets(): void {
   }
 }
 
-interface Repository {
+export interface Repository {
   full_name: string
   name: string
   description: string | null
@@ -256,11 +336,18 @@ interface Repository {
   owner: { login: string }
 }
 
-async function searchRepositories(q: string): Promise<Repository[]> {
+export function repositorySource(r: Repository): string {
+  return `${r.owner.login.toLowerCase()}/${r.name}`
+}
+
+export async function findMarkets(query: string | undefined, signal?: AbortSignal): Promise<Repository[]> {
+  const q = encodeURIComponent(`topic:${TOPIC}${query ? ` ${query}` : ''}`)
   try {
     const { items } = await fetchParsed(
       `https://api.github.com/search/repositories?q=${q}&sort=stars&per_page=50`,
       (text) => JSON.parse(text) as { items: Repository[] },
+      undefined,
+      signal,
     )
     return items
   } catch (error) {
@@ -275,18 +362,17 @@ async function searchRepositories(q: string): Promise<Repository[]> {
 
 async function searchMarkets(query: string | undefined): Promise<void> {
   const home = configHome()
-  const q = encodeURIComponent(`topic:${TOPIC}${query ? ` ${query}` : ''}`)
-  const items = await searchRepositories(q)
+  const items = await findMarkets(query)
   if (items.length === 0) {
     console.log(`No repository carries the ${TOPIC} topic${query ? ` and matches ${query}` : ''} yet`)
     return
   }
-  const added = new Set(marketsOf(readInstalled(home).markets))
+  const added = new Set(marketsOf(readInstalled(home).markets).map(repoOf))
   const rows = items.map((r) => {
-    const owner = r.owner.login.toLowerCase()
+    const arg = repositorySource(r)
     return {
-      arg: `${owner}/${r.name}`,
-      added: added.has(`${owner}/${r.name}`),
+      arg,
+      added: added.has(arg),
       stars: `★${r.stargazers_count}`,
       about: r.description ?? '',
     }
@@ -485,22 +571,7 @@ function required(action: string, arg: string | undefined): string {
   return arg
 }
 
-export async function refresh(home: string, source: string): Promise<string> {
-  if (source === OFFICIAL) {
-    const before = existsSync(catalogPath(home))
-      ? listed(parseCatalog(readFileSync(catalogPath(home), 'utf8')).palettes).length
-      : 0
-    const catalog = await fetchParsed(REGISTRY_URL, parseCatalog)
-    writeCatalog(home, catalog)
-    const count = listed(catalog.palettes).length
-    return `${OFFICIAL} ${catalog.version} — ${counted(count)}${count > before ? ` (+${count - before})` : ''}`
-  }
-  if (isLocal(source)) {
-    const id = idOf(home, source)
-    return `${id} — ${counted(readMarketDir(source, id, official(home), false).length)}, read in place`
-  }
-  const index = await fetchIndex(source)
-  mkdirSync(join(home, 'ttheme', 'markets'), { recursive: true })
-  writeAtomic(cachePath(home, source), `${JSON.stringify(index, null, 2)}\n`)
-  return `${remoteId(source, index)} — ${counted(index.palettes.length)}`
+export function localLine(home: string, source: string): string {
+  const id = idOf(home, source)
+  return `${id} — ${counted(readMarketDir(source, id, official(home), false).length)}, read in place`
 }

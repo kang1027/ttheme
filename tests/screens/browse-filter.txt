@@ -1,16 +1,16 @@
-◆ Catalog (1/6 · 2 picked)
-│    ki_
-│    ● Select all (1)
-│    ▾ Bocchi the Rock! (1/1) ぼっち・ざ・ろっく!
-│ ▌    ● kita
-│
-│
-│
-│
-│
-│
-│
-│
-│
-│
-└ ↑↓ move · ←→ fold · space pick · type to filter · enter install · esc cancel
+◆ [Catalog]  Installed   Markets   Errors                      │ kita
+│    ki_                                        1/6 · 2 picked │ The ttheme catalog
+│    ● Select all (1)                                          │ Bocchi the Rock!
+│    ▾ Bocchi the Rock! (1/1) ぼっち・ざ・ろっく!              │ ぼっち・ざ・ろっく!
+│ ▌    ● kita                                                  │ Installed
+│                                                              │
+│                                                              │ Gate 9/9 · passes
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+└ tab switch · ↑↓ move · ←→ fold · space pick · type to filter · enter apply · esc cancel

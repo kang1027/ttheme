@@ -68,12 +68,12 @@ export function firstPalette(rows: PickerRow[]): number {
   return index === -1 ? 0 : index
 }
 
-const RESET = '\x1b[0m'
-const DIM = '\x1b[2m'
-const BOLD = '\x1b[1m'
-const NORMAL = '\x1b[22m'
-const CYAN = '\x1b[36m'
-const YELLOW = '\x1b[33m'
+export const RESET = '\x1b[0m'
+export const DIM = '\x1b[2m'
+export const BOLD = '\x1b[1m'
+export const NORMAL = '\x1b[22m'
+export const CYAN = '\x1b[36m'
+export const YELLOW = '\x1b[33m'
 
 export type PromptFx = 'typewriter' | 'decode' | 'glitch'
 
@@ -81,107 +81,76 @@ export function promptFx(value: string | undefined): PromptFx {
   return value === 'decode' || value === 'glitch' ? value : 'typewriter'
 }
 
-export interface PalettePromptOptions {
+export type ListRow = Row
+
+export interface PaletteListOptions {
   entries: PaletteEntry[]
+  picked: Set<string>
   scope?: PickerScope
-  installed?: Iterable<string>
-  required?: boolean
   maxItems?: number
   color?: boolean
-  fx?: PromptFx
-  input?: Readable
-  output?: Writable
   onFocus?: (entry: PaletteEntry) => void
 }
 
-export class PalettePrompt extends Prompt<string> {
+export class PaletteList {
   readonly picked: Set<string>
-  private scope: PickerScope
-  private entries: PaletteEntry[]
-  private named: PaletteEntry[]
-  private series: string[]
-  private seriesPad: number
-  private namePad: number
+  readonly scope: PickerScope
+  readonly maxItems: number
+  named: PaletteEntry[] = []
+  series: string[] = []
+  private readonly color: boolean
+  private readonly onFocus?: (entry: PaletteEntry) => void
+  private entries: PaletteEntry[] = []
+  private seriesPad = 0
+  private namePad = 0
   private expanded = new Set<string>()
   private rows: Row[] = []
   private cursor = 0
   private top = 0
-  private maxItems: number
-  private color: boolean
-  private lastInput = ''
+  private filter = ''
   private lastFocused = ''
-  private onFocus?: (entry: PaletteEntry) => void
-  private example = ''
-  private fx: PromptFx
-  private fxStep = 0
-  private fxSeed = 0
-  private fxTimer?: ReturnType<typeof setTimeout>
 
-  constructor(opts: PalettePromptOptions) {
-    super(
-      {
-        render: () => this.draw(),
-        input: opts.input,
-        output: opts.output,
-        validate: opts.required
-          ? () => (this.picked.size === 0 ? `Pick at least one ${this.scope}` : undefined)
-          : undefined,
-      },
-      true,
-    )
-    this.entries = opts.entries
+  constructor(opts: PaletteListOptions) {
+    this.picked = opts.picked
     this.scope = opts.scope ?? 'palette'
-    this.picked = new Set(opts.installed ?? [])
-    this.named = opts.entries.filter((e) => !e.default)
+    this.maxItems = opts.maxItems ?? 12
+    this.color = opts.color ?? true
+    this.onFocus = opts.onFocus
+    this.load(opts.entries)
+    this.rebuild('first')
+  }
+
+  private load(entries: PaletteEntry[]): void {
+    this.entries = entries
+    this.named = entries.filter((e) => !e.default)
     this.series = [...new Set(this.named.map((e) => e.group))]
     this.seriesPad = Math.max(0, ...this.series.map((g) => g.length))
     this.namePad = Math.max(0, ...this.named.map((e) => e.name.length))
-    this.maxItems = opts.maxItems ?? 12
-    this.color = opts.color ?? true
-    this.fx = opts.fx ?? 'typewriter'
-    this.onFocus = opts.onFocus
-    this.rollExample()
-    const roller = setInterval(() => {
-      this.rollExample()
-      this.fxStep = 8
-      this.output.emit('resize')
-    }, 3000)
-    roller.unref?.()
-    this.once('finalize', () => {
-      clearInterval(roller)
-      clearTimeout(this.fxTimer)
-    })
-    this.rebuild('first')
-    this.on('cursor', (action) => {
-      if (action === 'up') {
-        this.move(-1)
-      } else if (action === 'down') {
-        this.move(1)
-      } else if (action === 'left') {
-        this.fold(false)
-      } else if (action === 'right') {
-        this.fold(true)
-      }
-    })
-    this.on('userInput', (value) => {
-      if (value !== this.lastInput) {
-        this.lastInput = value
-        this.rebuild('keep')
-      }
-    })
-    this.on('key', (_char, key) => {
-      if (key?.name === 'space') {
-        this.pick(this.rows[this.cursor])
-      }
-    })
   }
 
-  protected override _isActionKey(char: string | undefined): boolean {
-    return char === '\t' || char === ' '
+  setEntries(entries: PaletteEntry[]): void {
+    this.load(entries)
+    this.rebuild('stay')
+  }
+
+  setFilter(filter: string): void {
+    if (filter !== this.filter) {
+      this.filter = filter
+      this.rebuild('keep')
+    }
+  }
+
+  focusedRow(): Row | undefined {
+    return this.rows[this.cursor]
+  }
+
+  refocus(): void {
+    this.lastFocused = ''
+    this.sync()
   }
 
   private members(group: string): PaletteEntry[] {
-    const filter = this.scope === 'palette' ? this.userInput.trim() : ''
+    const filter = this.scope === 'palette' ? this.filter.trim() : ''
     return this.named.filter((e) => e.group === group && (filter === '' || matchesPalette(e, filter)))
   }
 
@@ -189,7 +158,8 @@ export class PalettePrompt extends Prompt<string> {
     return rows.flatMap((r) => (r.kind === 'group' ? this.members(r.name) : []))
   }
 
-  private pick(row: Row | undefined): void {
+  pick(): void {
+    const row = this.rows[this.cursor]
     const names =
       row?.kind === 'palette'
         ? [row.entry.name]
@@ -211,54 +181,27 @@ export class PalettePrompt extends Prompt<string> {
     }
   }
 
-  private pickedIn(group: string): number {
+  pickedIn(group: string): number {
     return this.members(group).filter((e) => this.picked.has(e.name)).length
   }
 
-  private pickedCount(): number {
+  pickedCount(): number {
     if (this.scope === 'palette') {
-      return this.picked.size
+      return this.named.filter((e) => this.picked.has(e.name)).length
     }
     return this.series.filter((g) => this.members(g).every((e) => this.picked.has(e.name))).length
   }
 
-  private rollExample(): void {
-    const pal = this.named[Math.floor(Math.random() * this.named.length)]
-    const grp = this.series[Math.floor(Math.random() * this.series.length)]
-    if (!pal || !grp) {
-      this.example = ''
-      return
-    }
-    const ex = `${pal.name} | ${grp}`
-    this.example = ex.length > 30 ? `${ex.slice(0, 29)}…` : ex
-    this.fxSeed = Math.floor(Math.random() * 997)
+  total(): number {
+    return this.scope === 'series' ? this.series.length : this.named.length
   }
 
-  private animatedExample(): string {
-    if (this.fxStep === 0) {
-      return this.example
+  matched(): number {
+    const filter = this.filter.trim()
+    if (this.scope === 'series') {
+      return this.rows.filter((r) => r.kind === 'group').length
     }
-    if (!this.fxTimer) {
-      this.fxTimer = setTimeout(() => {
-        this.fxTimer = undefined
-        this.fxStep -= 1
-        this.output.emit('resize')
-      }, 60)
-      this.fxTimer.unref?.()
-    }
-    const keep = Math.floor((this.example.length * (8 - this.fxStep)) / 8)
-    if (this.fx === 'typewriter') {
-      return `${this.example.slice(0, keep)}▏`
-    }
-    const pool = this.fx === 'decode' ? 'abcdefghijklmnopqrstuvwxyz' : '▓▒░#*+=<>?/-_'
-    const still = this.fx === 'decode' ? (ch: string) => !/[a-z0-9]/i.test(ch) : (ch: string) => ch === ' '
-    return [...this.example]
-      .map((ch, i) =>
-        i + ((i * 7 + this.fxSeed) % 3) < keep || still(ch)
-          ? ch
-          : (pool[Math.floor(Math.random() * pool.length)] ?? ch),
-      )
-      .join('')
+    return filter ? this.named.filter((e) => matchesPalette(e, filter)).length : this.named.length
   }
 
   private sync(): void {
@@ -271,19 +214,25 @@ export class PalettePrompt extends Prompt<string> {
     }
   }
 
-  private rebuild(snap: 'first' | 'keep' | 'clamp'): void {
+  private rebuild(snap: 'first' | 'keep' | 'clamp' | 'stay'): void {
     const focused = this.rows[this.cursor]
     const body =
       this.scope === 'series'
-        ? seriesRows(this.entries, this.userInput)
-        : pickerRows(this.entries, this.expanded, this.userInput)
+        ? seriesRows(this.entries, this.filter)
+        : pickerRows(this.entries, this.expanded, this.filter)
     this.rows = body.length > 0 ? ruled([{ kind: 'all', count: this.allCount(body) }, ...body]) : []
     const start = body.length > 0 ? this.rows.indexOf(body[firstPalette(body)] as Row) : 0
     if (snap === 'first') {
       this.cursor = start
-    } else if (snap === 'keep') {
-      const name = focused?.kind === 'palette' ? focused.entry.name : ''
-      const kept = name ? this.rows.findIndex((r) => r.kind === 'palette' && r.entry.name === name) : -1
+    } else if (snap === 'keep' || snap === 'stay') {
+      const same = (r: Row) =>
+        focused?.kind === 'palette'
+          ? r.kind === 'palette' && r.entry.name === focused.entry.name
+          : snap === 'stay' &&
+            focused !== undefined &&
+            r.kind === focused.kind &&
+            ('name' in r ? r.name : '') === ('name' in focused ? focused.name : '')
+      const kept = focused ? this.rows.findIndex(same) : -1
       this.cursor = kept === -1 ? start : kept
     } else if (this.cursor >= this.rows.length) {
       this.cursor = Math.max(0, this.rows.length - 1)
@@ -295,7 +244,7 @@ export class PalettePrompt extends Prompt<string> {
     return this.scope === 'series' ? body.length : this.everyone(body).length
   }
 
-  private move(delta: number): void {
+  move(delta: number): void {
     let next = this.cursor + delta
     if (this.rows[next]?.kind === 'rule') {
       next += delta
@@ -315,8 +264,8 @@ export class PalettePrompt extends Prompt<string> {
     this.rebuild('clamp')
   }
 
-  private fold(open: boolean): void {
-    if (this.userInput || this.scope === 'series') {
+  fold(open: boolean): void {
+    if (this.filter || this.scope === 'series') {
       return
     }
     const row = this.rows[this.cursor]
@@ -333,6 +282,21 @@ export class PalettePrompt extends Prompt<string> {
         this.cursor = 0
       }
       this.sync()
+    }
+  }
+
+  window(): { lines: string[]; below: number } {
+    if (this.cursor < this.top) {
+      this.top = this.cursor
+    }
+    if (this.cursor >= this.top + this.maxItems) {
+      this.top = this.cursor - this.maxItems + 1
+    }
+    this.top = Math.min(this.top, Math.max(0, this.rows.length - this.maxItems))
+    const shown = this.rows.slice(this.top, this.top + this.maxItems)
+    return {
+      lines: shown.map((row, i) => this.renderRow(row, this.top + i === this.cursor)),
+      below: this.rows.length - this.top - shown.length,
     }
   }
 
@@ -374,43 +338,173 @@ export class PalettePrompt extends Prompt<string> {
     const name = focused ? bold(padded) : padded
     return bar(`  ${box} ${name}${squares(e)}`)
   }
+}
+
+export function paletteExample(list: PaletteList): string {
+  const pal = list.named[Math.floor(Math.random() * list.named.length)]
+  const grp = list.series[Math.floor(Math.random() * list.series.length)]
+  return pal && grp ? `${pal.name} | ${grp}` : ''
+}
+
+export class SearchHint {
+  private readonly fx: PromptFx
+  private readonly make: () => string
+  private readonly redraw: () => void
+  private readonly roller: ReturnType<typeof setInterval>
+  private example = ''
+  private step = 0
+  private seed = 0
+  private timer?: ReturnType<typeof setTimeout>
+
+  constructor(fx: PromptFx, make: () => string, redraw: () => void) {
+    this.fx = fx
+    this.make = make
+    this.redraw = redraw
+    this.roll()
+    this.roller = setInterval(() => {
+      this.roll()
+      this.step = 8
+      this.redraw()
+    }, 3000)
+    this.roller.unref?.()
+  }
+
+  stop(): void {
+    clearInterval(this.roller)
+    clearTimeout(this.timer)
+  }
+
+  private roll(): void {
+    const ex = this.make()
+    this.example = ex.length > 30 ? `${ex.slice(0, 29)}…` : ex
+    this.seed = Math.floor(Math.random() * 997)
+  }
+
+  text(): string {
+    if (this.step === 0) {
+      return this.example
+    }
+    if (!this.timer) {
+      this.timer = setTimeout(() => {
+        this.timer = undefined
+        this.step -= 1
+        this.redraw()
+      }, 60)
+      this.timer.unref?.()
+    }
+    const keep = Math.floor((this.example.length * (8 - this.step)) / 8)
+    if (this.fx === 'typewriter') {
+      return `${this.example.slice(0, keep)}▏`
+    }
+    const pool = this.fx === 'decode' ? 'abcdefghijklmnopqrstuvwxyz' : '▓▒░#*+=<>?/-_'
+    const still = this.fx === 'decode' ? (ch: string) => !/[a-z0-9]/i.test(ch) : (ch: string) => ch === ' '
+    return [...this.example]
+      .map((ch, i) =>
+        i + ((i * 7 + this.seed) % 3) < keep || still(ch) ? ch : (pool[Math.floor(Math.random() * pool.length)] ?? ch),
+      )
+      .join('')
+  }
+}
+
+export interface PalettePromptOptions {
+  entries: PaletteEntry[]
+  scope?: PickerScope
+  installed?: Iterable<string>
+  required?: boolean
+  maxItems?: number
+  color?: boolean
+  fx?: PromptFx
+  input?: Readable
+  output?: Writable
+  onFocus?: (entry: PaletteEntry) => void
+}
+
+export class PalettePrompt extends Prompt<string> {
+  readonly picked: Set<string>
+  private readonly list: PaletteList
+  private readonly scope: PickerScope
+  private readonly color: boolean
+  private readonly hint: SearchHint
+  private lastInput = ''
+
+  constructor(opts: PalettePromptOptions) {
+    super(
+      {
+        render: () => this.draw(),
+        input: opts.input,
+        output: opts.output,
+        validate: opts.required
+          ? () => (this.picked.size === 0 ? `Pick at least one ${this.scope}` : undefined)
+          : undefined,
+      },
+      true,
+    )
+    this.scope = opts.scope ?? 'palette'
+    this.picked = new Set(opts.installed ?? [])
+    this.color = opts.color ?? true
+    this.list = new PaletteList({
+      entries: opts.entries,
+      picked: this.picked,
+      scope: this.scope,
+      ...(opts.maxItems === undefined ? {} : { maxItems: opts.maxItems }),
+      color: this.color,
+      ...(opts.onFocus ? { onFocus: opts.onFocus } : {}),
+    })
+    this.hint = new SearchHint(
+      opts.fx ?? 'typewriter',
+      () => paletteExample(this.list),
+      () => this.output.emit('resize'),
+    )
+    this.once('finalize', () => this.hint.stop())
+    this.on('cursor', (action) => {
+      if (action === 'up') {
+        this.list.move(-1)
+      } else if (action === 'down') {
+        this.list.move(1)
+      } else if (action === 'left') {
+        this.list.fold(false)
+      } else if (action === 'right') {
+        this.list.fold(true)
+      }
+    })
+    this.on('userInput', (value) => {
+      if (value !== this.lastInput) {
+        this.lastInput = value
+        this.list.setFilter(value)
+      }
+    })
+    this.on('key', (_char, key) => {
+      if (key?.name === 'space') {
+        this.list.pick()
+      }
+    })
+  }
+
+  protected override _isActionKey(char: string | undefined): boolean {
+    return char === '\t' || char === ' '
+  }
 
   private draw(): string {
     const dim = (s: string) => (this.color ? `${DIM}${s}${RESET}` : s)
     const bar = (s: string) => (this.color ? `${CYAN}${s}${RESET}` : s)
     const title = this.scope === 'series' ? 'Series' : 'Catalog'
     if (this.state === 'submit') {
-      return `${dim('◇')} ${title} ${dim(`· ${this.pickedCount()} picked`)}`
+      return `${dim('◇')} ${title} ${dim(`· ${this.list.pickedCount()} picked`)}`
     }
     if (this.state === 'cancel') {
       return `${dim(`◇ ${title} · cancelled`)}`
     }
-    const filter = this.userInput.trim()
-    const total = this.scope === 'series' ? this.series.length : this.named.length
-    const matched =
-      this.scope === 'series'
-        ? this.rows.filter((r) => r.kind === 'group').length
-        : filter
-          ? this.named.filter((e) => matchesPalette(e, filter)).length
-          : total
-    const head = `${bar('◆')} ${title} ${dim(`(${matched}/${total} · ${this.pickedCount()} picked)`)}`
-    const search = `${bar('│')}    ${this.userInput ? `${this.userInput}_` : dim(`Search…${this.example ? ` e.g. ${this.animatedExample()}` : ''}`)}`
-    if (this.cursor < this.top) {
-      this.top = this.cursor
-    }
-    if (this.cursor >= this.top + this.maxItems) {
-      this.top = this.cursor - this.maxItems + 1
-    }
-    this.top = Math.min(this.top, Math.max(0, this.rows.length - this.maxItems))
-    const window = this.rows.slice(this.top, this.top + this.maxItems)
+    const head = `${bar('◆')} ${title} ${dim(`(${this.list.matched()}/${this.list.total()} · ${this.list.pickedCount()} picked)`)}`
+    const example = this.hint.text()
+    const search = `${bar('│')}    ${this.userInput ? `${this.userInput}_` : dim(`Search…${example ? ` e.g. ${example}` : ''}`)}`
+    const { lines, below } = this.list.window()
     const body =
-      window.length > 0
-        ? window.map((row, i) => `${bar('│')} ${this.renderRow(row, this.top + i === this.cursor)}`)
+      lines.length > 0
+        ? lines.map((line) => `${bar('│')} ${line}`)
         : [`${bar('│')} ${dim(`No ${this.scope === 'series' ? 'series' : 'palettes'} match '${this.userInput}'`)}`]
-    while (body.length < this.maxItems) {
+    while (body.length < this.list.maxItems) {
       body.push(bar('│'))
     }
-    const below = this.rows.length - this.top - window.length
     const more = below > 0 ? `${bar('│')} ${dim(`↓ ${below} more`)}` : bar('│')
     const fold = this.scope === 'series' ? '' : ' · ←→ fold'
     const go = this.scope === 'series' ? 'continue' : 'install'

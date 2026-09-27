@@ -49,6 +49,7 @@ export interface Installed {
   wtHome?: string
   wtProfile?: string
   markets?: string[]
+  updates?: Record<string, boolean>
   palettes: string[]
 }
 
@@ -139,6 +140,13 @@ export function readInstalled(configHome: string): Installed {
     ...(doc.wtHome ? { wtHome: doc.wtHome } : {}),
     ...(doc.wtProfile ? { wtProfile: doc.wtProfile } : {}),
     ...(Array.isArray(doc.markets) ? { markets: doc.markets.filter((m) => typeof m === 'string') } : {}),
+    ...(doc.updates && typeof doc.updates === 'object'
+      ? {
+          updates: Object.fromEntries(
+            Object.entries(doc.updates).filter((pair): pair is [string, boolean] => typeof pair[1] === 'boolean'),
+          ),
+        }
+      : {}),
     palettes: doc.palettes,
   }
 }

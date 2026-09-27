@@ -77,9 +77,9 @@ export const VERB_SPECS: VerbSpec[] = [
   {
     name: 'browse',
     args: [],
-    about: 'Pick palettes from the catalog in a live picker',
+    about: 'Pick palettes and markets in a live picker — tab moves between Catalog, Installed, Markets and Errors',
     section: 'catalog',
-    start: 'Install or drop palettes — every market you added, in one picker',
+    start: 'Install or drop palettes, add markets — every change applies at once on enter',
   },
   {
     name: 'list',
@@ -93,16 +93,31 @@ export const VERB_SPECS: VerbSpec[] = [
     args: ['<palette...>'],
     about: 'Install palettes from the catalog, or from a share code: ttheme add tt1:…',
     section: 'catalog',
+    flags: {
+      market: {
+        type: 'string',
+        value: '<source>',
+        about: 'Add this market first — a repository, a folder or official — and take bare palette names from it',
+      },
+    },
   },
   { name: 'remove', args: ['<palette...>'], about: 'Uninstall palettes', section: 'catalog' },
-  { name: 'update', args: [], about: 'Refresh every market you added', section: 'catalog' },
+  {
+    name: 'update',
+    args: [],
+    about: 'Refresh every market you added now — those with auto-update refresh on their own once a day',
+    section: 'catalog',
+  },
   {
     name: 'market',
     args: ['[action]', '[source]'],
     about: 'The markets you added — add, remove and search them; init makes one of your own',
     actions: [
-      ['(none)', 'List the markets you added, with how many palettes each holds'],
-      ['add <source>', 'Add one: a repository (alice/ttheme-pastel), a folder, or official'],
+      ['(none)', 'List the markets you added: palettes, auto-update and the last update'],
+      [
+        'add <source>',
+        'Add one: a repository (alice/ttheme-pastel, #v1 pins a tag or branch), a folder, or official — asks whether it updates on its own',
+      ],
       ['remove <market>', 'Drop one by its name (alice@pastel) — the palettes you installed from it keep working'],
       ['search [query]', 'Repositories on GitHub with the ttheme-market topic'],
       ['init [name]', 'Make a market of your own, <you>@<name>, in ~/.config/ttheme/market/<name> (or give a folder)'],
@@ -207,6 +222,7 @@ const EXAMPLES: [string, string][] = [
   ['ttheme use homura', 'Paint this tab with one'],
   ['ttheme list --json madoka', 'The madoka series as JSON'],
   ['ttheme market add alice/ttheme-pastel', "alice's market, alice@pastel — ttheme add alice@pastel/dusk"],
+  ['ttheme add dusk --market alice/ttheme-pastel', 'The same in one step'],
   ['ttheme new rei --from rei', 'Your own rei, <you>@<market>/rei, to edit and share'],
 ]
 
