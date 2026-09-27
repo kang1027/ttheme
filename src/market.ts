@@ -19,6 +19,7 @@ import {
   withItermBase,
   writeInstalled,
 } from './palettes.ts'
+import { pending } from './pending.ts'
 import { bringPictures, since } from './pictures.ts'
 import { refreshLine, refreshMarket } from './refresh.ts'
 import { installedPath, isLocal, marketSources, OFFICIAL, shownSource } from './sources.ts'
@@ -208,14 +209,41 @@ export async function runUpdate(): Promise<void> {
   if (markets.length === 0) {
     console.log('No markets to update — `ttheme market add official` brings the ttheme catalog back')
   }
-  for (const source of markets) {
+  const kept = (source: string, error: unknown): string =>
+    `${shownSource(source)}: ${(error as Error).message} — kept the copy from the last update`
+  for (const source of markets.filter(isLocal)) {
     try {
-      console.log(`  ${isLocal(source) ? localLine(home, source) : refreshLine(await refreshMarket(home, source))}`)
+      console.log(`  ${localLine(home, source)}`)
     } catch (error) {
-      const name = shownSource(source)
-      console.log(`  ${name}: ${(error as Error).message} — kept the copy from the last update`)
+      console.log(`  ${kept(source, error)}`)
     }
   }
+  const remote = markets.filter((source) => !isLocal(source))
+  const waiting = new Set(remote)
+  const line = pending()
+  const show = (): void =>
+    line.set(
+      `Updating ${[...waiting].map(shownSource).join(', ')}${remote.length > 1 ? ` · ${remote.length - waiting.size}/${remote.length}` : ''}`,
+    )
+  show()
+  await Promise.all(
+    remote.map(async (source) => {
+      let text: string
+      try {
+        text = refreshLine(await refreshMarket(home, source))
+      } catch (error) {
+        text = kept(source, error)
+      }
+      waiting.delete(source)
+      if (waiting.size > 0) {
+        show()
+      } else {
+        line.done()
+      }
+      line.say(`  ${text}`)
+    }),
+  )
+  line.done()
   if (!existsSync(installedPath(home))) {
     return
   }

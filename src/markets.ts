@@ -26,6 +26,7 @@ import {
   readOwnText,
 } from './own.ts'
 import { configHome, type Installed, readInstalled, sync, writeInstalled } from './palettes.ts'
+import { pending } from './pending.ts'
 import { ago, counted, type Fetched, fetchedAt, fetchMarket, readTries, storeMarket } from './refresh.ts'
 import {
   autoUpdates,
@@ -165,8 +166,17 @@ async function askAuto(id: string): Promise<boolean> {
   return yes
 }
 
+async function fetching(source: string): Promise<Fetched> {
+  const line = pending(`Fetching ${shownSource(source)}`)
+  try {
+    return await fetchMarket(source)
+  } finally {
+    line.done()
+  }
+}
+
 async function repin(home: string, was: string, source: string): Promise<Fetched> {
-  const fetched = await fetchMarket(source)
+  const fetched = await fetching(source)
   const state = readInstalled(home)
   const sources = marketsOf(state.markets)
   const taken = nameTaken(home, sources, source, fetched.id)
@@ -211,7 +221,7 @@ export async function addSource(home: string, arg: string): Promise<{ source: st
     console.log(`Added ${id} · ${shownSource(source)} — ${counted(count)}, read in place`)
     return { source, id, fresh: true }
   }
-  const fetched = await fetchMarket(source)
+  const fetched = await fetching(source)
   const auto = source === OFFICIAL ? undefined : await askAuto(fetched.id)
   register(home, source, fetched.id, auto)
   storeMarket(home, fetched)

@@ -32,6 +32,7 @@ import {
 import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
 import type { PaletteEntry } from './emit/manifest.ts'
 import { refreshProfiles } from './palettes.ts'
+import { pending, progress } from './pending.ts'
 import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
 import type { SharedPicture } from './theme.ts'
 import { blurOf } from './wiring.ts'
@@ -75,11 +76,13 @@ async function install(
   shared: SharedPicture,
   aligns: boolean,
   signal: AbortSignal,
+  step: (stage: string, detail?: string) => void,
 ): Promise<void> {
   const site = SITES.find((s) => s.key === shared.site)
   if (!site) {
     throw new Error(`no site called ${shared.site}`)
   }
+  step('Fetching')
   const post = await fetchPost(site, shared.id, signal)
   if (!post) {
     throw new Error('the post is gone')
@@ -99,7 +102,8 @@ async function install(
   if (existsSync(orig)) {
     bytes = new Uint8Array(readFileSync(orig))
   } else {
-    bytes = await fetchBytes(site, version.file, signal)
+    step('Downloading')
+    bytes = await fetchBytes(site, version.file, signal, (got, size) => step('Downloading', progress(got, size)))
     mkdirSync(dirname(orig), { recursive: true })
     writeFileSync(orig, bytes)
   }
@@ -109,6 +113,7 @@ async function install(
     const path = join(cacheDir(site), 'cut', `${shared.id}.png`)
     try {
       if (!existsSync(path)) {
+        step('Cutting out')
         mkdirSync(dirname(path), { recursive: true })
         await removeBackground(orig, path, signal)
       }
@@ -120,6 +125,7 @@ async function install(
     } catch {}
   }
   const colors = colorsOf(entry)
+  step('Drawing')
   installBackdrop(
     configHome,
     colors,
@@ -142,40 +148,39 @@ async function install(
   }
 }
 
-export async function fetchPictures(
-  configHome: string,
-  entry: PaletteEntry,
-  aligns: boolean,
-  say: (line: string) => void,
-): Promise<number> {
-  let got = 0
-  for (const shared of missingPictures(configHome, entry)) {
-    const label = `${entry.name} · ${SITES.find((s) => s.key === shared.site)?.name ?? shared.site} ${shared.id}`
-    try {
-      await install(configHome, entry, shared, aligns, AbortSignal.timeout(TIMEOUT))
-      say(`  ▣ ${label}`)
-      got++
-    } catch (error) {
-      say(`  ▢ ${label} — ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  const [first] = entry.pictures ?? []
-  if (got > 0 && first) {
-    showImage(configHome, entry.name, imageKey(first))
-  }
-  return got
-}
-
 export async function bringPictures(
   configHome: string,
   entries: PaletteEntry[],
   terminals: readonly string[],
 ): Promise<void> {
-  let got = 0
-  for (const entry of entries) {
-    got += await fetchPictures(configHome, entry, !terminals.includes('iterm2'), (line) => console.log(line))
+  const due = entries.flatMap((entry) => missingPictures(configHome, entry).map((shared) => ({ entry, shared })))
+  if (due.length === 0) {
+    return
   }
-  if (got > 0) {
+  const aligns = !terminals.includes('iterm2')
+  const got = new Set<PaletteEntry>()
+  const line = pending()
+  for (const [at, { entry, shared }] of due.entries()) {
+    const label = `${entry.name} · ${SITES.find((s) => s.key === shared.site)?.name ?? shared.site} ${shared.id}`
+    const count = due.length > 1 ? ` · ${at + 1}/${due.length}` : ''
+    const step = (stage: string, detail?: string): void =>
+      line.set(`${stage} ${label}${detail ? ` · ${detail}` : ''}${count}`)
+    try {
+      await install(configHome, entry, shared, aligns, AbortSignal.timeout(TIMEOUT), step)
+      line.say(`  ▣ ${label}`)
+      got.add(entry)
+    } catch (error) {
+      line.say(`  ▢ ${label} — ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  line.done()
+  for (const entry of got) {
+    const [first] = entry.pictures ?? []
+    if (first) {
+      showImage(configHome, entry.name, imageKey(first))
+    }
+  }
+  if (got.size > 0) {
     refreshProfiles(configHome)
   }
 }

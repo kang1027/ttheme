@@ -1,5 +1,6 @@
 import { BLOCKS, type Block, KEY_SPAN, type Kind, type Narrow, type Rating, SITES } from './booru.ts'
 import { type Hex, mix, rgb } from './color.ts'
+import { megabytes, progress } from './pending.ts'
 
 export type Preset = 'cutouts' | 'all'
 export type Order = 'fit' | 'newest' | 'score'
@@ -333,19 +334,6 @@ class Line {
     }
     return out
   }
-}
-
-function megabytes(n: number): string {
-  return n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`
-}
-
-function progress(got: number, size: number): string {
-  if (!size) {
-    return megabytes(got)
-  }
-  return size >= 1e6
-    ? `${(got / 1e6).toFixed(1)}/${(size / 1e6).toFixed(1)} MB`
-    : `${Math.round(got / 1e3)}/${Math.round(size / 1e3)} KB`
 }
 
 export function plain(artist: string): string {

@@ -20,6 +20,7 @@ import {
 import { writeAtomic } from './edits.ts'
 import { listed, type Manifest, type PaletteEntry } from './emit/manifest.ts'
 import { configHome, type Installed, readInstalled, sync } from './palettes.ts'
+import { pending } from './pending.ts'
 import { bringPictures, since } from './pictures.ts'
 import {
   autoUpdates,
@@ -264,9 +265,11 @@ export async function autoRefresh(home = configHome()): Promise<void> {
       return
     }
     const was = readKept(home)
+    const line = pending(`Checking ${due.map(shownSource).join(', ')} for updates`)
     const done = (await Promise.allSettled(due.map((source) => refreshMarket(home, source, AUTO_TIMEOUT)))).flatMap(
       (r) => (r.status === 'fulfilled' ? [r.value] : []),
     )
+    line.done()
     const notes = done.flatMap((r) => updateNote(r) ?? [])
     if (notes.length === 0) {
       return
