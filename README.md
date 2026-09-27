@@ -92,7 +92,7 @@ sits below the series in `ttheme preview` and `ttheme browse`, past a line:
 ▾ Evangelion
     rei
     asuka
-── markets ──────────
+── Markets ──────────
 ▾ alice@pastel
     dusk
     rei
@@ -140,16 +140,16 @@ from the booru the way `find` does.
 
 | Command | |
 |---|---|
-| `ttheme preview` | browse live — the tab repaints as the cursor moves, enter applies it to this tab or makes it the default |
-| `ttheme use <palette>` | paint this tab (a unique prefix works) |
-| `ttheme next` | advance this tab to the next palette |
-| `ttheme default <palette>` | the palette new tabs open with |
-| `ttheme pin` / `unpin` | a palette for this directory — `cd` in repaints, `cd` out restores |
-| `ttheme browse` | pick palettes from the catalog |
-| `ttheme market add <owner/repo>` | add someone's market — `ttheme market` lists yours; `search`, `remove` too |
-| `ttheme new <name> --from <palette>` | make a palette of your own; `edit`, `check`, `share` follow |
-| `ttheme on` / `off` | wear the default again / give the terminal its own colors back |
-| `ttheme config` | settings in `$EDITOR` |
+| `ttheme preview` | Browse live — the tab repaints as the cursor moves, enter applies it to this tab or makes it the default |
+| `ttheme use <palette>` | Paint this tab (a unique prefix works) |
+| `ttheme next` | Advance this tab to the next palette |
+| `ttheme default <palette>` | The palette new tabs open with |
+| `ttheme pin` / `unpin` | A palette for this directory — `cd` in repaints, `cd` out restores |
+| `ttheme browse` | Pick palettes from the catalog |
+| `ttheme market add <owner/repo>` | Add someone's market — `ttheme market` lists yours; `search`, `remove` too |
+| `ttheme new <name> --from <palette>` | Make a palette of your own; `edit`, `check`, `share` follow |
+| `ttheme on` / `off` | Wear the default again / give the terminal its own colors back |
+| `ttheme config` | Settings in `$EDITOR` |
 
 `ttheme help` shows the three to start with and the rest by task; `ttheme help
 all` lists every command. Preview's keys, directory pins, rotating new

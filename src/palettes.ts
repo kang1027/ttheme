@@ -442,20 +442,20 @@ export function wiringPlan(configHome: string, state: Installed, home = homedir(
   const lines: string[] = []
   for (const terminal of state.terminals) {
     if (terminal === 'iterm2') {
-      lines.push(`write ${at(itermProfilesPath(home))} — a "ttheme · <palette>" profile per palette`)
+      lines.push(`Write ${at(itermProfilesPath(home))} — a "ttheme · <palette>" profile per palette`)
       continue
     }
     if (terminal === 'windows-terminal') {
       if (state.wtHome) {
-        lines.push(`write ${wtFragmentPath(state.wtHome)} — its schemes, and touch settings.json so it reloads`)
+        lines.push(`Write ${wtFragmentPath(state.wtHome)} — its schemes, and touch settings.json so it reloads`)
       }
       continue
     }
-    lines.push(`write ${at(themeDir(terminal, configHome, home))}/${owned('*')} — a theme file per palette`)
+    lines.push(`Write ${at(themeDir(terminal, configHome, home))}/${owned('*')} — a theme file per palette`)
     if (terminal === 'warp') {
       const file = warpSettings(home, configHome)
       if (startup && existsSync(file)) {
-        lines.push(`edit ${at(file)} — [appearance.themes] theme; \`ttheme off\` puts yours back`)
+        lines.push(`Edit ${at(file)} — [appearance.themes] theme; \`ttheme off\` puts yours back`)
       }
       continue
     }
@@ -463,7 +463,7 @@ export function wiringPlan(configHome: string, state: Installed, home = homedir(
       const config = weztermConfig(configHome, home)
       if (upsertLuaBlock(readText(config), '') !== undefined) {
         lines.push(
-          `edit ${at(config)} — a ttheme block before \`return config\`: color_scheme_dirs, color_scheme, pictures`,
+          `Edit ${at(config)} — a ttheme block before \`return config\`: color_scheme_dirs, color_scheme, pictures`,
         )
       }
       continue
@@ -471,13 +471,13 @@ export function wiringPlan(configHome: string, state: Installed, home = homedir(
     if (terminal === 'alacritty') {
       const config = alacrittyConfig(configHome)
       if (upsertAlacrittyImport(readText(config), undefined) !== undefined) {
-        lines.push(`edit ${at(config)} — a ttheme block: general.import`)
+        lines.push(`Edit ${at(config)} — a ttheme block: general.import`)
       }
       continue
     }
     const file = blockFile(terminal, configHome)
     const user = readText(file)
-    lines.push(`edit ${at(file)} — a ttheme block: ${blockKeys(blockBody(terminal, configHome, startup, user))}`)
+    lines.push(`Edit ${at(file)} — a ttheme block: ${blockKeys(blockBody(terminal, configHome, startup, user))}`)
   }
   return lines
 }

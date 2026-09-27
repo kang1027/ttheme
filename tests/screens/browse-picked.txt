@@ -1,6 +1,6 @@
-◆ catalog (6/6 · 3 picked)
-│    search… ‹hint›
-│    ○ select all (6)
+◆ Catalog (6/6 · 3 picked)
+│    Search… ‹hint›
+│    ○ Select all (6)
 │    ▾ Bocchi the Rock! (2/3) ぼっち・ざ・ろっく!
 │ ▌    ● bocchi
 │      ● kita

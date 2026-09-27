@@ -402,9 +402,9 @@ __tt_pin_save() {
   TTHEME_PIN=$key TTHEME_PIN_SPEC=${TTHEME_PALETTE[$name]}
   __tt_tilde "$key"
   if __tt_color; then
-    printf '\033[2mpinned · %s → %s\033[0m\n' "$REPLY" "$name"
+    printf '\033[2mPinned · %s → %s\033[0m\n' "$REPLY" "$name"
   else
-    print -r -- "pinned · $REPLY → $name"
+    print -r -- "Pinned · $REPLY → $name"
   fi
 }
 
@@ -420,9 +420,9 @@ __tt_unpin() {
     __tt_dir_sync
     __tt_tilde "$key"
     if __tt_color; then
-      printf '\033[2munpinned · %s\033[0m\n' "$REPLY"
+      printf '\033[2mUnpinned · %s\033[0m\n' "$REPLY"
     else
-      print -r -- "unpinned · $REPLY"
+      print -r -- "Unpinned · $REPLY"
     fi
     return 0
   done
@@ -474,7 +474,7 @@ __tt_menu() {
   for k in $reply; do
     grp=${TTHEME_GROUP[$k]:-Other}
     if [[ $grp != $last_grp ]]; then
-      [[ $grp == *@* && $last_grp != *@* && -n $last_grp ]] && printf '  \033[2m── markets ──────────\033[0m\n'
+      [[ $grp == *@* && $last_grp != *@* && -n $last_grp ]] && printf '  \033[2m── Markets ──────────\033[0m\n'
       printf '  \033[1m%s\033[0m' "$grp"
       [[ -n ${TTHEME_NATIVE[$k]} ]] && printf ' \033[2m%s\033[0m' "${TTHEME_NATIVE[$k]}"
       printf '\n'
@@ -572,7 +572,7 @@ __tt_config() {
   blur=${(M)${(@f)"$(<$TTHEME_CONFIG)"}:#': ${TTHEME_BG_BLUR:='*}
   ${=${VISUAL:-${EDITOR:-vi}}} $TTHEME_CONFIG || return
   [[ ${(M)${(@f)"$(<$TTHEME_CONFIG)"}:#': ${TTHEME_BG_BLUR:='*} == "$blur" ]] || __tt_redraw
-  print -r -- "settings apply in new tabs — $TTHEME_CONFIG"
+  print -r -- "Settings apply in new tabs — $TTHEME_CONFIG"
 }
 
 __tt_redraw() {
@@ -639,11 +639,11 @@ __tt_resolve() {
     return 0
   elif (( ${#m} > 1 )); then
     m=(${(o)m})
-    print -u2 "multiple palettes start with '$name': $m"
+    print -u2 "ttheme: multiple palettes start with '$name': $m"
   elif m=(${(o)${(M)${(k)TTHEME_PALETTE}:#*$name*}}) && (( ${#m} )); then
-    print -u2 "unknown palette '$name' — did you mean: ${(j:, :)m[1,3]}?"
+    print -u2 "ttheme: unknown palette '$name' — did you mean: ${(j:, :)m[1,3]}?"
   else
-    print -u2 "unknown palette '$name' — run \`ttheme\` to list palettes"
+    print -u2 "ttheme: unknown palette '$name' — run \`ttheme\` to list palettes"
   fi
   return 1
 }
@@ -823,7 +823,7 @@ __tt_pv_row() {
     (( color )) && on=$sb
   fi
   if [[ ${rtype[$1]} == rule ]]; then
-    name='── markets '
+    name='── Markets '
     REPLY="   "$d$name${(l:lw - 4 - ${#name}::─:)}$z
     return 0
   fi
@@ -893,9 +893,9 @@ __tt_pv_foot() {
       note=$REPLY
       (( pk == 2 )) && note+="/**"
     elif (( pk == 1 )); then
-      note="until this tab closes"
+      note="Until this tab closes"
     else
-      note="new tabs · the default palette"
+      note="New tabs · the default palette"
     fi
     kk=(enter) kl=(confirm)
     right=$b"esc"$z$d" back"$z
@@ -992,19 +992,19 @@ __tt_pv_foot() {
 __tt_pv_help() {
   local back="the tab" z=$'\e[0m' b=$'\e[1m' blank
   [[ -n ${TTHEME_PALETTE[$cn]} ]] && back=$cn
-  local -a hk=(move series filter apply) hv=(
+  local -a hk=(Move Series Filter Apply) hv=(
     "↑↓  home  end  pgup  pgdn"
     "←→  ·  enter or space on a series"
     "a-z 0-9 -  ·  bksp  ·  ctrl-u clears"
     "enter  ·  esc restores $back"
   )
   if (( bgcw )); then
-    hk+=("tune bg" "" "" "" "")
+    hk+=("Tune bg" "" "" "" "")
     hv+=("tab  ·  finds one on the boorus, or takes your own, if none" "↑↓ field  ←→ step  ⇧←→ ×10  1-9 place" "space hides  ·  = default  ·  f adds one from the boorus or your own" "enter keeps  ·  esc undoes" ",  .  other saved images  ·  D removes this one")
   fi
-  hk+=(config "")
+  hk+=(Config "")
   hv+=("alt-c  ·  ↑↓ setting  ←→ value" "enter saves  ·  esc undoes")
-  hk+=(close)
+  hk+=(Close)
   hv+=("?  esc")
   (( color )) || z= b=
   local -i i r x y w hh
@@ -1020,7 +1020,7 @@ __tt_pv_help() {
   x=$(( (pw - w) / 2 + 1 )) y=$(( (ph - hh) / 2 ))
   (( y < 4 )) && y=4
   blank=${(l:w:: :)}
-  out+=$'\e['$y';'$x'H'"╭─ keys ${(l:$(( w - 9 ))::─:)}╮"
+  out+=$'\e['$y';'$x'H'"╭─ Keys ${(l:$(( w - 9 ))::─:)}╮"
   for (( r = y + 1; r < y + hh - 1; r++ )); do
     out+=$'\e['$r';'$x'H'$blank$'\e['$r';'$x'H│'$'\e['$r';'$(( x + w - 1 ))'H│'
   done
@@ -1104,7 +1104,7 @@ __tt_pv_tune() {
       ;;
     $'\r'|$'\n')
       if [[ "${bgsize[$tune]} ${bgpos[$tune]} ${bgop[$tune]} ${bgoff[$tune]}" != "$tsnap" ]]; then
-        bgedit[$tune]=1 msg="kept · saved when preview closes" msgt=200
+        bgedit[$tune]=1 msg="Kept · saved when preview closes" msgt=200
       fi
       tune=""
       ;;
@@ -1184,11 +1184,11 @@ __tt_pv_conf_save() {
   fi
   __tt_tilde "$TTHEME_CONFIG"
   if __tt_config_write "${pairs[@]}"; then
-    conf=0 msg="saved · $REPLY" msgt=200
+    conf=0 msg="Saved · $REPLY" msgt=200
     (( ${pairs[(Ie)TTHEME_BG_BLUR]} )) && __tt_pv_redraw
   else
     __tt_pv_unconf
-    msg="could not write $REPLY" msgt=200
+    msg="Could not write $REPLY" msgt=200
   fi
 }
 
@@ -1200,7 +1200,7 @@ __tt_pv_redraw() {
     done
   fi
   bgedit=()
-  msg="drawing the background pictures again" msgt=300
+  msg="Drawing the background pictures again" msgt=300
   printf '\e[?2026h'
   __tt_pv_draw
   __tt_pv_bg_close
@@ -1208,7 +1208,7 @@ __tt_pv_redraw() {
   bgsrc=() resized=1 bgname="" bgshown="" bgdim=()
   __tt_reload
   (( $+functions[__tt_bg_refresh] )) && __tt_bg_refresh $TTHEME_ORDER
-  msg=${${out//$'\n'/ }:-"saved · no background pictures to draw"} msgt=300
+  msg=${${out//$'\n'/ }:-"Saved · no background pictures to draw"} msgt=300
 }
 
 __tt_pv_conf_panel() {
@@ -1307,7 +1307,7 @@ __tt_pv_draw() {
   if (( pw < 40 || ph < 12 )); then
     line="ttheme preview"
     (( color )) && line=$'\e[1m'$ac$line$'\e[0m'
-    out+=$line$'\e[K\n'"needs 40×12 — now ${pw}×${ph}"$'\e[K\n'
+    out+=$line$'\e[K\n'"Needs 40×12 — now ${pw}×${ph}"$'\e[K\n'
     line="esc quits"
     (( color )) && line=$'\e[2m'$line$'\e[0m'
     out+=$line$'\e[K\e[J'
@@ -1340,7 +1340,7 @@ __tt_pv_draw() {
         ex="${ex[1,gkeep]}▏"
       fi
     fi
-    line="   "$dd"search… e.g. $ex"$zz
+    line="   "$dd"Search… e.g. $ex"$zz
   fi
   local tail=$'\e['$(( lw - ${#cnt} ))'G'$dd$cnt$zz
   [[ -n $flt ]] && tail=$'\e['$(( lw - ${#cnt} ))'G'$cnt
@@ -1357,7 +1357,7 @@ __tt_pv_draw() {
     line=""
     if (( k < h )); then
       if (( ! N )); then
-        (( k == 0 )) && line="   ${dd}no palettes match '$flt'$zz"
+        (( k == 0 )) && line="   ${dd}No palettes match '$flt'$zz"
       elif (( i <= N )); then
         __tt_pv_row $i
         line=$REPLY
@@ -1370,20 +1370,20 @@ __tt_pv_draw() {
   __tt_pv_foot $(( split ? se : pw ))
   if (( split )); then
     if (( help && sw >= 48 )); then
-      __tt_pv_head 1 $sc $se keys
+      __tt_pv_head 1 $sc $se Keys
       __tt_pv_help
     elif [[ -n $tune ]]; then
       (( bgoff[$tune] )) && state=off
-      src=background
+      src=Background
       [[ -n ${bgfrom[$tune]} ]] && src+=" · ${bgfrom[$tune]}"
-      (( ${#tune} + ${#src} + 6 > sw )) && src=background
+      (( ${#tune} + ${#src} + 6 > sw )) && src=Background
       __tt_pv_head 1 $sc $se $tune "$src" $state
       __tt_pv_bg_panel $tune 4 $sc $se
     elif (( conf )); then
       __tt_tilde "$TTHEME_CONFIG"
       src=$REPLY
       (( 8 + ${#src} > sw )) && src=""
-      __tt_pv_head 1 $sc $se config "" "$src"
+      __tt_pv_head 1 $sc $se Config "" "$src"
       __tt_pv_conf_panel 4 $sc $se
     else
       [[ -n $an ]] && src=${TTHEME_SRC[$an]}
@@ -1395,13 +1395,13 @@ __tt_pv_draw() {
   else
     if [[ -n $tune ]]; then
       (( bgoff[$tune] )) && state=off
-      src=background
+      src=Background
       [[ -n ${bgfrom[$tune]} ]] && src+=" · ${bgfrom[$tune]}"
-      (( ${#tune} + ${#src} + 6 > lw )) && src=background
+      (( ${#tune} + ${#src} + 6 > lw )) && src=Background
       __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$src" $state
       __tt_pv_bg_panel $tune $(( ph - 8 )) 1 $lw
     elif (( conf )); then
-      __tt_pv_head $(( ph - 7 )) 1 $lw config
+      __tt_pv_head $(( ph - 7 )) 1 $lw Config
       __tt_pv_conf_panel $(( ph - 6 )) 1 $lw
     fi
     (( help )) && __tt_pv_help
@@ -1627,7 +1627,7 @@ __tt_pv_handle() {
       elif __tt_pv_bg_findable $name; then
         :
       elif (( bgcw )); then
-        msg="no background image for $name" msgt=200
+        msg="No background image for $name" msgt=200
       fi
       ;;
     altc)
@@ -1672,19 +1672,19 @@ __tt_preview() {
   local -a bgorder=()
   local -A bgfrom=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
   local conf=0 cf=1
-  local -a plabel=(" this tab " " default ") csnap=()
-  local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR) clabel=("new tabs" announce "search fx" sort blur)
+  local -a plabel=(" This tab " " Default ") csnap=()
+  local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR) clabel=("New tabs" Announce "Search fx" Sort Blur)
   local -a cchoice=("off seq" "1 0" "typewriter decode glitch" "abc series" "0 1 2 3 4") cshow=("off seq" "on off" "typewriter decode glitch" "abc series" "off 1px 2px 3px 4px")
   local -A cnote=(
-    TTHEME_TAB_PALETTE:seq "new tabs rotate through palettes" TTHEME_TAB_PALETTE:off "new tabs keep the terminal theme"
-    TTHEME_ANNOUNCE:1 "shows the palette notice" TTHEME_ANNOUNCE:0 "silences the palette notice"
-    TTHEME_FX:typewriter "the search hint types itself" TTHEME_FX:decode "the search hint decodes" TTHEME_FX:glitch "the search hint glitches in"
-    TTHEME_SORT:abc "series and palettes by name" TTHEME_SORT:series "series in the order added"
-    TTHEME_BG_BLUR:0 "pictures stay sharp" TTHEME_BG_BLUR:1 "pictures soften a little behind the text"
-    TTHEME_BG_BLUR:2 "pictures soften behind the text" TTHEME_BG_BLUR:3 "pictures blur behind the text"
-    TTHEME_BG_BLUR:4 "pictures blur well behind the text"
+    TTHEME_TAB_PALETTE:seq "New tabs rotate through palettes" TTHEME_TAB_PALETTE:off "New tabs keep the terminal theme"
+    TTHEME_ANNOUNCE:1 "Shows the palette notice" TTHEME_ANNOUNCE:0 "Silences the palette notice"
+    TTHEME_FX:typewriter "The search hint types itself" TTHEME_FX:decode "The search hint decodes" TTHEME_FX:glitch "The search hint glitches in"
+    TTHEME_SORT:abc "Series and palettes by name" TTHEME_SORT:series "Series in the order added"
+    TTHEME_BG_BLUR:0 "Pictures stay sharp" TTHEME_BG_BLUR:1 "Pictures soften a little behind the text"
+    TTHEME_BG_BLUR:2 "Pictures soften behind the text" TTHEME_BG_BLUR:3 "Pictures blur behind the text"
+    TTHEME_BG_BLUR:4 "Pictures blur well behind the text"
   )
-  [[ $mode == pin ]] && pkdef=2 plabel=(" this directory " " and below ")
+  [[ $mode == pin ]] && pkdef=2 plabel=(" This directory " " And below ")
   [[ $mode == init ]] && pkdef=2
   __tt_pv_canpick
   __tt_pv_size

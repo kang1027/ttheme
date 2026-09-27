@@ -94,10 +94,15 @@ setting, enter to save them to `config.zsh` and esc to put them back. ←→ cha
 a value; on the two rows of checkboxes (rating and block) they move between the
 boxes and space ticks one, so `safe` and `explicit` can be listed without
 `questionable`, or underwear let through while nudity stays blocked. At least
-one rating stays ticked. `a` turns the panel to its advanced page — the lowest
-score, the shortest side a picture must reach, the sites the all tab mixes, the
-kinds of picture to hide by tag (comic, monochrome, sketch, chibi), tags of your
-own to hide and PNG only — and back. Under the rows the panel says what the one
+one rating stays ticked. A row that is not at its default names the default at
+the panel's right edge (`Default fit`). `Advanced ›` under the rows (enter on
+it, or `a` from any row) turns the panel to its advanced page and `‹ Basic`
+back; a `•` beside it says a setting on the other page is not at its default.
+The advanced page holds the lowest score, the shortest side a picture
+must reach, the sites the all tab mixes, the kinds of picture to hide by tag
+(comic, monochrome, sketch, chibi), tags of your own to hide and PNG only. The
+panel keeps one size and place on both pages and while a value is typed. Under
+the rows the panel says what the one
 under the cursor does and which sites keep it, and what each site holds for the
 query at the values on screen before they are saved (`makise_kurisu: danbooru
 572 · konachan 42 · yande.re 213 · zerochan no count` at 1600 px), counted again

@@ -22,7 +22,7 @@ import {
 import { bringPictures, since } from './pictures.ts'
 import { installedPath, marketSources, shownSource } from './sources.ts'
 import { alphabetical } from './theme.ts'
-import type { InitTerminal } from './wiring.ts'
+import { type InitTerminal, TERMINAL_NAMES } from './wiring.ts'
 
 function reload(count: number): void {
   console.log(`\n${count} palettes installed — open a new tab, or reload your terminal config`)
@@ -37,7 +37,7 @@ export async function runAdd(given: string[]): Promise<void> {
   const fresh = names.filter((n) => !state.palettes.includes(n))
   if (fresh.length === 0) {
     sync(home, catalog, state)
-    console.log(`already installed: ${already.join(', ')}`)
+    console.log(`Already installed: ${already.join(', ')}`)
     return
   }
   const next = { ...state, palettes: [...state.palettes, ...fresh] }
@@ -100,7 +100,7 @@ export function runOn(): void {
     throw new Error('no palettes installed — `ttheme browse` picks some')
   }
   if (!state.off) {
-    console.log(`already on · ${name}`)
+    console.log(`Already on · ${name}`)
     return
   }
   const { off: _, ...next } = state
@@ -112,14 +112,14 @@ export function runOff(): void {
   const home = configHome()
   const state = readInstalled(home)
   if (state.off) {
-    console.log('already off')
+    console.log('Already off')
     return
   }
   const restart = commit(home, readCatalog(home), state, { ...state, off: true })
   const name = startupPalette(state)
-  console.log(`off · new tabs open in the terminal's own colors${name ? ` — \`ttheme on\` wears ${name} again` : ''}`)
+  console.log(`Off · new tabs open in the terminal's own colors${name ? ` — \`ttheme on\` wears ${name} again` : ''}`)
   if (restart) {
-    console.log('iterm2 new tabs open on your own profile once iTerm2 restarts')
+    console.log('iTerm2 new tabs open on your own profile once iTerm2 restarts')
   }
 }
 
@@ -127,18 +127,20 @@ function defaultNote(name: string, terminals: InitTerminal[], restart: boolean):
   const wearing = terminals.filter((t) => t !== 'iterm2')
   const lines =
     wearing.length > 0
-      ? [`default ${name} · ${wearing.join(', ')} open new tabs with it once their config reloads`]
+      ? [
+          `Default ${name} · ${wearing.map((t) => TERMINAL_NAMES[t]).join(', ')} open new tabs with it once their config reloads`,
+        ]
       : []
   if (terminals.includes('iterm2')) {
     lines.push(
       restart
-        ? `iterm2 new tabs open with it once iTerm2 restarts — "ttheme · default" is now its default profile`
-        : `iterm2 new tabs open with it — "ttheme · default" is its default profile`,
+        ? `iTerm2 new tabs open with it once iTerm2 restarts — "ttheme · default" is now its default profile`
+        : `iTerm2 new tabs open with it — "ttheme · default" is its default profile`,
     )
   }
   return lines.length > 0
     ? lines
-    : [`default ${name} · no terminal is wired to open with it — \`ttheme init\` wires one`]
+    : [`Default ${name} · no terminal is wired to open with it — \`ttheme init\` wires one`]
 }
 
 type Source = 'market' | 'mine' | 'kept'
@@ -184,7 +186,7 @@ export async function runUpdate(): Promise<void> {
   const home = configHome()
   const markets = marketSources(home)
   if (markets.length === 0) {
-    console.log('no markets to update — `ttheme market add official` brings the ttheme catalog back')
+    console.log('No markets to update — `ttheme market add official` brings the ttheme catalog back')
   }
   for (const source of markets) {
     try {
@@ -247,13 +249,13 @@ export async function runBrowse(): Promise<void> {
   const state = readInstalled(home)
   const wanted = await pickPalettes(available(home, catalog), state.palettes, 'palette')
   if (!wanted) {
-    console.log('nothing changed')
+    console.log('Nothing changed')
     return
   }
   const dropped = state.palettes.filter((n) => !wanted.includes(n))
   const added = wanted.filter((n) => !state.palettes.includes(n))
   if (added.length === 0 && dropped.length === 0) {
-    console.log('nothing changed')
+    console.log('Nothing changed')
     return
   }
   const next = { ...state, palettes: wanted }

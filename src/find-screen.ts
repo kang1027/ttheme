@@ -22,6 +22,7 @@ export interface Row {
   about: string
   choices: string[]
   value: string
+  default: string
   multi?: { none?: string }
   entry?: Entry
   advanced?: boolean
@@ -481,14 +482,14 @@ function query(line: Line, cols: number, view: FindView, accent: string): void {
     const hint = view.suggest?.length ? '  ↑↓ pick  enter searches' : '  enter searches'
     line.put(
       c,
-      view.editing ? hint : `  a tag, a post url or an id, or drop a picture or ctrl+v — ${view.tag || 'esc leaves'}`,
+      view.editing ? hint : `  A tag, a post URL or an id, or drop a picture or ctrl+v — ${view.tag || 'esc leaves'}`,
       D,
     )
     return
   }
   const c = line.run(0, [
     ['⌕ ', accent],
-    [view.tag || 'nothing yet — / searches, ctrl+v pastes a picture', view.tag ? '' : D],
+    [view.tag || 'Nothing yet — / searches, ctrl+v pastes a picture', view.tag ? '' : D],
   ])
   const allowed = BLOCKS.filter((block) => !view.block.includes(block))
   const skipped = SITES.filter((site) => !view.enabled.includes(site.name)).map((site) => site.name)
@@ -516,15 +517,15 @@ function query(line: Line, cols: number, view: FindView, accent: string): void {
 
 function transparent(shown: Shown): Part[] {
   if (shown.cut === 'on') {
-    return [[`cut out · ${shown.clear}% transparent`, GREEN]]
+    return [[`Cut out · ${shown.clear}% transparent`, GREEN]]
   }
   if (shown.cut === 'off') {
-    return [['opaque · x cuts out', YELLOW]]
+    return [['Opaque · x cuts out', YELLOW]]
   }
   if (shown.cut === 'failed') {
-    return [['opaque · no cut-out', YELLOW]]
+    return [['Opaque · no cut-out', YELLOW]]
   }
-  return [shown.clear > 0 ? [`${shown.clear}% transparent`, GREEN] : ['opaque', YELLOW]]
+  return [shown.clear > 0 ? [`${shown.clear}% transparent`, GREEN] : ['Opaque', YELLOW]]
 }
 
 function where(view: FindView): string {
@@ -533,7 +534,7 @@ function where(view: FindView): string {
 
 function status(view: FindView): Part | undefined {
   if (view.installing !== undefined) {
-    return [`installing ${view.palette} ← ${named(view.installing)}`, YELLOW]
+    return [`Installing ${view.palette} ← ${named(view.installing)}`, YELLOW]
   }
   if (view.hint) {
     return [view.hint, GREEN]
@@ -545,13 +546,13 @@ function status(view: FindView): Part | undefined {
     return [`${view.slow ?? view.site} asked to slow down · ${view.waiting}s`, YELLOW]
   }
   if (view.fetching) {
-    return [`fetching ${view.fetching.id % KEY_SPAN} · ${progress(view.fetching.got, view.fetching.size)}`, YELLOW]
+    return [`Fetching ${view.fetching.id % KEY_SPAN} · ${progress(view.fetching.got, view.fetching.size)}`, YELLOW]
   }
   if (view.cutting !== undefined) {
-    return [`cutting out ${view.cutting % KEY_SPAN}`, YELLOW]
+    return [`Cutting out ${view.cutting % KEY_SPAN}`, YELLOW]
   }
   if (view.preparing !== undefined) {
-    return [`preparing ${view.preparing % KEY_SPAN}`, YELLOW]
+    return [`Preparing ${view.preparing % KEY_SPAN}`, YELLOW]
   }
   if (view.saved) {
     return [view.saved, GREEN]
@@ -616,8 +617,8 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
     lines[3]?.put(
       0,
       view.preset === 'cutouts'
-        ? `no transparent cutouts of ${view.tag} on ${where(view)} — c searches every post, tab tries ${view.nextSite}`
-        : `no posts of ${view.tag} on ${where(view)} — tab tries ${view.nextSite}`,
+        ? `No transparent cutouts of ${view.tag} on ${where(view)} — c searches every post, tab tries ${view.nextSite}`
+        : `No posts of ${view.tag} on ${where(view)} — tab tries ${view.nextSite}`,
       D,
     )
   }
@@ -626,7 +627,7 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
   if (view.searching && view.tiles.length === 0 && !lead) {
     foot(line, cols, accent, {
       badge: 'FIND',
-      lead: [view.preset === 'cutouts' ? 'checking png headers' : 'fetching posts', D],
+      lead: [view.preset === 'cutouts' ? 'Checking PNG headers' : 'Fetching posts', D],
       right: ['esc', 'back'],
     })
     return
@@ -702,32 +703,47 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
 
 const KEYS: Record<FindView['mode'], [string, string][]> = {
   grid: [
-    ['move', '←↑↓→  home  end  pgup  pgdn'],
-    ['try on', 'enter'],
-    ['site', `tab  all, ${SITES.map((site) => site.name).join(', ')}`],
-    ['posts', 'c  cutouts or every post'],
-    ['search', '/  a tag, a post url or an id'],
-    ['your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window or paste its link'],
-    ['unfold', 'space  a set of ×N'],
-    ['open', 'o  the post page in a browser'],
-    ['settings', 's  rating, block, posts, solo, order, sets, remove bg'],
-    ['advanced', 'a in settings  min score, min size, sites, hide, hide tags, png only'],
-    ['back', 'esc returns to preview'],
-    ['close', '?  esc'],
+    ['Move', '←↑↓→  home  end  pgup  pgdn'],
+    ['Try on', 'enter'],
+    ['Site', `tab  all, ${SITES.map((site) => site.name).join(', ')}`],
+    ['Posts', 'c  cutouts or every post'],
+    ['Search', '/  a tag, a post URL or an id'],
+    ['Your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window or paste its link'],
+    ['Unfold', 'space  a set of ×N'],
+    ['Open', 'o  the post page in a browser'],
+    ['Settings', 's  rating, block, posts, solo, order, sets, remove bg'],
+    ['Advanced', 'a or Advanced › in settings  min score, min size, sites, hide, hide tags, PNG only'],
+    ['Back', 'esc returns to preview'],
+    ['Close', '?  esc'],
   ],
   try: [
-    ['browse', '←→'],
-    ['install', 'enter'],
-    ['cut out', 'x  the background off or on, on an opaque picture'],
-    ['open', 'o  the post page in a browser'],
-    ['your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window'],
-    ['grid', 'esc'],
-    ['close', '?  esc'],
+    ['Browse', '←→'],
+    ['Install', 'enter'],
+    ['Cut out', 'x  the background off or on, on an opaque picture'],
+    ['Open', 'o  the post page in a browser'],
+    ['Your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window'],
+    ['Grid', 'esc'],
+    ['Close', '?  esc'],
   ],
 }
 
+export const DIGITS = 6
+const TEXT_ROOM = 24
+
 export function pageOf(view: Pick<FindView, 'settings' | 'advanced'>): number[] {
-  return view.settings.flatMap((row, i) => (Boolean(row.advanced) === view.advanced ? [i] : []))
+  return [
+    ...view.settings.flatMap((row, i) => (Boolean(row.advanced) === view.advanced ? [i] : [])),
+    view.settings.length,
+  ]
+}
+
+function lowered(label: string): string {
+  return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+}
+
+function pageAbout(view: Pick<FindView, 'settings' | 'advanced'>): string {
+  const names = view.settings.filter((row) => Boolean(row.advanced) !== view.advanced).map((row) => lowered(row.label))
+  return `${view.advanced ? 'Back to' : 'More filters:'} ${names.join(', ')} — enter opens the page, or a from any row`
 }
 
 export function stepped(choices: readonly string[], value: string, step: 1 | -1): string {
@@ -760,27 +776,73 @@ interface Chip {
   sgr: string
 }
 
+function ordered(row: Row): string[] {
+  if (row.entry !== 'number' || row.choices.includes(row.value)) {
+    return row.choices
+  }
+  const at = row.choices.findIndex((choice) => (Number(choice) || 0) > Number(row.value))
+  return at === -1 ? [...row.choices, row.value] : [...row.choices.slice(0, at), row.value, ...row.choices.slice(at)]
+}
+
 function chips(row: Row, focused: boolean, typing: string | undefined, ansi: number): Chip[] {
   const lit = `\x1b[7;${30 + ansi}m`
   const typed = focused && typing !== undefined
   if (row.entry === 'text') {
-    return [typed ? { text: ` ${typing}█ `, sgr: lit } : { text: ` ${row.value || 'none'} `, sgr: row.value ? lit : D }]
+    const text = typed ? `${typing}█` : row.value || 'none'
+    return [{ text: ` ${text} `, sgr: typed || (focused && row.value) ? lit : row.value ? '' : D }]
   }
   const on = typed ? [] : row.value.split(' ')
-  const out = row.choices.map((choice, k): Chip => {
+  const out = (typed ? row.choices : ordered(row)).map((choice, k): Chip => {
     const shown = on.includes(choice)
     const under = row.multi && focused && k === row.cursor ? '4;' : ''
     return {
       text: row.multi ? ` ${shown ? '[x]' : '[ ]'} ${choice} ` : ` ${choice} `,
-      sgr: shown ? `\x1b[${under}7;${30 + ansi}m` : under ? `\x1b[4m${D}` : D,
+      sgr: shown ? (focused ? `\x1b[${under}7;${30 + ansi}m` : '') : under ? `\x1b[4m${D}` : D,
     }
   })
-  if (typed) {
-    return [...out, { text: ` ${typing}█ `, sgr: lit }]
+  return typed ? [...out, { text: ` ${typing}█ `, sgr: lit }] : out
+}
+
+function widest(row: Row): Chip[] {
+  if (row.entry === 'text') {
+    return [{ text: ' '.repeat(TEXT_ROOM), sgr: '' }]
   }
-  return row.entry === 'number' && !row.choices.includes(row.value)
-    ? [...out, { text: ` ${row.value} `, sgr: lit }]
-    : out
+  const all = row.choices.map((choice) => ({ text: row.multi ? ` [x] ${choice} ` : ` ${choice} `, sgr: '' }))
+  return row.entry === 'number' ? [...all, { text: ` ${'0'.repeat(DIGITS)}█ `, sgr: '' }] : all
+}
+
+function span(list: Chip[]): number {
+  return list.reduce((n, chip) => n + width(chip.text) + 1, 0) - 1
+}
+
+function pack(list: Chip[], room: number): Chip[][] {
+  const packed: Chip[][] = [[]]
+  let used = 0
+  for (const chip of list) {
+    const shown =
+      width(chip.text) > room
+        ? {
+            ...chip,
+            text: ` …${Array.from(chip.text)
+              .slice(-(room - 2))
+              .join('')}`,
+          }
+        : chip
+    if (used > 0 && used + width(shown.text) > room) {
+      packed.push([])
+      used = 0
+    }
+    packed[packed.length - 1]?.push(shown)
+    used += width(shown.text) + 1
+  }
+  return packed
+}
+
+function standard(row: Row): string {
+  if (row.multi && row.choices.every((choice) => row.default.split(' ').includes(choice))) {
+    return 'Default all'
+  }
+  return `Default ${row.default && row.default !== row.multi?.none ? row.default : 'none'}`
 }
 
 function tally(view: FindView): string {
@@ -791,13 +853,23 @@ function tally(view: FindView): string {
     return `${view.tag}: counting…`
   }
   const each = view.counts.map(
-    ({ site, count }) => `${site}\u00a0${count === undefined ? 'no\u00a0count' : count.toLocaleString('en-US')}`,
+    ({ site, count }) => `${site} ${count === undefined ? 'no count' : count.toLocaleString('en-US')}`,
   )
   return `${view.tag}: ${each.join(' · ')}`
 }
 
 function panelKeys(view: FindView, row: Row | undefined): { keys: [string, string][]; right: [string, string] } {
   const page = view.advanced ? 'basic' : 'advanced'
+  if (!row) {
+    return {
+      keys: [
+        ['↑↓', 'setting'],
+        ['enter', page],
+        ['s', 'save'],
+      ],
+      right: ['esc', 'undo'],
+    }
+  }
   if (view.typing !== undefined) {
     return {
       keys: [
@@ -807,7 +879,7 @@ function panelKeys(view: FindView, row: Row | undefined): { keys: [string, strin
       right: ['esc', 'cancel'],
     }
   }
-  if (row?.entry) {
+  if (row.entry) {
     return {
       keys: [
         ['↑↓', 'setting'],
@@ -824,7 +896,7 @@ function panelKeys(view: FindView, row: Row | undefined): { keys: [string, strin
       ['↑↓', 'setting'],
       ['←→', 'value'],
       ['a', page],
-      ...(row?.multi ? ([['space', 'toggle']] as [string, string][]) : []),
+      ...(row.multi ? ([['space', 'toggle']] as [string, string][]) : []),
       ['enter', 'save'],
     ],
     right: ['esc', 'undo'],
@@ -833,61 +905,68 @@ function panelKeys(view: FindView, row: Row | undefined): { keys: [string, strin
 
 function panel(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
   const at = view.panel ?? 0
+  const link = view.settings.length
   const label = Math.max(...view.settings.map((row) => width(row.label)))
-  const lead = 5 + label
-  const need = Math.max(
-    ...view.settings.map(
-      (row) => lead + chips(row, false, undefined, 0).reduce((n, c) => n + width(c.text) + 1, 0) + 2,
-    ),
+  const lead = 6 + label
+  const said = Math.max(...view.settings.map((row) => width(standard(row))))
+  const need = lead + Math.max(...view.settings.map((row) => span(widest(row)))) + said + 5
+  const w = Math.min(cols - 2, Math.max(48, need))
+  const room = w - lead - said - 5
+  const text = w - 7
+  const pages = [false, true].map((advanced) => ({
+    advanced,
+    rows: pageOf({ settings: view.settings, advanced }).slice(0, -1),
+  }))
+  const held = view.settings.map((row) => pack(widest(row), room).length)
+  const body = Math.max(...pages.map((page) => page.rows.reduce((n, i) => n + (held[i] as number), 0)))
+  const aboutRoom = Math.max(
+    ...pages.map((page) => wrapped(pageAbout({ settings: view.settings, advanced: page.advanced }), text).length),
+    ...view.settings.map((row) => wrapped(row.about, text).length),
   )
-  const w = Math.min(cols - 2, Math.max(40, need))
-  const room = w - lead - 2
-  const laid = pageOf(view).map((i) => {
-    const row = view.settings[i] as Row
-    const packed: Chip[][] = [[]]
-    let used = 0
-    for (const chip of chips(row, i === at, view.typing, view.siteAnsi)) {
-      const cw = width(chip.text) + 1
-      if (used > 0 && used + cw > room) {
-        packed.push([])
-        used = 0
-      }
-      packed[packed.length - 1]?.push(chip)
-      used += cw
-    }
-    return { row, i, packed }
-  })
-  const text = w - 6
-  const aboutRoom = Math.max(...laid.map(({ row }) => wrapped(row.about, text).length))
-  const about = wrapped(view.settings[at]?.about ?? '', text)
-  const counted = wrapped(tally(view), text)
-  const countRoom = view.tag ? Math.max(2, counted.length) : 0
-  const body = laid.reduce((n, { packed }) => n + packed.length, 0)
-  const h = body + aboutRoom + countRoom + 5
+  const worst = `${view.tag}: ${SITES.map((site) => `${site.name} 0,000,000`).join(' · ')}`
+  const countRoom = view.tag ? Math.max(wrapped(worst, text).length, wrapped(tally(view), text).length) : 0
+  const h = body + aboutRoom + countRoom + 8
   const x = Math.floor((cols - w) / 2)
-  const y = Math.max(2, Math.floor((rows - h) / 2))
-  const title = view.advanced ? 'settings · advanced' : 'settings'
-  lines[y]?.put(x, `╭─ ${title} ${'─'.repeat(Math.max(0, w - width(title) - 5))}╮`)
+  const y = Math.max(1, Math.floor((rows - 1 - h) / 2))
+  const lit = `\x1b[7;${30 + view.siteAnsi}m`
+  lines[y]?.put(x, `╭─ Settings ${'─'.repeat(Math.max(0, w - 13))}╮`)
   for (let r = y + 1; r < y + h - 1; r++) {
     lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
   }
   let r = y + 2
-  for (const { row, i, packed } of laid) {
-    lines[r]?.put(x + 3, row.label, i === at ? B : D)
-    for (const chipLine of packed) {
-      let c = x + lead
-      for (const chip of chipLine) {
-        c = (lines[r] as Line).put(c, chip.text, chip.sgr) + 1
-      }
-      r++
+  for (const i of pageOf(view).slice(0, -1)) {
+    const row = view.settings[i] as Row
+    const focused = i === at
+    if (focused) {
+      lines[r]?.put(x + 2, '▶', accent)
     }
+    lines[r]?.put(x + 4, row.label, focused ? B : '')
+    if (row.value !== row.default) {
+      lines[r]?.right(x + w - 3, [[standard(row), D]])
+    }
+    pack(chips(row, focused, view.typing, view.siteAnsi), room).forEach((chipLine, k) => {
+      let col = x + lead
+      for (const chip of chipLine) {
+        col = (lines[r + k] as Line).put(col, chip.text, chip.sgr) + 1
+      }
+    })
+    r += held[i] as number
   }
-  lines[y + 3 + body]?.put(x + 3, '─'.repeat(w - 6), D)
-  about.forEach((line, k) => {
-    lines[y + 4 + body + k]?.put(x + 3, line)
+  const other = pages.find((page) => page.advanced !== view.advanced)?.rows ?? []
+  const linkLine = lines[y + 3 + body] as Line
+  if (at === link) {
+    linkLine.put(x + 2, '▶', accent)
+  }
+  const end = linkLine.put(x + 3, view.advanced ? ' ‹ Basic ' : ' Advanced › ', at === link ? lit : B)
+  if (other.some((i) => view.settings[i]?.value !== view.settings[i]?.default)) {
+    linkLine.put(end + 1, '•', D)
+  }
+  lines[y + 5 + body]?.put(x + 2, '─'.repeat(w - 4), D)
+  wrapped(view.settings[at]?.about ?? pageAbout(view), text).forEach((line, k) => {
+    lines[y + 6 + body + k]?.put(x + 4, line)
   })
-  counted.forEach((line, k) => {
-    lines[y + 4 + body + aboutRoom + k]?.put(x + 3, line, D)
+  wrapped(tally(view), text).forEach((line, k) => {
+    lines[y + 6 + body + aboutRoom + k]?.put(x + 4, line, D)
   })
   lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
   const { keys, right } = panelKeys(view, view.settings[at])
@@ -901,7 +980,7 @@ function help(lines: Line[], cols: number, rows: number, view: FindView, accent:
   const h = laid.reduce((n, { parts }) => n + parts.length, 0) + 4
   const x = Math.floor((cols - w) / 2)
   const y = Math.max(2, Math.floor((rows - h) / 2))
-  lines[y]?.put(x, `╭─ keys ${'─'.repeat(w - 9)}╮`)
+  lines[y]?.put(x, `╭─ Keys ${'─'.repeat(w - 9)}╮`)
   for (let r = y + 1; r < y + h - 1; r++) {
     lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
   }
@@ -939,7 +1018,7 @@ export function renderFind(view: FindView, cols: number, rows: number): Frame {
   const accent = fg(view.colors.cursor)
   if (cols < MIN.cols || rows < MIN.rows) {
     lines[0]?.put(0, 'ttheme find', B + accent)
-    lines[1]?.put(0, `needs ${MIN.cols}×${MIN.rows} — now ${cols}×${rows}`)
+    lines[1]?.put(0, `Needs ${MIN.cols}×${MIN.rows} — now ${cols}×${rows}`)
     lines[2]?.put(0, 'esc quits', D)
     return { lines: lines.map((l) => l.render()), images }
   }

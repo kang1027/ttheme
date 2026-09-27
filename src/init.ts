@@ -44,6 +44,7 @@ import {
   detectTerminal,
   INIT_TERMINALS,
   type InitTerminal,
+  TERMINAL_NAMES,
   upsertAlacrittyImport,
   upsertBlock,
   upsertLuaBlock,
@@ -118,12 +119,12 @@ export function planInit(opts: InitOptions, paths: InitPaths): InitPlan {
   const wt = opts.terminals.includes('windows-terminal')
   if (wt && !paths.wtHome) {
     notes.push(
-      'windows terminal: %LOCALAPPDATA% was not found — drop the release fragment into its Fragments folder yourself',
+      'Windows Terminal: %LOCALAPPDATA% was not found — drop the release fragment into its Fragments folder yourself',
     )
   }
   if (opts.terminals.includes('warp')) {
     notes.push(
-      'warp: wears the default palette app-wide through its settings.toml — the shell layer stays off in it, since Warp paints no tab background of its own',
+      'Warp wears the default palette app-wide through its settings.toml — the shell layer stays off in it, since Warp paints no tab background of its own',
     )
   }
   const installed: Installed = {
@@ -164,7 +165,7 @@ export function planUpgrade(state: Installed, paths: InitPaths): InitPlan {
     palettes,
     ...(startup && palettes.includes(startup) ? { startup } : {}),
   }
-  const notes = gone.length > 0 ? [`dropped ${gone.join(', ')} — no longer in the catalog`, ...plan.notes] : plan.notes
+  const notes = gone.length > 0 ? [`Dropped ${gone.join(', ')} — no longer in the catalog`, ...plan.notes] : plan.notes
   return { ...plan, installed, notes }
 }
 
@@ -183,7 +184,7 @@ function installedVersion(configHome: string): string | undefined {
 function summary(state: Installed): string {
   const startup = worn(state)
   return [
-    state.terminals.join(', '),
+    state.terminals.map((t) => TERMINAL_NAMES[t]).join(', '),
     `${state.palettes.length} palettes`,
     startup ? `default ${startup}` : 'no default — ttheme is off',
   ].join(' · ')
@@ -229,7 +230,7 @@ export class Cancelled extends Error {}
 
 function accepted<T>(value: T | symbol): T {
   if (p.isCancel(value)) {
-    p.cancel('nothing changed')
+    p.cancel('Nothing changed')
     throw new Cancelled()
   }
   return value as T
@@ -282,8 +283,12 @@ function windowsAppData(): string | undefined {
 async function askTerminals(detected: string, preselected: InitTerminal[], paths: InitPaths): Promise<InitTerminal[]> {
   return accepted(
     await p.multiselect({
-      message: 'wire which terminals?',
-      options: offered(paths).map((t) => ({ value: t, hint: t === detected ? 'detected' : undefined })),
+      message: 'Wire which terminals?',
+      options: offered(paths).map((t) => ({
+        value: t,
+        label: TERMINAL_NAMES[t],
+        hint: t === detected ? 'detected' : undefined,
+      })),
       initialValues: preselected,
       required: true,
     }),
@@ -320,13 +325,13 @@ function startupLines(installed: Installed, painted: boolean): string[] {
   const startup = worn(installed)
   if (!startup) {
     return [
-      'default    none — new tabs keep the terminal colors',
-      `turn on    \`ttheme on\` wears ${startupPalette(installed)}`,
+      'Default    none — new tabs keep the terminal colors',
+      `Turn on    \`ttheme on\` wears ${startupPalette(installed)}`,
     ]
   }
   return [
-    `default    ${startup}${painted ? ' — this tab wears it already' : ''}`,
-    'change it  `ttheme preview`, enter on a palette, then default',
+    `Default    ${startup}${painted ? ' — this tab wears it already' : ''}`,
+    'Change it  `ttheme preview`, enter on a palette, then default',
   ]
 }
 
@@ -340,31 +345,31 @@ function receipt(plan: InitPlan, opts: InitOptions, painted: boolean, restart: b
   const series = seriesOf(plan.catalog, opts.palettes)
   p.note(
     [`${series.join(', ')} (${opts.palettes.length})`, ...startupLines(plan.installed, painted)].join('\n'),
-    `installed ${opts.palettes.length} palettes`,
+    `Installed ${opts.palettes.length} palettes`,
   )
   p.note(
-    ['exec zsh          the ttheme command in this tab', ...nextLines(opts.terminals, plan, restart)].join('\n'),
-    'next',
+    ['exec zsh          The ttheme command in this tab', ...nextLines(opts.terminals, plan, restart)].join('\n'),
+    'Next',
   )
-  p.outro('done')
+  p.outro('Done')
 }
 
 function nextLines(terminals: InitTerminal[], plan: InitPlan, restart: boolean): string[] {
   const next: string[] = []
   if (terminals.includes('ghostty')) {
-    next.push('restart ghostty   new tabs pick up its config')
+    next.push('Restart Ghostty   New tabs pick up its config')
   }
   if (terminals.includes('kitty')) {
-    next.push('new kitty window  pictures follow it — kitty reloads its colors by itself')
+    next.push('New kitty window  Pictures follow it — kitty reloads its colors by itself')
   }
   if (terminals.includes('alacritty')) {
-    next.push('alacritty         reloads its config by itself')
+    next.push('Alacritty         Reloads its config by itself')
   }
   if (terminals.includes('wezterm')) {
-    next.push('wezterm           reloads its config by itself')
+    next.push('WezTerm           Reloads its config by itself')
   }
   if (terminals.includes('windows-terminal')) {
-    next.push('windows terminal  reloads its settings by itself')
+    next.push('Windows Terminal  Reloads its settings by itself')
   }
   if (terminals.includes('iterm2')) {
     next.push(...itermLines(worn(plan.installed), restart))
@@ -383,25 +388,25 @@ async function upgrade(state: Installed, paths: InitPaths, interactive: boolean)
   verify(plan)
   await redrawPictures(paths.configHome, say(interactive), paths.home)
   const lines = [
-    'exec zsh          open tabs run the new layer — new tabs already do',
+    'exec zsh          Open tabs run the new layer — new tabs already do',
     ...nextLines(plan.installed.terminals, plan, moved && prefs.running()),
   ]
-  const title = `updated to ${pkg.version} — kept ${summary(plan.installed)}`
+  const title = `Updated to ${pkg.version} — kept ${summary(plan.installed)}`
   if (!interactive) {
     console.log([title, ...lines].join('\n'))
     return
   }
   p.note(lines.join('\n'), title)
-  p.outro('done')
+  p.outro('Done')
 }
 
 function itermLines(startup: string | undefined, restart: boolean): string[] {
-  const lines = ['iterm2 profiles   a "ttheme · <palette>" per palette in Settings › Profiles']
+  const lines = ['iTerm2 profiles   A "ttheme · <palette>" per palette in Settings › Profiles']
   if (startup) {
     lines.push(
       restart
-        ? `restart iterm2    new tabs open on "ttheme · default", which wears ${startup}`
-        : `iterm2 default    "ttheme · default" wears ${startup} and follows \`ttheme default\``,
+        ? `Restart iTerm2    New tabs open on "ttheme · default", which wears ${startup}`
+        : `iTerm2 default    "ttheme · default" wears ${startup} and follows \`ttheme default\``,
     )
   }
   return lines
@@ -409,27 +414,27 @@ function itermLines(startup: string | undefined, restart: boolean): string[] {
 
 function report(plan: InitPlan, opts: InitOptions): void {
   const lines = [
-    `placed ${plan.copies.length} files`,
-    `settings in ${plan.settings.file} — edit later with \`ttheme config\``,
-    ...plan.edits.map((e) => `wired ${e.file}`),
+    `Placed ${plan.copies.length} files`,
+    `Settings in ${plan.settings.file} — edit later with \`ttheme config\``,
+    ...plan.edits.map((e) => `Wired ${e.file}`),
   ]
   if (opts.terminals.includes('ghostty')) {
-    lines.push('restart ghostty to pick up its config')
+    lines.push('Restart Ghostty to pick up its config')
   }
   if (opts.terminals.includes('kitty')) {
     lines.push('kitty reloads its colors by itself; pictures show in kitty windows opened from now on')
   }
   if (opts.terminals.includes('alacritty')) {
-    lines.push('alacritty reloads its config by itself')
+    lines.push('Alacritty reloads its config by itself')
   }
   if (opts.terminals.includes('wezterm') || opts.terminals.includes('windows-terminal')) {
-    lines.push('wezterm and windows terminal reload their config by themselves')
+    lines.push('WezTerm and Windows Terminal reload their config by themselves')
   }
   if (opts.terminals.includes('iterm2')) {
-    lines.push('iterm2 gets a "ttheme · <palette>" profile per palette under Settings › Profiles')
+    lines.push('iTerm2 gets a "ttheme · <palette>" profile per palette under Settings › Profiles')
   }
   lines.push(...plan.notes)
-  lines.push('no palettes yet — open a new shell (`exec zsh`), then `ttheme browse` picks them from the catalog')
+  lines.push('No palettes yet — open a new shell (`exec zsh`), then `ttheme browse` picks them from the catalog')
   console.log(lines.join('\n'))
 }
 
@@ -487,9 +492,9 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     const from = installedVersion(configHome)
     const keep = accepted(
       await p.confirm({
-        message: `ttheme${from ? ` ${from}` : ''} is installed — ${summary(existing)}\n${from === pkg.version ? 'reinstall' : 'update to'} ${pkg.version} and keep all of it?`,
-        active: 'yes',
-        inactive: 'no, set it up again',
+        message: `ttheme${from ? ` ${from}` : ''} is installed — ${summary(existing)}\n${from === pkg.version ? 'Reinstall' : 'Update to'} ${pkg.version} and keep all of it?`,
+        active: 'Yes',
+        inactive: 'No, set it up again',
         initialValue: true,
       }),
     )
@@ -504,7 +509,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     ? await pickPalettes(catalog, existing.palettes, 'palette', true)
     : await pickPalettes(catalog, [], 'series', true)
   if (!palettes) {
-    p.cancel('nothing changed')
+    p.cancel('Nothing changed')
     throw new Cancelled()
   }
   const was = existing && startupPalette(existing)
@@ -513,7 +518,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
   const choose = palettes.length > 1 && detectTerminal(process.env) !== 'warp'
   const wear = accepted(
     await p.confirm({
-      message: choose ? 'pick a default palette in ttheme preview once installed?' : `wear ${first} in every tab?`,
+      message: choose ? 'Pick a default palette in ttheme preview once installed?' : `Wear ${first} in every tab?`,
       initialValue: existing ? !existing.off : true,
     }),
   )
@@ -522,23 +527,23 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
   const plan = kept ? { ...fresh, installed: { ...fresh.installed, startup: kept } } : fresh
   p.note(
     [
-      `install ${palettes.length} palettes — ${seriesOf(plan.catalog, palettes).join(', ')}`,
-      `copy ${plan.copies.length} files under ${configHome}`,
-      `write ${plan.settings.file}`,
-      ...plan.edits.map((e) => `edit ${e.file} — a ttheme block: source ttheme.zsh`),
+      `Install ${palettes.length} palettes — ${seriesOf(plan.catalog, palettes).join(', ')}`,
+      `Copy ${plan.copies.length} files under ${configHome}`,
+      `Write ${plan.settings.file}`,
+      ...plan.edits.map((e) => `Edit ${e.file} — a ttheme block: source ttheme.zsh`),
       ...wiringPlan(configHome, plan.installed, home),
-      'each config is backed up once to <file>.ttheme.bak before the first edit — `npx @kecan0406/ttheme uninstall` takes it all out',
+      'Each config is backed up once to <file>.ttheme.bak before the first edit — `npx @kecan0406/ttheme uninstall` takes it all out',
       wear
         ? choose
-          ? `open ttheme preview — every tab wears the palette picked there, ${first} until then`
-          : `paint every tab with ${first}, this one now`
-        : 'leave the terminal colors as they are — `ttheme on` wears a palette later',
-      ...(terminals.includes('iterm2') && wear ? ['make "ttheme · default" the iTerm2 default profile'] : []),
+          ? `Open ttheme preview — every tab wears the palette picked there, ${first} until then`
+          : `Paint every tab with ${first}, this one now`
+        : 'Leave the terminal colors as they are — `ttheme on` wears a palette later',
+      ...(terminals.includes('iterm2') && wear ? ['Make "ttheme · default" the iTerm2 default profile'] : []),
     ].join('\n'),
-    `wiring ${terminals.join(', ')}`,
+    `Wiring ${terminals.map((t) => TERMINAL_NAMES[t]).join(', ')}`,
   )
-  if (!accepted(await p.confirm({ message: 'apply these changes?' }))) {
-    p.cancel('nothing changed')
+  if (!accepted(await p.confirm({ message: 'Apply these changes?' }))) {
+    p.cancel('Nothing changed')
     throw new Cancelled()
   }
   const prefs = itermDefaults()

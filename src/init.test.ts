@@ -205,7 +205,7 @@ test('an upgrade drops palettes the catalog no longer has, and a default among t
   const paths = makeFixture()
   const plan = planUpgrade({ terminals: ['ghostty'], startup: 'gone', palettes: ['miku', 'gone'] }, paths)
   assert.deepEqual(plan.installed, { terminals: ['ghostty'], palettes: ['miku'] })
-  assert.match(plan.notes[0] ?? '', /^dropped gone/)
+  assert.match(plan.notes[0] ?? '', /^Dropped gone/)
 })
 
 test('there is no install to upgrade before the first init', () => {

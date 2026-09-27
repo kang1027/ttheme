@@ -164,6 +164,31 @@ mise run demo preview-open    # open one scenario for real, in its fixture
 `mise run demo` is also the fastest way to reproduce a bug: it builds the
 fixture state, hands you the real TUI, and throws the directory away after.
 
+### Writing the text
+
+Every screen and message is written in sentence case: the first word and proper
+nouns take a capital, everything else is lowercase. Never all lowercase as a
+look, and never Title Case.
+
+- **Sentence case**: box and panel titles (`Settings`, `Keys`), row, column,
+  tab and checkbox labels (`Min score`, `Select all`), buttons (`Advanced ›`),
+  questions (`Remove ttheme?`), placeholders (`Search…`), status lines and
+  notes (`Nothing changed`), the prose half of a two-column list, and every
+  `about` line in `src/verbs.ts`.
+- **As spelled where they are typed**: anything the user types or
+  `config.zsh` holds — values (`fit`, `safe`, `off`), palette and market
+  names (`kita`, `kec@dust`), site names on find's tabs (`danbooru`), booru
+  tags, commands and flags (`ttheme preview`, `--yes`) and key names
+  (`enter`, `ctrl+v`). A line that starts with one keeps it as spelled.
+- **As their owners spell them**: Ghostty, iTerm2, WezTerm, kitty, Alacritty,
+  Warp, Windows Terminal, Terminal.app, macOS, GitHub; acronyms in capitals
+  (PNG, URL, OSC, ANSI).
+- **Lowercase**: key hints in footers and key bars (`↑↓ move · enter save`),
+  and error messages, which read the same after the `ttheme:` prefix
+  (`ttheme: not installed: kita`) and in a status line. A notice written for
+  the screen (`No picture on the clipboard`) is not an error.
+- **Capitals**: only a mode badge (`SET`, `KEYS`, `TUNE`, `CONFIG`).
+
 Counts on screen come from the catalog, never from the rows being drawn. A
 folded series still reports how many of its palettes are picked, and the
 filtered total counts what matches, not what fits on screen. The cursor and the

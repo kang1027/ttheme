@@ -74,6 +74,7 @@ import {
   CELL_QUERY,
   type Count,
   cellReport,
+  DIGITS,
   decodeKeys,
   type FindView,
   gridShape,
@@ -93,103 +94,103 @@ import {
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
 import { configHome, refreshProfiles } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
-import { blurOf, withSetting } from './wiring.ts'
+import { blurOf, settingDefault, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
 const SETTINGS: Setting[] = [
   {
     name: 'TTHEME_FIND_RATING',
-    label: 'rating',
-    about: 'the ratings to list, each site read in its own words — space ticks one, and one stays ticked',
+    label: 'Rating',
+    about: 'The ratings to list, each site read in its own words — space ticks one, and one stays ticked',
     choices: RATINGS,
     multi: { read: ratingSet },
   },
   {
     name: 'TTHEME_FIND_BLOCK',
-    label: 'block',
-    about: 'posts tagged with nudity or underwear are left out — space unticks one',
+    label: 'Block',
+    about: 'Posts tagged with nudity or underwear are left out — space unticks one',
     choices: BLOCKS,
     multi: { read: blockSet, none: 'none' },
   },
   {
     name: 'TTHEME_FIND_POSTS',
-    label: 'posts',
-    about: 'every post of the character, or only the transparent cutouts',
+    label: 'Posts',
+    about: 'Every post of the character, or only the transparent cutouts',
     choices: ['all', 'cutouts'],
   },
   {
     name: 'TTHEME_FIND_SOLO',
-    label: 'solo',
+    label: 'Solo',
     about:
-      'on keeps the posts known to show the character alone — checked as posts arrive, so the counts below leave it out',
+      'When on, only the posts known to show the character alone — checked as posts arrive, so the counts below leave it out',
     choices: ['on', 'off'],
   },
   {
     name: 'TTHEME_FIND_ORDER',
-    label: 'order',
-    about: 'fit ranks each page by how well a post makes a backdrop; newest; or score',
+    label: 'Order',
+    about: 'How posts are ranked: fit, by how well each makes a backdrop; newest; or score',
     choices: ['fit', 'newest', 'score'],
   },
   {
     name: 'TTHEME_FIND_SETS',
-    label: 'sets',
-    about: 'one picture posted over and over, or held by another site too: fold it into one tile, or show each',
+    label: 'Sets',
+    about: 'One picture posted over and over, or held by another site too: fold it into one tile, or show each',
     choices: ['fold', 'show'],
   },
   ...(canRemoveBackground()
     ? [
         {
           name: 'TTHEME_FIND_REMOVE_BG',
-          label: 'remove bg',
-          about: 'cut the character out of an opaque picture you try on, with macOS Vision',
+          label: 'Remove bg',
+          about: 'Cut the character out of an opaque picture you try on, with macOS Vision',
           choices: ['on', 'off'],
         },
       ]
     : []),
   {
     name: 'TTHEME_FIND_MIN_SCORE',
-    label: 'min score',
+    label: 'Min score',
     about:
-      'posts scored at least this — danbooru, konachan and yande.re; zerochan keeps no score. ←→ steps, or type any number',
+      'Posts scored at least this — danbooru, konachan and yande.re; zerochan keeps no score. ←→ steps, or type any number',
     choices: SCORES,
     entry: 'number',
     advanced: true,
   },
   {
     name: 'TTHEME_FIND_MIN_SIZE',
-    label: 'min size',
-    about: 'the shorter side of a picture, in px — every site filters it. ←→ steps, or type any number',
+    label: 'Min size',
+    about: 'The shorter side of a picture, in px — every site filters it. ←→ steps, or type any number',
     choices: SIZES,
     entry: 'number',
     advanced: true,
   },
   {
     name: 'TTHEME_FIND_SITES',
-    label: 'sites',
-    about: 'the sites the all tab mixes — each keeps its own tab. space ticks one, and one stays ticked',
+    label: 'Sites',
+    about: 'The sites the all tab mixes — each keeps its own tab. Space ticks one, and one stays ticked',
     choices: SITES.map((site) => site.name),
     multi: { read: siteSet },
     advanced: true,
   },
   {
     name: 'TTHEME_FIND_HIDE',
-    label: 'hide',
-    about: "comics, monochrome, sketches or chibi, told by tag in every site's spelling — checked as posts arrive",
+    label: 'Hide',
+    about: "Comics, monochrome, sketches or chibi, told by tag in every site's spelling — checked as posts arrive",
     choices: KINDS,
     multi: { read: kindSet, none: 'none' },
     advanced: true,
   },
   {
     name: 'TTHEME_FIND_HIDE_TAGS',
-    label: 'hide tags',
-    about: 'posts with any of these tags are left out, spaced like cosplay multiple_girls — checked as posts arrive',
+    label: 'Hide tags',
+    about: 'Posts with any of these tags are left out, spaced like cosplay multiple_girls — checked as posts arrive',
     choices: [],
     entry: 'text',
     advanced: true,
   },
   {
     name: 'TTHEME_FIND_PNG',
-    label: 'png only',
+    label: 'PNG only',
     about:
       'PNG originals only — danbooru counts it, the others are told by the file; zerochan only where danbooru holds it',
     choices: ['off', 'on'],
@@ -233,7 +234,6 @@ const PROBE = 12
 const ALL_ANSI = 4
 const SUGGEST_WAIT = 150
 const COUNT_WAIT = 300
-const DIGITS = 6
 const THUMB = 12
 const PRELOAD = 2
 const SETTLE = 150
@@ -454,6 +454,7 @@ class Finder {
         label: setting.label,
         choices: [...setting.choices],
         value: this.setting(setting.name),
+        default: initial(setting, settingDefault(setting.name)),
         multi: setting.multi && { none: setting.multi.none },
         about: setting.about,
         entry: setting.entry,
@@ -594,7 +595,7 @@ class Finder {
       }
     } else {
       this.view.searching = false
-      this.view.error = 'this terminal does not report its cell size — find needs kitty graphics'
+      this.view.error = 'This terminal does not report its cell size — find needs kitty graphics'
     }
     await this.features()
     this.grabber.start()
@@ -761,7 +762,7 @@ class Finder {
     }
     if (got.kind === 'text') {
       if (got.text.trim() === '') {
-        this.notice(`no picture on the clipboard — ${SCREENSHOT}`)
+        this.notice(`No picture on the clipboard — ${SCREENSHOT}`)
         return
       }
       this.pasted(got.text)
@@ -798,7 +799,7 @@ class Finder {
     if (!seen.picture || view.installing !== undefined) {
       return
     }
-    view.hint = `picture on the clipboard · ${PASTE_KEY} uses it`
+    view.hint = `Picture on the clipboard · ${PASTE_KEY} uses it`
     clearTimeout(this.peekTimer)
     this.peekTimer = setTimeout(() => {
       view.hint = undefined
@@ -814,14 +815,14 @@ class Finder {
         this.grabber.ask()
         return
       }
-      this.notice('over ssh the clipboard is not here — drop the file')
+      this.notice('Over SSH the clipboard is not here — drop the file')
       return
     }
     let clip: Clip
     try {
       clip = await readClipboard(join(this.scratch, `clipboard-${Date.now()}.png`))
     } catch (error) {
-      this.notice(`could not read the clipboard: ${describe(error)}`)
+      this.notice(`Could not read the clipboard: ${describe(error)}`)
       return
     }
     clearTimeout(this.peekTimer)
@@ -832,7 +833,7 @@ class Finder {
     }
     const text = clip.text.trim()
     if (!text) {
-      this.notice(`no picture on the clipboard — ${SCREENSHOT}`)
+      this.notice(`No picture on the clipboard — ${SCREENSHOT}`)
       return
     }
     if (this.picture(text)) {
@@ -856,7 +857,7 @@ class Finder {
     }
     const [first, ...more] = pastedRefs(trimmed).sort((a, b) => Number(!PICTURE.test(a)) - Number(!PICTURE.test(b)))
     if (!first) {
-      this.notice('nothing to use in that — drop a picture, or paste one or its link')
+      this.notice('Nothing to use in that — drop a picture, or paste one or its link')
       return
     }
     await this.bring((signal) => loadRef(first, signal), more.length)
@@ -869,7 +870,7 @@ class Finder {
     this.attaching = control
     view.error = undefined
     view.saved = undefined
-    view.note = 'reading the picture…'
+    view.note = 'Reading the picture…'
     this.draw()
     let image: Loaded
     try {
@@ -884,7 +885,7 @@ class Finder {
     if (control.signal.aborted) {
       return
     }
-    view.note = skipped > 0 ? `the first picture of ${skipped + 1} — drop one at a time to try the others` : undefined
+    view.note = skipped > 0 ? `The first picture of ${skipped + 1} — drop one at a time to try the others` : undefined
     this.quietSuggest()
     view.editing = undefined
     view.suggest = undefined
@@ -1094,7 +1095,7 @@ class Finder {
       this.draw()
       return
     }
-    if (key === 'a') {
+    if (key === 'a' || (key === 'enter' && at === view.settings.length)) {
       view.advanced = !view.advanced
       view.panel = pageOf(view)[0] ?? 0
       this.draw()
@@ -2416,7 +2417,7 @@ class Finder {
       known[current.id] = this.posts.get(current.key)?.post.owner ?? ''
       writeCache(current.site, 'owners.json', known)
       refreshProfiles(this.home)
-      view.saved = `background · ${this.entry.name} ← ${current.site.name} ${current.id}`
+      view.saved = `Background · ${this.entry.name} ← ${current.site.name} ${current.id}`
       view.installed.push(tile.key)
       this.fetch?.abort()
       clearTimeout(this.settle)

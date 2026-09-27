@@ -153,7 +153,7 @@ export async function runEdit(name: string): Promise<void> {
       editor(draft)
       const after = readFileSync(draft, 'utf8')
       if (after === before) {
-        console.log('nothing changed')
+        console.log('Nothing changed')
         return
       }
       try {
@@ -162,7 +162,7 @@ export async function runEdit(name: string): Promise<void> {
         console.log(`\n${(error as Error).message}\n`)
         const again = await p.confirm({ message: `${full} cannot be read like this — edit it again?` })
         if (p.isCancel(again) || !again) {
-          console.log('kept the old one')
+          console.log('Kept the old one')
           return
         }
         continue
@@ -177,11 +177,11 @@ export async function runEdit(name: string): Promise<void> {
     sync(home, catalog, state)
   }
   console.log(
-    `saved ${full}${state.palettes.includes(full) ? ' — new tabs and `ttheme use` wear it' : ` — \`ttheme add ${full}\` installs it`}`,
+    `Saved ${full}${state.palettes.includes(full) ? ' — new tabs and `ttheme use` wear it' : ` — \`ttheme add ${full}\` installs it`}`,
   )
   if (failing.length > 0) {
     console.log(
-      `\nit misses the contrast gate:\n${failing.join('\n')}\n\`ttheme check --fix ${full}\` suggests colors that pass`,
+      `\nIt misses the contrast gate:\n${failing.join('\n')}\n\`ttheme check --fix ${full}\` suggests colors that pass`,
     )
   }
   const entry = available(home, catalog).palettes.find((e) => e.name === full)
@@ -204,16 +204,16 @@ export function runCheck(name: string, fix = false): number {
   console.log(gateLines(entry).join('\n'))
   const failures = gateFailures(entry)
   if (failures.length === 0) {
-    console.log('\npasses the gate')
+    console.log('\nPasses the gate')
     return 0
   }
   const { theme, moves, left } = fixGate(toTheme(entry))
   if (moves.length === 0) {
-    console.log('\nno color change fixes it — waive the rule in [contrast] with a reason, or pick other colors')
+    console.log('\nNo color change fixes it — waive the rule in [contrast] with a reason, or pick other colors')
     return 1
   }
   console.log(
-    `\n${left.length === 0 ? 'these colors pass' : 'these colors come closer'}:\n${movesText(moves).join('\n')}`,
+    `\n${left.length === 0 ? 'These colors pass' : 'These colors come closer'}:\n${movesText(moves).join('\n')}`,
   )
   const path = mineAt(home, entry.name)
   if (!path || !existsSync(path)) {
@@ -228,7 +228,7 @@ export function runCheck(name: string, fix = false): number {
   if (state.palettes.includes(entry.name)) {
     sync(home, catalog, state)
   }
-  console.log(`\nwrote ${path}`)
+  console.log(`\nWrote ${path}`)
   return left.length === 0 ? 0 : 1
 }
 
@@ -251,6 +251,6 @@ export function runShare(name: string): void {
   const code = shareCode(draftFor(home, named(available(home, readCatalog(home)), name, home)))
   console.log(code)
   if (process.stdout.isTTY) {
-    console.error(`\nanyone with ttheme wears it with: ttheme add ${CODE}…`)
+    console.error(`\nAnyone with ttheme wears it with: ttheme add ${CODE}…`)
   }
 }

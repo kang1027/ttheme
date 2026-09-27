@@ -23,7 +23,7 @@ export async function redrawPictures(home: string, say: (line: string) => void, 
     return 0
   }
   say(
-    `drawing ${due.length} background picture${due.length === 1 ? '' : 's'} again${blurring ? ` · blur ${blurring}px` : ''}`,
+    `Drawing ${due.length} background picture${due.length === 1 ? '' : 's'} again${blurring ? ` · blur ${blurring}px` : ''}`,
   )
   const aligns = !readInstalled(home).terminals.includes('iterm2')
   const pool = new Pool(Math.min(WORKERS, availableParallelism() - 1))

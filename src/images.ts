@@ -8,13 +8,13 @@ export function runImage(name: string, action: string): number {
   if (action === 'next' || action === 'prev') {
     const { key, at, of } = switchImage(home, name, action === 'next' ? 1 : -1)
     refreshProfiles(home)
-    process.stderr.write(`background · ${name} ${at}/${of} ${key}\n`)
+    process.stderr.write(`Background · ${name} ${at}/${of} ${key}\n`)
     return 0
   }
   if (action === 'drop') {
     const { key, left } = dropImage(home, name)
     refreshProfiles(home)
-    process.stderr.write(`background · ${name} removed ${key} · ${left} left\n`)
+    process.stderr.write(`Background · ${name} removed ${key} · ${left} left\n`)
     return 0
   }
   if (action === 'tuned') {

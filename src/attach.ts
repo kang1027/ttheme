@@ -522,7 +522,7 @@ export class Grabber {
     if (status !== 'DONE') {
       this.deliver({
         kind: 'error',
-        message: status === 'EPERM' ? 'the clipboard read was not allowed' : `the terminal answered ${status}`,
+        message: status === 'EPERM' ? 'The clipboard read was not allowed' : `The terminal answered ${status}`,
       })
       return
     }
@@ -579,7 +579,7 @@ export class Grabber {
     if (type === 'R') {
       this.dropping = undefined
       this.send('\x1b]72;t=r:o=0\x1b\\')
-      this.deliver({ kind: 'error', message: `the drop failed: ${payload.split(':')[0] || 'unknown error'}` })
+      this.deliver({ kind: 'error', message: `The drop failed: ${payload.split(':')[0] || 'unknown error'}` })
       return
     }
     if (type !== 'r' && type !== '') {

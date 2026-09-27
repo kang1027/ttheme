@@ -13,6 +13,16 @@ export const INIT_TERMINALS = [
 ] as const
 export type InitTerminal = (typeof INIT_TERMINALS)[number]
 
+export const TERMINAL_NAMES: Record<InitTerminal, string> = {
+  ghostty: 'Ghostty',
+  kitty: 'kitty',
+  alacritty: 'Alacritty',
+  wezterm: 'WezTerm',
+  iterm2: 'iTerm2',
+  'windows-terminal': 'Windows Terminal',
+  warp: 'Warp',
+}
+
 const BEGIN = '# ttheme begin'
 const END = '# ttheme end'
 const BLOCK = /# ttheme begin\n[\s\S]*?# ttheme end\n?/
@@ -176,10 +186,13 @@ const CONFIG_SETTINGS = {
   },
 } as const
 
+export function settingDefault(name: string): string | undefined {
+  return CONFIG_SETTINGS[name as keyof typeof CONFIG_SETTINGS]?.default
+}
+
 function settingLine(name: string, value: string): string {
   const line = `: \${${name}:=${value}}`
-  const setting = CONFIG_SETTINGS[name as keyof typeof CONFIG_SETTINGS]
-  return setting?.default === value ? `# ${line}` : line
+  return settingDefault(name) === value ? `# ${line}` : line
 }
 
 function settingPattern(name: string): RegExp {

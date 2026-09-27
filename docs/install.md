@@ -9,9 +9,9 @@ npx @kecan0406/ttheme@latest init
 ## What init asks
 
 1. **Which terminals to wire** — the one you are in comes preselected.
-2. **Which series to install** — `space` marks one, `select all` takes the lot,
+2. **Which series to install** — `space` marks one, `Select all` takes the lot,
    enter moves on.
-3. **Whether to wear them** — with one palette picked, `wear <palette> in every
+3. **Whether to wear them** — with one palette picked, `Wear <palette> in every
    tab?`; with several, whether to pick the default in `ttheme preview` once
    everything is installed. No installs ttheme off: your terminal keeps its own
    colors until `ttheme on`.

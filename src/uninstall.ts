@@ -107,20 +107,20 @@ export function applyUninstall(plan: UninstallPlan, prefs: ItermDefaults = iterm
     const result = restoreUserFile(file, content)
     done.push(
       result === 'removed'
-        ? `removed ${file} — ttheme had created it`
+        ? `Removed ${file} — ttheme had created it`
         : result === 'restored'
-          ? `took ttheme out of ${file}`
-          : `took ttheme out of ${file} — kept ${file}.ttheme.bak, since the file changed after ttheme's first edit`,
+          ? `Took ttheme out of ${file}`
+          : `Took ttheme out of ${file} — kept ${file}.ttheme.bak, since the file changed after ttheme's first edit`,
     )
   }
   if (plan.state && pointItermDefault({ ...plan.state, off: true }, prefs)) {
-    done.push('gave iTerm2 its own default profile back — it takes it at its next start')
+    done.push('Gave iTerm2 its own default profile back — it takes it at its next start')
   }
   for (const path of plan.removals) {
     rmSync(path, { recursive: true, force: true })
   }
   if (plan.removals.length > 0) {
-    done.push(`deleted ${plan.removals.length} files and folders ttheme wrote`)
+    done.push(`Deleted ${plan.removals.length} files and folders ttheme wrote`)
   }
   const now = new Date()
   for (const file of plan.touches) {
@@ -144,7 +144,7 @@ export async function runUninstall(yes = false): Promise<void> {
   const paths = uninstallPaths()
   const plan = planUninstall(paths)
   if (plan.edits.length === 0 && plan.removals.length === 0) {
-    console.log('nothing of ttheme is installed')
+    console.log('Nothing of ttheme is installed')
     return
   }
   if (!yes) {
@@ -155,23 +155,23 @@ export async function runUninstall(yes = false): Promise<void> {
     p.intro('ttheme uninstall')
     p.note(
       [
-        ...plan.edits.map((e) => `take ttheme out of ${e.file}`),
+        ...plan.edits.map((e) => `Take ttheme out of ${e.file}`),
         ...plan.removals.map((r) =>
           r === tthemeDir
-            ? `delete ${r} — settings, pins, every installed picture${existsSync(localRoot(paths.configHome)) ? `, and your markets under ${localRoot(paths.configHome)} (push them to GitHub first to keep them)` : ''}`
-            : `delete ${r}`,
+            ? `Delete ${r} — settings, pins, every installed picture${existsSync(localRoot(paths.configHome)) ? `, and your markets under ${localRoot(paths.configHome)} (push them to GitHub first to keep them)` : ''}`
+            : `Delete ${r}`,
         ),
       ].join('\n'),
-      'uninstall',
+      'Uninstall',
     )
-    const ok = await p.confirm({ message: 'remove ttheme?' })
+    const ok = await p.confirm({ message: 'Remove ttheme?' })
     if (p.isCancel(ok) || !ok) {
-      p.cancel('nothing changed')
+      p.cancel('Nothing changed')
       throw new Cancelled()
     }
   }
   for (const line of applyUninstall(plan)) {
     console.log(line)
   }
-  console.log('open tabs keep their colors until they close — restart your terminal to drop ttheme everywhere')
+  console.log('Open tabs keep their colors until they close — restart your terminal to drop ttheme everywhere')
 }

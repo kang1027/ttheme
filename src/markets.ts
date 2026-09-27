@@ -72,7 +72,7 @@ export async function handle(home: string, state: Installed): Promise<string> {
       )
     }
     const typed = await p.text({
-      message: 'your GitHub handle — your palettes are named <handle>@<market>/<palette>',
+      message: 'Your GitHub handle — your palettes are named <handle>@<market>/<palette>',
       validate: (value) =>
         HANDLE.test((value ?? '').toLowerCase()) && (value ?? '').length <= 39
           ? undefined
@@ -84,7 +84,7 @@ export async function handle(home: string, state: Installed): Promise<string> {
     author = typed.toLowerCase()
   }
   writeInstalled(home, { ...state, author })
-  console.log(`your palettes are named ${author}@<market>/<palette>`)
+  console.log(`Your palettes are named ${author}@<market>/<palette>`)
   return author
 }
 
@@ -157,14 +157,14 @@ async function addMarket(arg: string): Promise<void> {
     const catalog = await fetchParsed(REGISTRY_URL, parseCatalog)
     register(home, source, OFFICIAL)
     writeCatalog(home, catalog)
-    console.log(`added the ttheme catalog — ${counted(listed(catalog.palettes).length)} · \`ttheme browse\` picks them`)
+    console.log(`Added the ttheme catalog — ${counted(listed(catalog.palettes).length)} · \`ttheme browse\` picks them`)
     return
   }
   if (isLocal(source)) {
     const id = marketId(localIdentity(source))
     register(home, source, id)
     const count = readMarketDir(source, id, official(home)).length
-    console.log(`added ${id} · ${shownSource(source)} — ${counted(count)}, read in place`)
+    console.log(`Added ${id} · ${shownSource(source)} — ${counted(count)}, read in place`)
     console.log('\n`ttheme browse` picks them · `ttheme market build` there writes the index others fetch')
     return
   }
@@ -173,7 +173,7 @@ async function addMarket(arg: string): Promise<void> {
   register(home, source, id)
   mkdirSync(join(home, 'ttheme', 'markets'), { recursive: true })
   writeAtomic(cachePath(home, source), `${JSON.stringify(index, null, 2)}\n`)
-  console.log(`added ${id} · ${shownSource(source)} — ${counted(index.palettes.length)}`)
+  console.log(`Added ${id} · ${shownSource(source)} — ${counted(index.palettes.length)}`)
   console.log(`\n\`ttheme browse\` picks them, or \`ttheme add ${id}/<palette>\``)
 }
 
@@ -195,7 +195,7 @@ function removeMarket(name: string): void {
     rmSync(cachePath(home, source), { force: true })
   }
   sync(home, readCatalog(home), next)
-  console.log(`removed ${id ?? name} · ${shownSource(source)}`)
+  console.log(`Removed ${id ?? name} · ${shownSource(source)}`)
   if (kept.length > 0) {
     console.log(`${counted(kept.length)} installed from it keep working — \`ttheme remove\` drops them`)
   }
@@ -228,7 +228,7 @@ function listMarkets(): void {
   const state = readInstalled(home)
   const sources = marketsOf(state.markets)
   if (sources.length === 0) {
-    console.log('no markets — `ttheme market add official` brings the ttheme catalog back')
+    console.log('No markets — `ttheme market add official` brings the ttheme catalog back')
     return
   }
   const rows = sources.map((source) => {
@@ -238,7 +238,7 @@ function listMarkets(): void {
     return {
       name,
       where: shownSource(source),
-      note: count === undefined ? 'unreadable' : `${counted(count)}${installed > 0 ? ` · ${installed} installed` : ''}`,
+      note: count === undefined ? 'Unreadable' : `${counted(count)}${installed > 0 ? ` · ${installed} installed` : ''}`,
     }
   })
   const nameWidth = Math.max(...rows.map((r) => r.name.length))
@@ -278,7 +278,7 @@ async function searchMarkets(query: string | undefined): Promise<void> {
   const q = encodeURIComponent(`topic:${TOPIC}${query ? ` ${query}` : ''}`)
   const items = await searchRepositories(q)
   if (items.length === 0) {
-    console.log(`no repository carries the ${TOPIC} topic${query ? ` and matches ${query}` : ''} yet`)
+    console.log(`No repository carries the ${TOPIC} topic${query ? ` and matches ${query}` : ''} yet`)
     return
   }
   const added = new Set(marketsOf(readInstalled(home).markets))
@@ -345,7 +345,7 @@ async function askName(): Promise<string> {
     throw new Error('name the market: ttheme market init <name>, or --in <name> on new')
   }
   const typed = await p.text({
-    message: "your market's name — its palettes are <you>@<name>/<palette>",
+    message: "Your market's name — its palettes are <you>@<name>/<palette>",
     validate: (value) => nameProblemOf((value ?? '').toLowerCase()),
   })
   if (p.isCancel(typed)) {
@@ -392,7 +392,7 @@ async function initLocal(home: string, dir: string, name: string): Promise<Local
   }
   const id = marketId(identity)
   register(home, dir, id)
-  console.log(`${fresh ? 'made' : 'added'} your market ${id} · ${shownSource(dir)}`)
+  console.log(`${fresh ? 'Made' : 'Added'} your market ${id} · ${shownSource(dir)}`)
   return { dir, ...identity, id }
 }
 
@@ -415,7 +415,7 @@ async function initMarket(arg: string | undefined): Promise<void> {
   gh repo create ${repo} --public --source . --push
   gh repo edit ${repo} --add-topic ${TOPIC}
 
-its action rebuilds ${INDEX} on every push; then \`ttheme market add ${repo}\` works anywhere`)
+Its action rebuilds ${INDEX} on every push; then \`ttheme market add ${repo}\` works anywhere`)
 }
 
 function buildMarket(arg: string | undefined): number {

@@ -8,34 +8,36 @@ one you land on, `ttheme browse` installs or drops palettes, and `ttheme use
 `ttheme help all` lists every command with what it does:
 
 ```
-ttheme          list every palette, grouped, with previews
-
 This tab
-ttheme use      paint this tab    (a unique prefix works: ttheme use ho)
-ttheme preview  browse live — focus repaints the tab, enter keeps it (this tab or default)
-ttheme next     advance this tab to the next palette
-ttheme pin      pick a palette for this directory — cd into it repaints, cd out restores
-ttheme unpin    drop the palette pinned to this directory
+  preview                                        Browse live — focus repaints, enter keeps (this tab or default), esc restores, ? lists keys
+  use <palette>                                  Paint this tab — a unique prefix works: ttheme use ho
+  next                                           Advance this tab to the next palette
+  pin                                            Pick a palette for this directory — cd into it repaints, cd out restores
+  unpin                                          Drop the palette pinned to this directory
 
 New tabs
-ttheme default  make a palette the one new tabs open with
-ttheme on       wear the default palette in new tabs again
-ttheme off      take the palette and picture off every tab — the terminal's own colors until ttheme on
-ttheme config   edit settings in $EDITOR — they apply in new tabs
+  default <palette>                              Make a palette the one new tabs open with
+  on                                             Wear the default palette in new tabs again
+  off                                            Take the palette and picture off every tab — the terminal's own colors until `ttheme on`
+  config                                         Edit settings in $EDITOR — they apply in new tabs
 
 Palettes
-ttheme browse   pick palettes from the catalog in a live picker
-ttheme list     the catalog, ● installed and ○ not (a query filters it, --json prints it as JSON)
-ttheme add      install palettes from the catalog, or from a share code (ttheme add tt1:…)
-ttheme remove   uninstall palettes
-ttheme update   refresh every market you added
-ttheme market   the markets you added — add, remove and search them; init makes one of your own
+  browse                                         Pick palettes from the catalog in a live picker
+  list [--json] [query]                          Show the catalog, marking what is installed
+  add <palette...>                               Install palettes from the catalog, or from a share code: ttheme add tt1:…
+  remove <palette...>                            Uninstall palettes
+  update                                         Refresh every market you added
+  market [action] [source]                       The markets you added — add, remove and search them; init makes one of your own
 
 Your own
-ttheme new      make a palette of your own, <you>@<market>/<name>, from another one (--from, --in)
-ttheme edit     change one of your palettes in $EDITOR — the gate advises, never refuses
-ttheme check    measure a palette against the contrast gate (--fix writes colors that pass)
-ttheme share    print a share code — the colors and the pictures' post numbers
+  new [--from <palette>] [--in <market>] <name>  Make a palette of your own, <you>@<market>/<name>, in your local market — installed at once
+  edit <palette>                                 Change one of your palettes in $EDITOR — the contrast gate advises, never refuses
+  check [--fix] <palette>                        Measure a palette against the contrast gate and suggest colors that pass
+  share <palette>                                Print a share code — ttheme add <code> installs it anywhere, pictures included
+
+Setup
+  init [--yes]                                   Install the shell layer and wire your terminal configs
+  uninstall [--yes]                              Take ttheme out of every terminal config and delete what it wrote
 ```
 
 `ttheme <command> --help` (or `ttheme help <command>`) describes one command
@@ -114,7 +116,7 @@ still wins:
 | `TTHEME_ANNOUNCE` | `1` | `0` silences the one-line notice under "Last login:" |
 | `TTHEME_FX` | `typewriter` | search hint animation — `typewriter`, `decode` or `glitch` |
 | `TTHEME_SORT` | `abc` | `series` lists series and palettes in the order they were added instead of by name — in `ttheme`, `preview` and, once exported, the `init` picker |
-| `TTHEME_BG_BLUR` | `0` | softens every background picture behind the text: a blur of this many screen pixels, up to 8, where `0` keeps them sharp. Changing it draws every picture again from its original — from `ttheme config`, or from alt-c in `preview`, whose `blur` row offers `off` to `4px`. It is read from `config.zsh` itself, not from a shell's variables, since the pictures it draws are shared by every tab |
+| `TTHEME_BG_BLUR` | `0` | softens every background picture behind the text: a blur of this many screen pixels, up to 8, where `0` keeps them sharp. Changing it draws every picture again from its original — from `ttheme config`, or from alt-c in `preview`, whose `Blur` row offers `off` to `4px`. It is read from `config.zsh` itself, not from a shell's variables, since the pictures it draws are shared by every tab |
 | `TTHEME_FIND_RATING` | `safe` | the ratings `find` lists, any of `safe`, `questionable` and `explicit` separated by spaces (`"safe explicit"`). Each site is read in its own vocabulary, so danbooru's `s` (sensitive) is not mistaken for yande.re's `s` (safe); zerochan keeps no rating, so its posts count as safe unless they carry a nudity tag, which makes them questionable. The set shows next to the query whenever it is not just `safe` |
 | `TTHEME_FIND_BLOCK` | `nudity underwear` | the posts `find` drops by tag: `nudity` (`nude`, `naked`, `topless`…), `underwear` (`panties`, `bra`, `lingerie`… — each with the site's own spelling), both, or `none` to keep every post. What is let through shows next to the query as `allows …` |
 | `TTHEME_FIND_POSTS` | `all` | what `find` opens on — every post of the character, or only the transparent cutouts (`cutouts`) |
@@ -137,13 +139,13 @@ The catalog is not installed wholesale: `init` installs the series you pick, and
 `init --yes` none at all. `ttheme browse` opens the catalog as a live picker —
 groups fold and unfold, typing filters (a query has no spaces, `space` is the
 pick key), the tab repaints as the cursor lands on a palette, `space` marks one
-(a series from its header, everything shown from `select all`), and enter
+(a series from its header, everything shown from `Select all`), and enter
 installs exactly what is marked and removes what is not:
 
 ```
-◆ catalog (4/150 · 2 picked)
+◆ Catalog (4/150 · 2 picked)
 │    bo_
-│    ○ select all (4)
+│    ○ Select all (4)
 │    ▾ Bocchi the Rock! (2/4) ぼっち・ざ・ろっく!
 │ ▌    ● bocchi   ■ ■ ■ ■ ■ ■
 │      ● kita     ■ ■ ■ ■ ■ ■
@@ -195,7 +197,7 @@ ttheme market remove alice@pastel # installed palettes from it keep working
 A market is `<owner>@<name>`: the repository's owner and the name its index
 gives. Its palettes are `<owner>@<name>/<palette>` (`ttheme add
 alice@pastel/dusk`), and the market is their group: `preview`, `browse` and the
-bare `ttheme` list it below every series, past a `── markets` line. Only the
+bare `ttheme` list it below every series, past a `── Markets` line. Only the
 official catalog is held to the contrast gate — a market palette installs
 whatever its numbers, and `ttheme check` shows them. `ttheme market remove
 official` drops the official catalog too; `ttheme market add official` brings

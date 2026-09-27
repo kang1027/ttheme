@@ -124,7 +124,7 @@ export class PalettePrompt extends Prompt<string> {
         input: opts.input,
         output: opts.output,
         validate: opts.required
-          ? () => (this.picked.size === 0 ? `pick at least one ${this.scope}` : undefined)
+          ? () => (this.picked.size === 0 ? `Pick at least one ${this.scope}` : undefined)
           : undefined,
       },
       true,
@@ -338,7 +338,7 @@ export class PalettePrompt extends Prompt<string> {
 
   private renderRow(row: Row, focused: boolean): string {
     if (row.kind === 'rule') {
-      const line = '── markets ──────────'
+      const line = '── Markets ──────────'
       return `   ${this.color ? `${DIM}${line}${RESET}` : line}`
     }
     const entry = row.kind === 'palette' ? row.entry : row.kind === 'group' ? row.lead : undefined
@@ -352,7 +352,7 @@ export class PalettePrompt extends Prompt<string> {
       lit ? `${gutter}${ansiBar(entry.selection, entry.foreground)} ${text} ${RESET}` : `${gutter} ${text}`
     if (row.kind === 'all') {
       const box = this.everyone(this.rows).every((e) => this.picked.has(e.name)) ? '●' : '○'
-      return bar(`${box} select all ${dim(`(${row.count})`)}`)
+      return bar(`${box} Select all ${dim(`(${row.count})`)}`)
     }
     if (row.kind === 'group' && this.scope === 'series') {
       const box = this.pickedIn(row.name) === row.count ? '●' : '○'
@@ -378,7 +378,7 @@ export class PalettePrompt extends Prompt<string> {
   private draw(): string {
     const dim = (s: string) => (this.color ? `${DIM}${s}${RESET}` : s)
     const bar = (s: string) => (this.color ? `${CYAN}${s}${RESET}` : s)
-    const title = this.scope === 'series' ? 'series' : 'catalog'
+    const title = this.scope === 'series' ? 'Series' : 'Catalog'
     if (this.state === 'submit') {
       return `${dim('◇')} ${title} ${dim(`· ${this.pickedCount()} picked`)}`
     }
@@ -394,7 +394,7 @@ export class PalettePrompt extends Prompt<string> {
           ? this.named.filter((e) => matchesPalette(e, filter)).length
           : total
     const head = `${bar('◆')} ${title} ${dim(`(${matched}/${total} · ${this.pickedCount()} picked)`)}`
-    const search = `${bar('│')}    ${this.userInput ? `${this.userInput}_` : dim(`search…${this.example ? ` e.g. ${this.animatedExample()}` : ''}`)}`
+    const search = `${bar('│')}    ${this.userInput ? `${this.userInput}_` : dim(`Search…${this.example ? ` e.g. ${this.animatedExample()}` : ''}`)}`
     if (this.cursor < this.top) {
       this.top = this.cursor
     }
@@ -406,7 +406,7 @@ export class PalettePrompt extends Prompt<string> {
     const body =
       window.length > 0
         ? window.map((row, i) => `${bar('│')} ${this.renderRow(row, this.top + i === this.cursor)}`)
-        : [`${bar('│')} ${dim(`no ${this.scope === 'series' ? 'series' : 'palettes'} match '${this.userInput}'`)}`]
+        : [`${bar('│')} ${dim(`No ${this.scope === 'series' ? 'series' : 'palettes'} match '${this.userInput}'`)}`]
     while (body.length < this.maxItems) {
       body.push(bar('│'))
     }

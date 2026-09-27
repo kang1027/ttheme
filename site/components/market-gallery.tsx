@@ -76,7 +76,7 @@ export function MarketGallery({
           <section key={section.key} aria-label={section.title} className="grid gap-4">
             {section === firstMarket && sources ? (
               <div className="flex items-center gap-3 text-sm text-muted-foreground after:h-px after:flex-1 after:bg-border">
-                ── markets
+                ── Markets
               </div>
             ) : null}
             <h2 className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

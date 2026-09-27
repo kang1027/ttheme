@@ -437,13 +437,13 @@ __tt_pv_bg_find() {
   err=${${err//$'\n'/ }## #}
   resized=1 bgname="" bgshown="" bgdim=()
   if (( rc == 1 )); then
-    msg=${err:-"find failed for $name"} msgt=300
+    msg=${err:-"Find failed for $name"} msgt=300
   fi
   (( rc == 0 )) || return 1
   unset "bgsrc[$name]"
   __tt_bg_load $name
   bgload[$name]="" bgedit[$name]=1
-  msg=${err:-"background · $name"} msgt=200
+  msg=${err:-"Background · $name"} msgt=200
   return 0
 }
 
@@ -469,14 +469,14 @@ __tt_pv_bg_image() {
   unset "bgsrc[$name]"
   __tt_bg_load $name
   bgload[$name]="" bgedit[$name]=1
-  msg=${err:-"background · $name"} msgt=$(( rc ? 300 : 200 ))
+  msg=${err:-"Background · $name"} msgt=$(( rc ? 300 : 200 ))
   [[ -r ${TTHEME_CONFIG:h}/backgrounds/${${name/@/--}/\//--}.conf ]] || return 0
   tune=$name tf=1 tsnap="${bgsize[$name]} ${bgpos[$name]} ${bgop[$name]} ${bgoff[$name]}"
 }
 
 __tt_pv_bg_panel() {
   local name=$1 z=$'\e[0m' b=$'\e[1m' d=$'\e[2m' c=$ac val sty REPLY
-  local -a labs=(size position opacity) at=(0 3 6)
+  local -a labs=(Size Position Opacity) at=(0 3 6)
   local -i r0=$2 col=$3 end=$4 off=${bgoff[$1]} T=$(( $4 - $3 - 19 )) lo=100 hi=100 k i r knob pos=${bgpos[$1]} o
   (( color )) || z= b= d= c=
   (( T < 8 )) && T=8
@@ -510,7 +510,7 @@ __tt_pv_bg_panel() {
     else
       if (( k == 1 )); then
         if [[ ${bgsize[$name]} == fill ]]; then
-          knob=$(( T - 1 )) val=FILL
+          knob=$(( T - 1 )) val=fill
         else
           knob=$(( (${bgsize[$name]} - lo) * (T - 1) / (hi - lo + 1) )) val=${bgsize[$name]}%
         fi
@@ -549,12 +549,12 @@ __tt_pv_bg_save() {
     fi
     saved+=($name)
     if [[ ! -r ${TTHEME_CONFIG:h}/backgrounds/${${name/@/--}/\//--}.conf ]]; then
-      msg="background · $name none"
+      msg="Background · $name none"
     elif (( bgoff[$name] )); then
-      msg="background · $name off"
+      msg="Background · $name off"
     else
       __tt_bg_label $name
-      msg="background · $name $REPLY"
+      msg="Background · $name $REPLY"
     fi
     if __tt_color; then
       printf '\033[2m%s\033[0m\n' "$msg"
