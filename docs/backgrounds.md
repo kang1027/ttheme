@@ -44,7 +44,9 @@ the size of the window, as the sizes above 100% are.
 
 A palette with no background yet can find one: on it in `preview`, tab opens
 **find**, which searches for the palette's character tag (`meta.booru`) and lays
-the results out as a grid of thumbnails. It opens on **all**, every site's posts
+the results out as a grid of thumbnails, over the palette's own background — the
+picture the terminal shows for another palette stays out of sight while find is
+open. It opens on **all**, every site's posts
 ranked together; tab moves to danbooru, konachan, yande.re and zerochan alone,
 then back, and shift+tab goes the other way. The boorus share one tag vocabulary, and zerochan names characters in
 words (`Gotou Hitori`), which find asks for with underscores (`gotou_hitori`);
@@ -61,8 +63,7 @@ servers, which answer faster than yande.re's and zerochan's, and stays that
 site's post. The
 sites sit in a strip of tabs under the query, the one you are on lit in its own
 color, and it comes again as a badge at the start of the line above a picture
-you try on, next to the site the artwork itself came from when the post records
-one (`pixiv.net`, `deviantart.com`). The grid starts
+you try on. The grid starts
 with every post of the character; `c` narrows it to **cutouts** — posts carrying
 the site's transparency tags (`transparent_background` on danbooru and zerochan,
 `transparent` or `vector` on konachan, `transparent_png` on yande.re) whose PNG header says they have
@@ -137,7 +138,8 @@ filtering by.
 straight to that one picture. While you type, danbooru's tag completion lists
 up to eight tags that start like the last word, each with its post count — the
 way to find a costume variant such as `amane_suzuha_(beta)` or a tag you only
-half remember; `↑`/`↓` pick one and enter searches it. A palette with no `meta.booru` tag at all opens
+half remember; `↑`/`↓` pick one and enter searches it; a Japanese input
+method composes in the query itself. A palette with no `meta.booru` tag at all opens
 find on that empty query, so it can have a background too. `o` opens the post's
 page in a browser.
 
@@ -168,8 +170,18 @@ since the clipboard is on your own machine.
 Enter tries the picture on: ttheme downloads the original and paints the whole
 window with it the way the installed background will look — tinted with the
 palette, cropped with headroom above the face, at the opacity the contrast gate
-allows — over a sample of shell output, with the share of transparent pixels
-next to its size (`opaque` when there are none). On macOS an opaque picture is
+allows — over one of preview's five sample scenes (⇧←→ switch them), with the
+share of transparent pixels next to its size (`opaque` when there are none).
+Under that line the post's page, the source the artwork came from and its artist
+always show, a `—` where the post names none; the page, the source and the post
+id are links, opened with a click (cmd+click in Ghostty and iTerm2). `i` puts
+the rest of the post's details where the scene was — characters, series, the
+other tags, rating, score, the day it was posted, file type and size, uploader —
+and `i` again brings the scene back; they come with the posts' own answers, so
+nothing more is fetched. `t` opens the same tuning panel preview has (see
+[Tuning](#tuning)) over the picture: size, position and opacity change what you
+see in place, stay as you move to the next post, and are installed with the
+picture, so preview opens it the way you left it. On macOS an opaque picture is
 cut out first: ttheme asks the system's own Vision framework (macOS 14 or newer,
 through `osascript` — nothing is installed or uploaded) for the character alone,
 marks the picture `cut out`, and `x` switches between the cut-out and the picture
@@ -246,23 +258,30 @@ uses `<palette>.<hash>@fill-<focus>.png` when it sits beside the image — a cro
 to fill the window, whose name carries the height of the figure at the window's middle, which
 the sizes above 100% zoom around — and the image itself otherwise. Position
 steps through the nine `background-image-position` anchors, or `1`–`9` jump to
-one in reading order; opacity moves by 0.01. Space turns the palette's
-background off and on, `=` returns it to its defaults, enter keeps the change
-and esc puts back what the panel opened with. `f` in the panel opens find again
-to replace the picture.
+one in reading order; opacity moves by 0.01. A field that is not at its
+default carries `↺` at the panel's right edge, lit on the field the cursor is on:
+`=` puts that one field back, `+` all three (and shows the picture again if it
+was off). Space turns the palette's background off and on, enter keeps the
+change and esc puts back what the panel opened with. `f` in the panel opens
+find again to add a picture.
 
 ## Several pictures per palette
 
 A palette holds every picture installed on it: an install keeps the one on
-screen rather than dropping it, `,` and `.` walk the saved pictures, and `D`
-removes the one shown with its files. `backgrounds/images.json` lists each
+screen rather than dropping it. In the tuning panel, below the three fields, a
+strip of up to five thumbnails shows the palette's pictures with the one on
+screen framed and its place (`2/3`) beside them; `,` and `.` move along it, the
+strip sliding round when there are more, and the background shows that picture
+with its own tuning at once — nothing is saved until enter, which makes it the
+palette's picture, and esc goes back to the one the panel opened with. `D`
+removes the picture the strip is on, with its files. `backgrounds/images.json` lists each
 palette's pictures and which one is up; only ttheme writes it, and the pictures'
-files never move — walking to another picture only rewrites `<palette>.conf` to
-point at it. Each picture carries its own settings — size, position, opacity,
+files never move — showing another picture only rewrites `<palette>.conf` to
+point at it, and every picture the palette holds is listed in the conf as a
+`# picture` line, which is where the strip reads them. Each picture carries its own settings — size, position, opacity,
 the off switch and the baked crops sit beside it under its own name
-(`kagami.1a2b3c4d.tune.conf`), so walking back to a picture puts it back the way
-you left it, and tuning you have not confirmed is written to the picture before
-`,` or `.` moves off it.
+(`kagami.1a2b3c4d.tune.conf`), so moving back to a picture puts it back the way
+you left it.
 
 The palette's `.conf` holds the shown picture's defaults and includes that
 picture's `<palette>.<hash>.tune.conf` (the tuning) and
@@ -280,10 +299,11 @@ with `cover`). With iTerm2 wired, a size of 100% or less that is not centered
 goes onto the window-sized canvas too, since iTerm2 cannot place an image.
 Baking runs `sips`, so those sizes are offered on macOS only.
 
-The preview draws inside the cell grid, and Ghostty's `window-padding` around
+The preview and find draw inside the cell grid, and Ghostty's `window-padding` around
 it keeps showing the configured background. While the cursor rests on the
 configured palette and nothing has been tuned, the preview draws nothing and
 lets that background show through whole. Once Ghostty supports kitty's relative
 placements (merged after 1.3.1), the preview notices when it opens and hangs
 its layers out over the padding instead, so every palette reaches the window
-edge.
+edge, and hands the same margins to find, whose plain background covers the
+padding too.

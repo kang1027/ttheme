@@ -175,7 +175,9 @@ export async function bringPictures(
   }
   line.done()
   for (const entry of got) {
-    const [first] = entry.pictures ?? []
+    const first = (entry.pictures ?? []).find((shared) =>
+      rackOf(configHome, entry.name).some((picture) => picture.key === imageKey(shared)),
+    )
     if (first) {
       showImage(configHome, entry.name, imageKey(first))
     }

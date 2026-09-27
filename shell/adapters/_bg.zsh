@@ -80,31 +80,48 @@ __tt_bg_path() {
 }
 
 __tt_bg_load() {
-  local name=$1 file=${${1/@/--}/\//--} dir=${TTHEME_CONFIG:h}/backgrounds img="" fit=contain op=1 pos=center f line stem="" size=100 REPLY
-  local -i at=5
-  local -a fills lines
+  local name=$1 pal=${1%:*} key="" file dir=${TTHEME_CONFIG:h}/backgrounds img="" fit=contain op=1 pos=center line stem="" size=100 REPLY
+  local -i at=5 pass
+  local -a fills lines src pics pd
   (( ${+bgsrc[$name]} )) && return 0
+  [[ $name == *:* ]] && key=${name##*:}
+  file=${${pal/@/--}/\//--}
   bgfrom[$name]="" bgtunef[$name]=$file.tune.conf bgofff[$name]=$file.off.conf bgimages[$name]=1
-  [[ -r $dir/$file.conf ]] && lines=("${(@f)$(<$dir/$file.conf)}")
+  if [[ -n $key ]]; then
+    pd=(${=bgpic[$pal:$key]})
+    lines=("# from ${pd[4,-1]}" "background-image = $pd[2]" "background-image-fit = cover" "background-image-position = top-right" "background-image-opacity = $pd[3]" "config-file = ?$pd[1].tune.conf" "config-file = ?$pd[1].off.conf")
+    bgimages[$name]=${bgimages[$pal]:-1}
+  elif [[ -r $dir/$file.conf ]]; then
+    lines=("${(@f)$(<$dir/$file.conf)}")
+  fi
   for line in $lines; do
     case $line in
       'config-file = ?'*.tune.conf) bgtunef[$name]=${line#config-file = \?} ;;
       'config-file = ?'*.off.conf) bgofff[$name]=${line#config-file = \?} ;;
-      '# image '*/<->) bgimages[$name]=${line##*/} ;;
+      '# image '*/<->) bgimages[$name]=${line##*/} bgact[$pal]=${${line#\# image }%% *} ;;
+      '# picture '*)
+        pd=(${=line#\# picture })
+        bgpic[$pal:$pd[1]]=${(j: :)pd[2,-1]}
+        pics+=($pd[1])
+        ;;
     esac
   done
-  for f in $dir/$file.conf $dir/${bgtunef[$name]}; do
-    if [[ -r $f ]]; then
-      for line in "${(@f)$(<$f)}"; do
-        case $line in
-          '# from '*) [[ $f == *.tune.conf ]] || bgfrom[$name]=${(j: :)${${=line#\# from }[1,2]}} ;;
-          'background-image = '*|'background-image='*) img=${${line#*=}# } ;;
-          'background-image-fit = '*|'background-image-fit='*) fit=${${line#*=}# } ;;
-          'background-image-opacity = '*|'background-image-opacity='*) op=${${line#*=}# } ;;
-          'background-image-position = '*|'background-image-position='*) pos=${${line#*=}# } ;;
-        esac
-      done
+  [[ -n $key ]] || bgpics[$pal]=${(j: :)pics}
+  for pass in 1 2; do
+    src=("${lines[@]}")
+    if (( pass == 2 )); then
+      src=()
+      [[ -r $dir/${bgtunef[$name]} ]] && src=("${(@f)$(<$dir/${bgtunef[$name]})}")
     fi
+    for line in "${src[@]}"; do
+      case $line in
+        '# from '*) (( pass == 1 )) && bgfrom[$name]=${(j: :)${${=line#\# from }[1,2]}} ;;
+        'background-image = '*|'background-image='*) img=${${line#*=}# } ;;
+        'background-image-fit = '*|'background-image-fit='*) fit=${${line#*=}# } ;;
+        'background-image-opacity = '*|'background-image-opacity='*) op=${${line#*=}# } ;;
+        'background-image-position = '*|'background-image-position='*) pos=${${line#*=}# } ;;
+      esac
+    done
     [[ $op == <->(|.<->) ]] || op=1
     [[ $pos == center-center ]] && pos=center
     at=${TTHEME_BG_POSITIONS[(Ie)$pos]}
@@ -116,7 +133,7 @@ __tt_bg_load() {
       *@<20-999>-*-<->x<->.png|*@<20-99>-*.png) stem=${REPLY%@*} size=${${REPLY##*@}%%-*} ;;
       *.png) stem=${REPLY%.png}; [[ $fit == cover ]] && size=fill ;;
     esac
-    [[ $f == *.tune.conf ]] || bgdef[$name]="$size $at $op" bgbase[$name]=$REPLY
+    (( pass == 1 )) && bgdef[$name]="$size $at $op" bgbase[$name]=$REPLY
   done
   bgsize[$name]=$size bgpos[$name]=$at bgop[$name]=$op bgoff[$name]=0 bgshot[$name]="" bgshotkey[$name]="" bgfocus[$name]=50
   [[ -e $dir/${bgofff[$name]} ]] && bgoff[$name]=1
@@ -200,12 +217,12 @@ __tt_bg_include() {
 }
 
 __tt_bg_write() {
-  local name=$1 dir=${TTHEME_CONFIG:h}/backgrounds src=${bgsrc[$1]} size=${bgsize[$1]} shape img="" fit=contain f REPLY
+  local name=$1 pal=${1%:*} dir=${TTHEME_CONFIG:h}/backgrounds src=${bgsrc[$1]} size=${bgsize[$1]} shape img="" fit=contain f REPLY
   local pos=${TTHEME_BG_POSITIONS[${bgpos[$1]}]}
   local -i W=$(( (pw + 2 * bgmx) * bgcw )) H=$(( (ph + 2 * bgmy) * bgch ))
   local -a wh fr
-  [[ -r $dir/${${name/@/--}/\//--}.conf ]] || return 0
-  __tt_bg_include $name || return 1
+  [[ -r $dir/${${pal/@/--}/\//--}.conf ]] || return 0
+  [[ $name == *:* ]] || __tt_bg_include $name || return 1
   if [[ "$size ${bgpos[$1]} ${bgop[$1]}" == "${bgdef[$1]}" ]]; then
     rm -f -- $dir/${bgtunef[$1]}
   else
@@ -262,7 +279,7 @@ __tt_pv_bg_open() {
 __tt_pv_bg_show() {
   (( bgcw )) || return 0
   local name=$1 img="" op size fit=contain focus=-1 REPLY
-  local -a p=(${=TTHEME_PALETTE[$name]}) wh at
+  local -a p=(${=TTHEME_PALETTE[${name%:*}]}) wh at
   local -i cols=$(( pw + 2 * bgmx )) rows=$(( ph + 2 * bgmy ))
   (( ${#p} >= 20 )) || return 0
   (( $2 )) && { __tt_bg_forget; bgshown="" bganchor=0 }
@@ -336,7 +353,7 @@ __tt_bg_forget() {
   for id in $bgsent; do
     printf '\e_Ga=d,d=I,i=%d,q=2\e\\' $id
   done
-  bgsent=() bgcost=() bgorder=() bgbytes=0
+  bgsent=() bgcost=() bgorder=() bgbytes=0 bgthumb=()
 }
 
 __tt_pv_bg_fs() {
@@ -353,8 +370,8 @@ __tt_pv_bg_fs() {
 }
 
 __tt_pv_bg_adjust() {
-  (( bgcw )) && [[ -n $tune ]] || return 0
-  local name=$tune REPLY
+  (( bgcw )) && [[ -n $tpick ]] || return 0
+  local name=$tpick REPLY
   __tt_bg_load $name
   __tt_bg_image $name
   __tt_bg_dim "$REPLY" || return 0
@@ -364,7 +381,14 @@ __tt_pv_bg_adjust() {
   __tt_pv_bg_fs $name && fs=$REPLY
   case $1 in
     on) off=$(( ! off )) ;;
-    def) size=$def[1] at=$def[2] op=$def[3] off=0 ;;
+    def)
+      case $n in
+        1) size=$def[1] ;;
+        2) at=$def[2] ;;
+        3) op=$def[3] ;;
+        *) size=$def[1] at=$def[2] op=$def[3] off=0 ;;
+      esac
+      ;;
     *)
       (( off )) && return 0
       case $1 in
@@ -425,8 +449,12 @@ __tt_pv_bg_findable() {
 
 __tt_pv_bg_find() {
   local name=$1 err var
-  local -i rc
+  local -i rc n=${#TTHEME_SCENES}
+  local -x TTHEME_SCENE="" TTHEME_BG_MARGIN=""
+  (( n )) && TTHEME_SCENE=${(L)TTHEME_SCENES[(scene % n + n) % n + 1]}
+  (( bgrel )) && TTHEME_BG_MARGIN="$bgmx $bgmy"
   [[ $applied == "$painted" ]] || { __tt_apply "$applied" && painted=$applied }
+  __tt_pv_bg_commit $name
   __tt_pv_bg_close
   err=$(__tt_cli find $name 2>&1 >/dev/tty)
   rc=$?
@@ -440,11 +468,28 @@ __tt_pv_bg_find() {
     msg=${err:-"Find failed for $name"} msgt=300
   fi
   (( rc == 0 )) || return 1
-  unset "bgsrc[$name]"
+  __tt_pv_bg_reset $name
   __tt_bg_load $name
   bgload[$name]="" bgedit[$name]=1
   msg=${err:-"Background · $name"} msgt=200
   return 0
+}
+
+__tt_pv_bg_commit() {
+  local img
+  for img in ${(k)bgedit[(I)${(b)1}(|:*)]}; do
+    __tt_bg_write $img
+    unset "bgedit[$img]"
+  done
+  unset "bgview[$1]" "bgswap[$1]"
+}
+
+__tt_pv_bg_reset() {
+  local img
+  for img in ${(k)bgsrc[(I)${(b)1}(|:*)]}; do
+    unset "bgsrc[$img]"
+  done
+  unset "bgview[$1]" "bgswap[$1]"
 }
 
 __tt_pv_bg_images() {
@@ -452,32 +497,62 @@ __tt_pv_bg_images() {
   REPLY=${bgimages[$1]:-1}
 }
 
-__tt_pv_bg_image() {
-  local name=$tune act=$1 err REPLY
-  local -i rc
-  if [[ $act != drop ]]; then
-    __tt_pv_bg_images $name
-    (( REPLY > 1 )) || { msg="$name has one image" msgt=200; return 0 }
-    [[ "${bgsize[$name]} ${bgpos[$name]} ${bgop[$name]} ${bgoff[$name]}" == "$tsnap" ]] || __tt_bg_write $name
+__tt_pv_img() {
+  REPLY=$1
+  [[ -z $2 || $2 == "${bgact[$1]}" ]] || REPLY=$1:$2
+}
+
+__tt_pv_tune_open() {
+  local REPLY
+  __tt_bg_load $1
+  __tt_pv_shows $1
+  tpick=$REPLY tune=$1 tf=1 tsnaps=()
+  __tt_bg_load $tpick
+  tsnaps[$tpick]="${bgsize[$tpick]} ${bgpos[$tpick]} ${bgop[$tpick]} ${bgoff[$tpick]}"
+}
+
+__tt_pv_bg_pick() {
+  local -a keys=(${=bgpics[$tune]})
+  local cur=${tpick##*:} REPLY
+  local -i n=${#keys} at
+  if (( n < 2 )); then
+    msg="$tune has one image" msgt=200
+    return 0
   fi
-  bgname="" tune=""
+  [[ $tpick == *:* ]] || cur=${bgact[$tune]}
+  at=${keys[(Ie)$cur]}
+  (( at )) || at=1
+  at=$(( (at - 1 + $1 + n) % n + 1 ))
+  __tt_pv_img $tune $keys[at]
+  tpick=$REPLY
+  __tt_bg_load $tpick
+  (( ${+tsnaps[$tpick]} )) || tsnaps[$tpick]="${bgsize[$tpick]} ${bgpos[$tpick]} ${bgop[$tpick]} ${bgoff[$tpick]}"
+  bgname=""
+}
+
+__tt_pv_bg_drop() {
+  local name=$tune key=${tpick##*:} err
+  local -i rc
+  [[ $tpick == *:* ]] || key=${bgact[$name]}
+  __tt_pv_untune
+  __tt_pv_bg_commit $name
   __tt_pv_bg_close
-  err=$(__tt_cli image $name $act 2>&1)
+  err=$(__tt_cli image $name drop ${key:+$key} 2>&1)
   rc=$?
   err=${${err//$'\n'/ }## #}
   resized=1 bgname="" bgshown="" bgdim=()
-  unset "bgsrc[$name]"
+  __tt_pv_bg_reset $name
   __tt_bg_load $name
   bgload[$name]="" bgedit[$name]=1
   msg=${err:-"Background · $name"} msgt=$(( rc ? 300 : 200 ))
   [[ -r ${TTHEME_CONFIG:h}/backgrounds/${${name/@/--}/\//--}.conf ]] || return 0
-  tune=$name tf=1 tsnap="${bgsize[$name]} ${bgpos[$name]} ${bgop[$name]} ${bgoff[$name]}"
+  __tt_pv_tune_open $name
 }
 
 __tt_pv_bg_panel() {
-  local name=$1 z=$'\e[0m' b=$'\e[1m' d=$'\e[2m' c=$ac val sty REPLY
-  local -a labs=(Size Position Opacity) at=(0 3 6)
-  local -i r0=$2 col=$3 end=$4 off=${bgoff[$1]} T=$(( $4 - $3 - 19 )) lo=100 hi=100 k i r knob pos=${bgpos[$1]} o
+  local name=$1 z=$'\e[0m' b=$'\e[1m' d=$'\e[2m' c=$ac val sty mark REPLY
+  local -a labs=(Size Position Opacity) at=(0 3 6) def=(${=bgdef[$1]})
+  local -i r0=$2 col=$3 end=$4 off=${bgoff[$1]} T=$(( $4 - $3 - 21 )) lo=100 hi=100 k i r knob pos=${bgpos[$1]} o tuned
   (( color )) || z= b= d= c=
   (( T < 8 )) && T=8
   (( $+commands[sips] )) && lo=20
@@ -507,6 +582,7 @@ __tt_pv_bg_panel() {
         fi
       done
       val=${TTHEME_BG_POSITIONS[pos]}
+      tuned=$(( pos != def[2] ))
     else
       if (( k == 1 )); then
         if [[ ${bgsize[$name]} == fill ]]; then
@@ -514,9 +590,12 @@ __tt_pv_bg_panel() {
         else
           knob=$(( (${bgsize[$name]} - lo) * (T - 1) / (hi - lo + 1) )) val=${bgsize[$name]}%
         fi
+        tuned=0
+        [[ ${bgsize[$name]} == "$def[1]" ]] || tuned=1
       else
         o=$(( ${bgop[$name]} * 100 + 0.5 ))
         knob=$(( o * (T - 1) / 100 )) val=${bgop[$name]}
+        tuned=$(( ${bgop[$name]} * 1000 + 0.5 != ${def[3]:-1} * 1000 + 0.5 ))
       fi
       (( knob < 0 )) && knob=0
       (( knob > T - 1 )) && knob=$(( T - 1 ))
@@ -529,8 +608,88 @@ __tt_pv_bg_panel() {
         out+=$c${(l:knob::━:)}$b"●"$z$d${(l:$(( T - 1 - knob ))::─:)}$z
       fi
     fi
-    out+=$'\e['$r';'$(( end - ${#val} + 1 ))'H'$sty$val$z
+    out+=$'\e['$r';'$(( end - ${#val} - 1 ))'H'$sty$val$z
+    if (( tuned )); then
+      mark=$d
+      (( tf == k )) && mark=$b$c
+      out+=$'\e['$r';'$end'H'$mark"↺"$z
+    fi
   done
+  (( split )) && bgstrip="$(( r0 + 8 )) $col $end"
+}
+
+__tt_pv_bg_strip() {
+  local pal=$tune dir=${TTHEME_CONFIG:h}/backgrounds cur fill want sty top side bot cmd buf="" z=$'\e[0m' d=$'\e[2m' REPLY
+  local -a keys=(${=bgpics[$tune]}) wh pd
+  local -i r0=$1 col=$2 end=$3 n=${#keys} at show tc tr=3 i k x r id slot first
+  if (( n < 2 )); then
+    __tt_pv_bg_strip_off
+    return 0
+  fi
+  cur=${tpick##*:}
+  [[ $tpick == *:* ]] || cur=${bgact[$pal]}
+  at=${keys[(Ie)$cur]}
+  (( at )) || at=1
+  buf+=$'\e['$r0';'$(( col + 2 ))'H'$d"Images"$z$'\e['$r0';'$(( end - ${#at} - ${#n} ))'H'$d"$at/$n"$z
+  pd=(${=bgpic[$pal:$keys[at]]})
+  if (( r0 + tr + 3 >= ph )) || ! __tt_bg_dim $dir/$pd[2]; then
+    print -rn -- "$buf"
+    __tt_pv_bg_strip_off
+    return 0
+  fi
+  wh=(${=bgdim[$dir/$pd[2]]})
+  tc=$(( (2 * tr * bgch * wh[1] + wh[2] * bgcw) / (2 * wh[2] * bgcw) ))
+  (( tc < 4 )) && tc=4
+  (( tc > 16 )) && tc=16
+  show=$(( n < 5 ? n : 5 ))
+  while (( show > 1 && show * (tc + 3) - 1 > end - col )); do
+    (( show-- ))
+  done
+  first=1
+  (( n > show )) && first=$(( ((at - 1 - show / 2) % n + n) % n + 1 ))
+  for (( i = 0; i < show; i++ )); do
+    k=$(( (first - 1 + i) % n + 1 ))
+    x=$(( col + i * (tc + 3) ))
+    slot=$(( i + 1 ))
+    if (( k == at )); then
+      sty=$'\e[1m'$ac top="┏${(l:tc::━:)}┓" side="┃" bot="┗${(l:tc::━:)}┛"
+    else
+      sty=$d top="╭${(l:tc::─:)}╮" side="│" bot="╰${(l:tc::─:)}╯"
+    fi
+    buf+=$'\e['$(( r0 + 1 ))';'$x'H'$sty$top$z$'\e['$(( r0 + tr + 2 ))';'$x'H'$sty$bot$z
+    for (( r = 0; r < tr; r++ )); do
+      buf+=$'\e['$(( r0 + 2 + r ))';'$x'H'$sty$side$z$'\e['$(( r0 + 2 + r ))';'$(( x + tc + 1 ))'H'$sty$side$z
+    done
+    pd=(${=bgpic[$pal:$keys[k]]})
+    fill=$dir/$pd[2]
+    [[ -r $fill ]] || continue
+    __tt_bg_send $fill
+    id=$REPLY
+    want="$id $(( r0 + 2 )) $(( x + 1 )) $tc $tr"
+    [[ ${bgthumb[$slot]} == "$want" ]] && continue
+    if [[ -n ${bgthumb[$slot]} ]]; then
+      printf -v cmd '\e_Ga=d,d=i,i=%d,p=%d,q=2\e\\' ${${=bgthumb[$slot]}[1]} $(( 700000 + slot ))
+      buf+=$cmd
+    fi
+    printf -v cmd '\e[%d;%dH\e_Ga=p,i=%d,p=%d,c=%d,r=%d,C=1,z=-1,q=2\e\\' $(( r0 + 2 )) $(( x + 1 )) $id $(( 700000 + slot )) $tc $tr
+    buf+=$cmd
+    bgthumb[$slot]=$want
+  done
+  for slot in ${(k)bgthumb}; do
+    (( slot > show )) || continue
+    printf -v cmd '\e_Ga=d,d=i,i=%d,p=%d,q=2\e\\' ${${=bgthumb[$slot]}[1]} $(( 700000 + slot ))
+    buf+=$cmd
+    unset "bgthumb[$slot]"
+  done
+  print -rn -- "$buf"
+}
+
+__tt_pv_bg_strip_off() {
+  local slot
+  for slot in ${(k)bgthumb}; do
+    printf '\e_Ga=d,d=i,i=%d,p=%d,q=2\e\\' ${${=bgthumb[$slot]}[1]} $(( 700000 + slot ))
+  done
+  bgthumb=()
 }
 
 __tt_pv_bg_close() {
@@ -539,27 +698,38 @@ __tt_pv_bg_close() {
 }
 
 __tt_pv_bg_save() {
-  local name msg REPLY
+  local img name note err REPLY
   local -a saved=()
-  (( ${#bgedit} )) || return 0
-  for name in ${(ok)bgedit}; do
-    if ! __tt_bg_write $name; then
-      print -u2 "ttheme: could not save the background of $name"
+  (( ${#bgedit} + ${#bgswap} )) || return 0
+  for img in ${(ok)bgedit}; do
+    if ! __tt_bg_write $img; then
+      print -u2 "ttheme: could not save the background of ${img%:*}"
       continue
     fi
-    saved+=($name)
+    (( ${saved[(Ie)${img%:*}]} )) || saved+=(${img%:*})
+  done
+  for name in ${(ok)bgswap}; do
+    if ! err=$(__tt_cli image $name show ${bgswap[$name]} 2>&1); then
+      print -u2 -r -- "$err"
+      continue
+    fi
+    (( ${saved[(Ie)$name]} )) || saved+=($name)
+  done
+  for name in $saved; do
+    __tt_pv_shows $name
+    img=$REPLY
     if [[ ! -r ${TTHEME_CONFIG:h}/backgrounds/${${name/@/--}/\//--}.conf ]]; then
-      msg="Background · $name none"
-    elif (( bgoff[$name] )); then
-      msg="Background · $name off"
+      note="Background · $name none"
+    elif (( bgoff[$img] )); then
+      note="Background · $name off"
     else
-      __tt_bg_label $name
-      msg="Background · $name $REPLY"
+      __tt_bg_label $img
+      note="Background · $name $REPLY"
     fi
     if __tt_color; then
-      printf '\033[2m%s\033[0m\n' "$msg"
+      printf '\033[2m%s\033[0m\n' "$note"
     else
-      print -r -- "$msg"
+      print -r -- "$note"
     fi
   done
   (( ${#saved} )) && __tt_bg_saved $saved

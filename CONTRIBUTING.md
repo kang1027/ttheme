@@ -74,6 +74,7 @@ One file — copy any of `themes/*.toml`:
 ```toml
 [meta]
 name = "madoka"                            # must match the filename
+native_names = ["鹿目まどか"]               # the character's names in Japanese, preview searches them
 group = "Madoka Magica"                    # needs a [[group]] in themes/_groups.toml
 order = 15                                 # position in the rotation
 ansi_source = "Elegant + Magica"           # what the harmonizer was fed
@@ -107,6 +108,12 @@ One palette per pull request. At most three open at a time.
   it should be a character tag with posts. Leave it out for
   palettes that are not one character (a place, a concept). It is a search
   term; posts go in `[[picture]]`, by number.
+- `meta.native_names` lists the character's names in its original language (or
+  the Japanese release's), which `preview` searches alongside the palette and
+  series names: the full name first, then any other it goes by — a code name, an
+  avatar name, a civilian one (`["雨宮蓮", "来栖暁", "ジョーカー"]`). A place,
+  concept or machine takes its own Japanese name. Check them against the tag's
+  danbooru wiki, whose other names list them; a name may not contain `|`.
 - `meta.ansi_source` records what the ANSI ramp was actually derived from, and
   must stay accurate. Take base schemes from
   [mbadolato/iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes),

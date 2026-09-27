@@ -1,7 +1,22 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isMainThread, parentPort, Worker } from 'node:worker_threads'
-import { type Colors, type Hue, installBackdrop, type Picture, type Tone, tryOn } from './backdrop.ts'
+import {
+  backgroundsDir,
+  type Colors,
+  type Framing,
+  type Hue,
+  type Inked,
+  imageKey,
+  inked,
+  installBackdrop,
+  type Picture,
+  rackOf,
+  type Tone,
+  type Tune,
+  tryOn,
+  writeTune,
+} from './backdrop.ts'
 import { MAX_PIXELS } from './booru.ts'
 import type { Hex } from './color.ts'
 import { paletteMatch } from './fit.ts'
@@ -40,6 +55,7 @@ interface Show {
   colors: Colors
   tone: Tone
   blur: number
+  tune?: Framing
 }
 
 interface Backdrop {
@@ -53,6 +69,14 @@ interface Backdrop {
   width: number
   height: number
   blur: number
+  tune?: Tune
+  aligns?: boolean
+  user?: string
+}
+
+export interface Shown {
+  clear: number
+  fill: number
 }
 
 interface Redraw {
@@ -73,7 +97,13 @@ export interface Look {
 
 type Task = Thumb | Band | Match | Show | Backdrop | Redraw
 type Lane = 'tile' | 'band' | 'view'
-type Result<T extends Task> = T extends Match ? Look : T extends Redraw ? Picture | null : number
+type Result<T extends Task> = T extends Match
+  ? Look
+  : T extends Redraw
+    ? Picture | null
+    : T extends Show
+      ? Shown
+      : number
 
 const LANES: Record<Task['job'], Lane> = {
   thumb: 'tile',
@@ -84,9 +114,21 @@ const LANES: Record<Task['job'], Lane> = {
   redraw: 'view',
 }
 
-async function work(task: Task): Promise<number | Look | Picture | null> {
+let held: { from: string; clear: number; inked: Inked } | undefined
+
+async function work(task: Task): Promise<number | Look | Picture | Shown | null> {
   if (task.job === 'redraw') {
     return redrawOne(task.home, task.name, task.key, task.hue, task.blur, task.aligns, task.user)
+  }
+  if (task.job === 'show') {
+    if (held?.from !== task.from) {
+      const image = decodeImage(new Uint8Array(readFileSync(task.from)), MAX_PIXELS)
+      held = { from: task.from, clear: transparency(image), inked: inked(image) }
+    }
+    const { image, fill } = tryOn(held.inked, task.colors, task.tone, task.width, task.height, task.blur, task.tune)
+    mkdirSync(dirname(task.to), { recursive: true })
+    writeFileSync(task.to, encodePng(image))
+    return { clear: held.clear, fill }
   }
   const image = decodeImage(new Uint8Array(readFileSync(task.from)), MAX_PIXELS)
   if (task.job === 'backdrop') {
@@ -103,6 +145,10 @@ async function work(task: Task): Promise<number | Look | Picture | null> {
       task,
       task.blur,
     )
+    const picture = task.tune && rackOf(task.home, task.colors.name).find((p) => p.key === imageKey(task.origin))
+    if (task.tune && picture) {
+      writeTune(backgroundsDir(task.home), picture, task.tune, task.aligns ?? true, task.user ?? task.home)
+    }
     return 0
   }
   if (task.job === 'match') {
@@ -113,15 +159,9 @@ async function work(task: Task): Promise<number | Look | Picture | null> {
     writeFileSync(task.to, encodePng(contain(image, task.width, task.height)))
     return 0
   }
-  if (task.job === 'band') {
-    const data = image.data.subarray(task.y * image.width * 4, (task.y + task.height) * image.width * 4)
-    writeFileSync(task.to, encodePng({ width: image.width, height: task.height, data }))
-    return 0
-  }
-  const clear = transparency(image)
-  mkdirSync(dirname(task.to), { recursive: true })
-  writeFileSync(task.to, encodePng(tryOn(image, task.colors, task.tone, task.width, task.height, task.blur)))
-  return clear
+  const data = image.data.subarray(task.y * image.width * 4, (task.y + task.height) * image.width * 4)
+  writeFileSync(task.to, encodePng({ width: image.width, height: task.height, data }))
+  return 0
 }
 
 export function serveRenders(port: NonNullable<typeof parentPort>): void {

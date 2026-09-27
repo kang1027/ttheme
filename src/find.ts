@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import cells from 'fast-string-width'
 import {
   type Clip,
   type Got,
@@ -22,7 +23,7 @@ import {
   sourceLabel,
   takeInbound,
 } from './attach.ts'
-import { backdropTone, fillSize, origins, type Tone } from './backdrop.ts'
+import { backdropTone, fillSize, origins, type Tone, type Tune } from './backdrop.ts'
 import {
   BLOCKS,
   blockSet,
@@ -46,7 +47,6 @@ import {
   mates,
   type Narrow,
   narrowOf,
-  originHost,
   PAGE,
   type Post,
   pausedUntil,
@@ -56,6 +56,7 @@ import {
   RATINGS,
   type Rendition,
   rated,
+  ratingOf,
   ratingSet,
   rendition,
   SCORES,
@@ -68,6 +69,7 @@ import {
   tagsOf,
 } from './booru.ts'
 import { booruTags, find, readAvailable, siteTags } from './catalog.ts'
+import { rgb } from './color.ts'
 import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
 import {
@@ -78,6 +80,7 @@ import {
   decodeKeys,
   type FindView,
   gridShape,
+  type Info,
   MIN,
   type Order,
   type Placement,
@@ -91,11 +94,15 @@ import {
   stepped,
   TILE,
   type Tile,
+  type TunePanel,
+  type Tuning,
   transmit,
 } from './find-screen.ts'
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
-import { configHome, refreshProfiles } from './palettes.ts'
+import { configHome, readInstalled, refreshProfiles } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
+import { SCENES } from './scenes.ts'
+import { POSITIONS } from './theme.ts'
 import { blurOf, detectTerminal, settingDefault, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
@@ -228,6 +235,43 @@ function orderOf(value: string): Order {
   return ORDERS.find((order) => order === value) ?? 'fit'
 }
 
+const STEPS: Record<string, number> = { left: -1, right: 1, 'shift-left': -10, 'shift-right': 10 }
+
+function marginOf(raw: string | undefined): { x: number; y: number } | undefined {
+  const m = /^(\d+) (\d+)$/.exec(raw ?? '')
+  return m && (Number(m[1]) > 0 || Number(m[2]) > 0) ? { x: Number(m[1]), y: Number(m[2]) } : undefined
+}
+
+const MARGIN = marginOf(process.env.TTHEME_BG_MARGIN)
+
+function resized(size: Tuning['size'], step: number, fill: number): Tuning['size'] {
+  if (step < 0) {
+    if (size !== 'fill') {
+      return Math.max(SMALLEST, size + step)
+    }
+    if (!fill) {
+      return size
+    }
+    return Math.max(SMALLEST, Math.max(100, fill) + step + 1)
+  }
+  return size === 'fill' || size + step > fill ? 'fill' : size + step
+}
+
+function sameTuning(a: Tuning, b: Tuning): boolean {
+  return a.size === b.size && a.at === b.at && a.opacity === b.opacity
+}
+
+function toTune(tune: Tuning, untuned: Tuning): Tune | undefined {
+  if (sameTuning(tune, untuned)) {
+    return undefined
+  }
+  return {
+    ...(tune.size !== 'fill' ? { size: tune.size } : {}),
+    ...(tune.at !== untuned.at ? { position: POSITIONS[tune.at - 1] } : {}),
+    ...(tune.opacity !== untuned.opacity ? { opacity: tune.opacity } : {}),
+  }
+}
+
 function completable(token: string): boolean {
   return token.length >= 2 && !/^\d+$/.test(token) && !token.includes('://') && !/^[\w.]+:\d+$/.test(token)
 }
@@ -246,6 +290,13 @@ const PICTURE = /\.(png|jpe?g|gif|webp|heic|tiff?|bmp)$/i
 const PASTE_KEY = process.platform === 'win32' ? 'alt+v' : 'ctrl+v'
 const SCREENSHOT = process.platform === 'darwin' ? 'ctrl+shift+cmd+4 copies a screenshot' : 'copy a picture first'
 const TRY_WIDTH = 1280
+const TUNED_HELD = 16
+const TOP_RIGHT = POSITIONS.indexOf('top-right') + 1
+const SMALLEST = 20
+const COVER_ID = 2 ** 31 - 3
+const ANCHOR_ID = 2 ** 31 - 2
+const COVER_Z = -1073741827
+const ANCHOR_Z = -1073741828
 const LOOKAHEAD = 2
 const TICK = 80
 const GLIDE = 16
@@ -326,6 +377,7 @@ interface Current {
   cut?: string
   using: 'plain' | 'cut'
   failed: boolean
+  fill?: number
 }
 
 function describe(error: unknown): string {
@@ -406,7 +458,11 @@ class Finder {
   private readonly unsaved = new Set<string>()
   private thumbQueue: Pick[] = []
   private thumbing = 0
-  private readonly clarity = new Map<string, number>()
+  private readonly clarity = new Map<string, { clear: number; fill: number }>()
+  private readonly tunedFiles: string[] = []
+  private presenting = false
+  private again = false
+  private covered = ''
   private readonly renders = new Renderer()
   private readonly sent = new Map<number, string>()
   private readonly placed = new Map<number, string>()
@@ -453,6 +509,7 @@ class Finder {
     this.entry = entry
     this.tone = backdropTone(entry, entry.signatureSlots)
     this.blurring = blurOf(home)
+    const untuned: Tuning = { size: 'fill', at: TOP_RIGHT, opacity: this.tone.opacity }
     this.view = {
       palette: entry.name,
       tag,
@@ -501,6 +558,13 @@ class Finder {
       beat: 0,
       mode: 'grid',
       help: false,
+      scene: Math.max(
+        0,
+        SCENES.findIndex((scene) => scene.name.toLowerCase() === process.env.TTHEME_SCENE),
+      ),
+      details: false,
+      tune: { ...untuned },
+      untuned,
       editing: tag === '' ? '' : undefined,
     }
     this.board = blank(this.boardKey, tag !== '')
@@ -577,7 +641,6 @@ class Finder {
       artist: site === LOCAL ? sourceLabel(post.source) : post.artist,
       score: post.score,
       variants,
-      origin: originHost(post.source),
       mates: this.owners.get(site.key)?.get(post.owner) ?? [],
       thumb: this.thumbPath.get(key),
       missing: this.thumbless.has(key),
@@ -1534,9 +1597,30 @@ class Finder {
 
   private tryKey(key: string): void {
     const view = this.view
+    if (view.tuning) {
+      this.tuneKey(key)
+      return
+    }
     if (key === 'left' || key === 'right') {
       this.direction = key === 'left' ? -1 : 1
       this.focus(view.focus + this.direction)
+      return
+    }
+    if (key === 'shift-left' || key === 'shift-right') {
+      view.scene += key === 'shift-left' ? -1 : 1
+      view.details = false
+      this.draw()
+      return
+    }
+    if (key === 'i') {
+      view.details = !view.details
+      this.inform()
+      this.draw()
+      return
+    }
+    if (key === 't') {
+      view.tuning = { field: 0, held: { ...view.tune }, fill: this.current?.fill ?? 0 }
+      this.draw()
       return
     }
     if (key === 'o') {
@@ -1562,6 +1646,102 @@ class Finder {
       view.mode = 'grid'
       view.error = undefined
       this.draw()
+    }
+  }
+
+  private tuneKey(key: string): void {
+    const view = this.view
+    const panel = view.tuning as TunePanel
+    const tune = view.tune
+    if (key === 'up' || key === 'down') {
+      panel.field = (panel.field + (key === 'up' ? 2 : 1)) % 3
+      this.draw()
+      return
+    }
+    const step = STEPS[key]
+    if (step !== undefined) {
+      if (panel.field === 0) {
+        tune.size = resized(tune.size, step, panel.fill)
+      } else if (panel.field === 1) {
+        tune.at = ((tune.at - 1 + Math.sign(step) + 9) % 9) + 1
+      } else {
+        tune.opacity = Math.max(0, Math.min(100, Math.round(tune.opacity * 100) + step)) / 100
+      }
+      this.retune()
+      return
+    }
+    if (/^[1-9]$/.test(key)) {
+      panel.field = 1
+      tune.at = Number(key)
+      this.retune()
+      return
+    }
+    if (key === '=') {
+      const base = view.untuned
+      if (panel.field === 0) {
+        tune.size = base.size
+      } else if (panel.field === 1) {
+        tune.at = base.at
+      } else {
+        tune.opacity = base.opacity
+      }
+      this.retune()
+      return
+    }
+    if (key === '+') {
+      view.tune = { ...view.untuned }
+      this.retune()
+      return
+    }
+    if (key === 'enter') {
+      view.tuning = undefined
+      this.draw()
+      return
+    }
+    if (key === 'esc') {
+      view.tune = { ...panel.held }
+      view.tuning = undefined
+      this.retune()
+    }
+  }
+
+  private retune(): void {
+    this.draw()
+    if (this.current && this.view.shown?.id === this.current.key) {
+      this.reveal()
+    }
+  }
+
+  private inform(): void {
+    const view = this.view
+    const tile = view.tiles[view.focus]
+    const pick = tile && this.posts.get(tile.key)
+    view.info = pick ? this.infoOf(pick) : undefined
+  }
+
+  private infoOf(pick: Pick): Info {
+    const { site, post } = pick
+    const named = post.named
+    const rating = ratingOf(site, post)
+    const listed = new Set([...(named?.artist ?? []), ...(named?.character ?? []), ...(named?.copyright ?? [])])
+    const source = post.source
+    const link = /^https?:\/\//i.test(source)
+      ? source
+      : site === LOCAL && source.startsWith('/')
+        ? pathToFileURL(source).href
+        : undefined
+    return {
+      page: site === LOCAL ? '' : site.pageUrl(post.id),
+      source,
+      ...(link ? { link } : {}),
+      artists: named?.artist ?? (post.artist ? [post.artist] : []),
+      characters: named?.character ?? [],
+      series: named?.copyright ?? [],
+      tags: post.tags.filter((tag) => !listed.has(tag)),
+      ...(rating ? { rating } : {}),
+      ...(post.posted ? { posted: post.posted } : {}),
+      ext: (rendition(post) ?? post).ext,
+      uploader: post.owner,
     }
   }
 
@@ -2281,6 +2461,7 @@ class Finder {
     this.fetch?.abort()
     clearTimeout(this.settle)
     view.fetching = undefined
+    this.inform()
     if (!tile) {
       return
     }
@@ -2453,16 +2634,20 @@ class Finder {
     const H = this.rows * this.cell.h
     const width = Math.min(W, TRY_WIDTH)
     const height = Math.max(1, Math.round((H * width) / W))
+    const tune = { ...this.view.tune }
+    const tuned = !sameTuning(tune, this.view.untuned)
+    const mark = tuned ? `-${tune.size}-${tune.at}-${Math.round(tune.opacity * 100)}` : ''
     const path = join(
       this.scratch,
-      `${current.site.key}-${current.id}${using === 'cut' ? 'c' : ''}-${width}x${height}.png`,
+      `${current.site.key}-${current.id}${using === 'cut' ? 'c' : ''}-${width}x${height}${mark}.png`,
     )
-    const key = `${current.site.key}:${current.id}:${using}`
+    const key = `${current.site.key}:${current.id}:${using}:${width}x${height}`
     const known = this.clarity.get(key)
-    if (known !== undefined && existsSync(path)) {
-      return { clear: known, path }
+    if (known && existsSync(path)) {
+      current.fill = known.fill
+      return { clear: known.clear, path }
     }
-    const clear = await this.renders.run({
+    const made = await this.renders.run({
       job: 'show',
       from: using === 'cut' ? (current.cut as string) : current.path,
       to: path,
@@ -2471,9 +2656,25 @@ class Finder {
       colors: this.entry,
       tone: this.tone,
       blur: (this.blurring * width) / fillSize(W, H).width,
+      ...(tuned ? { tune } : {}),
     })
-    this.clarity.set(key, clear)
-    return { clear, path }
+    this.clarity.set(key, made)
+    current.fill = made.fill
+    if (tuned) {
+      this.keepTuned(path)
+    }
+    return { clear: made.clear, path }
+  }
+
+  private keepTuned(path: string): void {
+    this.tunedFiles.push(path)
+    while (this.tunedFiles.length > TUNED_HELD) {
+      const at = this.tunedFiles.findIndex((file) => file !== this.view.shown?.path && file !== path)
+      if (at === -1) {
+        return
+      }
+      rmSync(this.tunedFiles.splice(at, 1)[0] as string, { force: true })
+    }
   }
 
   private async present(): Promise<void> {
@@ -2486,6 +2687,9 @@ class Finder {
     if (this.current !== current || current.using !== using) {
       return
     }
+    if (this.view.tuning && current.fill) {
+      this.view.tuning.fill = current.fill
+    }
     this.view.shown = {
       id: current.key,
       clear,
@@ -2497,6 +2701,11 @@ class Finder {
 
   private reveal(): void {
     const view = this.view
+    if (this.presenting) {
+      this.again = true
+      return
+    }
+    this.presenting = true
     view.preparing = this.current?.key
     this.flush()
     void this.present()
@@ -2504,6 +2713,12 @@ class Finder {
         view.error = error instanceof Error ? error.message : String(error)
       })
       .finally(() => {
+        this.presenting = false
+        if (this.again) {
+          this.again = false
+          this.reveal()
+          return
+        }
         if (view.preparing === this.current?.key) {
           view.preparing = undefined
         }
@@ -2521,6 +2736,7 @@ class Finder {
     view.installing = tile.key
     view.error = undefined
     this.flush()
+    const tune = toTune(view.tune, view.untuned)
     try {
       await this.renders.run({
         job: 'backdrop',
@@ -2538,12 +2754,17 @@ class Finder {
         width: this.cols * this.cell.w,
         height: this.rows * this.cell.h,
         blur: this.blurring,
+        ...(tune ? { tune, aligns: !readInstalled(this.home).terminals.includes('iterm2'), user: homedir() } : {}),
       })
       const known = readCache<string>(current.site, 'owners.json')
       known[current.id] = this.posts.get(current.key)?.post.owner ?? ''
       writeCache(current.site, 'owners.json', known)
       refreshProfiles(this.home)
-      view.saved = `Background · ${this.entry.name} ← ${current.site.name} ${current.id}`
+      const { size, at, opacity } = view.tune
+      const framing = tune
+        ? ` · ${size === 'fill' ? 'fill' : `${size}%`} · ${POSITIONS[at - 1]} · ${opacity.toFixed(2)}`
+        : ''
+      view.saved = `Background · ${this.entry.name} ← ${current.site.name} ${current.id}${framing}`
       view.installed.push(tile.key)
       this.fetch?.abort()
       clearTimeout(this.settle)
@@ -2605,10 +2826,37 @@ class Finder {
         this.placed.delete(id)
       }
     }
-    if (out) {
-      this.write(`\x1b[?2026h${out}\x1b[?2026l`)
+    out += this.cover()
+    const caret = this.view.mode === 'grid' && this.view.editing !== undefined ? this.caret() : ''
+    if (out || caret) {
+      this.write(`\x1b[?2026h${out}${caret}\x1b[?2026l`)
     }
     this.pace(frame.tick)
+  }
+
+  private cover(): string {
+    const at = `${this.cols};${this.rows}`
+    if (this.covered === at) {
+      return ''
+    }
+    let out = ''
+    if (!this.covered) {
+      const pixel = Buffer.from(rgb(this.entry.background)).toString('base64')
+      out += `\x1b_Ga=t,f=24,s=1,v=1,i=${COVER_ID},q=2;${pixel}\x1b\\`
+      if (MARGIN) {
+        out += `\x1b_Ga=t,f=32,s=1,v=1,i=${ANCHOR_ID},q=2;AAAAAA==\x1b\\\x1b[H\x1b_Ga=p,i=${ANCHOR_ID},p=${ANCHOR_ID},c=1,r=1,C=1,z=${ANCHOR_Z},q=2\x1b\\`
+      }
+    }
+    this.covered = at
+    if (MARGIN) {
+      const { x, y } = MARGIN
+      return `${out}\x1b_Ga=p,i=${COVER_ID},p=${COVER_ID},P=${ANCHOR_ID},Q=${ANCHOR_ID},H=${-x},V=${-y},c=${this.cols + 2 * x},r=${this.rows + 2 * y},C=1,z=${COVER_Z},q=2\x1b\\`
+    }
+    return `${out}\x1b[H\x1b_Ga=p,i=${COVER_ID},p=${COVER_ID},c=${this.cols},r=${this.rows},C=1,z=${COVER_Z},q=2\x1b\\`
+  }
+
+  private caret(): string {
+    return `\x1b[1;${Math.min(this.cols, cells(`⌕ ${this.view.editing ?? ''}`) + 1)}H`
   }
 
   private pace(tick: boolean): void {

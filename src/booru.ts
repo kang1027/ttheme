@@ -60,6 +60,12 @@ export interface Rendition {
   ext: string
 }
 
+export interface Named {
+  artist: string[]
+  character: string[]
+  copyright: string[]
+}
+
 export interface Post extends Rendition {
   id: number
   preview: string
@@ -70,6 +76,8 @@ export interface Post extends Rendition {
   md5: string
   source: string
   tags: string[]
+  named?: Named
+  posted?: string
   solo: boolean | undefined
   family: number
   smaller: Rendition[]
@@ -148,6 +156,17 @@ function version(url: unknown, width: unknown, height: unknown): Rendition {
   return { file, width: Number(width) || 0, height: Number(height) || 0, ext: extension(file) }
 }
 
+function words(text: unknown): string[] {
+  return String(text ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function day(at: unknown): string | undefined {
+  const when = typeof at === 'number' ? new Date(at * 1000) : typeof at === 'string' ? new Date(at) : undefined
+  return when && !Number.isNaN(when.getTime()) ? when.toISOString().slice(0, 10) : undefined
+}
+
 interface Raw {
   preview: unknown
   file: string
@@ -156,6 +175,7 @@ interface Raw {
   artist: string
   md5: unknown
   tags: string
+  named?: Named
   solo: boolean | undefined
   versions: Rendition[]
 }
@@ -181,7 +201,9 @@ function post(p: Record<string, unknown>, raw: Raw): Post[] {
       rating: String(p.rating ?? ''),
       md5: String(raw.md5 ?? ''),
       source: String(p.source ?? ''),
-      tags: raw.tags.split(/\s+/).filter(Boolean),
+      tags: words(raw.tags),
+      ...(raw.named ? { named: raw.named } : {}),
+      ...(day(p.created_at) ? { posted: day(p.created_at) } : {}),
       solo: raw.solo,
       family: Number(p.parent_id) || (p.has_children === true ? Number(p.id) : 0),
       smaller: raw.versions.filter((v) => v.file && v.width > 0 && v.height > 0 && v.width * v.height < width * height),
@@ -194,14 +216,18 @@ export function parseMoebooru(text: string): Post[] {
   return records(text).flatMap((p) => {
     const file = absolute(String(p.file_url ?? ''))
     const tags = String(p.tags ?? '')
+    const typed = (type: string) => words(tags).filter((tag) => types.get(tag) === type)
     return post(p, {
       preview: p.preview_url,
       file,
       ext: String(p.file_ext || extension(file)).toLowerCase(),
       owner: p.author,
-      artist: tags.split(/\s+/).find((tag) => types.get(tag) === 'artist') ?? '',
+      artist: typed('artist')[0] ?? '',
       md5: p.md5,
       tags,
+      ...(types.size > 0
+        ? { named: { artist: typed('artist'), character: typed('character'), copyright: typed('copyright') } }
+        : {}),
       solo: undefined,
       versions: [
         version(p.jpeg_url, p.jpeg_width, p.jpeg_height),
@@ -224,6 +250,11 @@ export function parseDanbooru(text: string): Post[] {
       artist: String(p.tag_string_artist ?? '').split(/\s+/)[0] ?? '',
       md5: p.md5,
       tags,
+      named: {
+        artist: words(p.tag_string_artist),
+        character: words(p.tag_string_character),
+        copyright: words(p.tag_string_copyright),
+      },
       solo: tags.split(/\s+/).includes('solo'),
       versions: (asset.variants ?? [])
         .map((v) => version(v.url, v.width, v.height))
@@ -636,6 +667,10 @@ export function rated(site: Site, post: Pick<Post, 'rating'>, levels: readonly R
   return levels.some((level) => site.ratings[level].has(post.rating))
 }
 
+export function ratingOf(site: Site, post: Pick<Post, 'rating'>): Rating | undefined {
+  return site.rate(['safe']) === '' ? undefined : RATINGS.find((level) => site.ratings[level].has(post.rating))
+}
+
 export function rendition(post: Post): Rendition | undefined {
   return [post, ...post.smaller].find((v) => v.width * v.height <= MAX_PIXELS)
 }
@@ -807,13 +842,14 @@ export async function fetchPost(site: Site, id: number, signal: AbortSignal): Pr
 
 export interface Lent {
   tags: string[]
+  named: Named
   file: string
 }
 
 export function lentUrl(md5s: readonly string[]): string {
   const params = new URLSearchParams({
     limit: String(2 * PAGE),
-    only: 'md5,tag_string,file_url',
+    only: 'md5,tag_string,tag_string_artist,tag_string_character,tag_string_copyright,file_url',
     tags: `md5:${md5s.join(',')}`,
   })
   return `${LENDER.origin}/posts.json?${params}`
@@ -828,9 +864,12 @@ export function parseLent(text: string): Map<string, Lent> {
             [
               md5,
               {
-                tags: String(p.tag_string ?? '')
-                  .split(/\s+/)
-                  .filter(Boolean),
+                tags: words(p.tag_string),
+                named: {
+                  artist: words(p.tag_string_artist),
+                  character: words(p.tag_string_character),
+                  copyright: words(p.tag_string_copyright),
+                },
                 file: absolute(String(p.file_url ?? '')),
               },
             ],
@@ -847,6 +886,7 @@ export function lend(posts: readonly Post[], lent: ReadonlyMap<string, Lent>): v
       continue
     }
     post.tags = [...new Set([...post.tags, ...found.tags])]
+    post.named ??= found.named
     post.solo = found.tags.includes('solo')
     if (found.file.includes('/original/')) {
       post.mirror = {

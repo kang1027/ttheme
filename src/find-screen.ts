@@ -1,6 +1,10 @@
+import columns from 'fast-string-width'
+import type { Framing } from './backdrop.ts'
 import { BLOCKS, type Block, KEY_SPAN, type Kind, type Narrow, type Rating, SITES } from './booru.ts'
 import { type Hex, mix, rgb } from './color.ts'
 import { megabytes, progress } from './pending.ts'
+import { SCENES, sceneAt, sceneParts, WIDE } from './scenes.ts'
+import { POSITIONS } from './theme.ts'
 
 export type Preset = 'cutouts' | 'all'
 export type Order = 'fit' | 'newest' | 'score'
@@ -47,7 +51,6 @@ export interface Tile {
   artist: string
   score: number
   variants: number
-  origin: string
   mates: string[]
   thumb?: string
   missing?: boolean
@@ -61,6 +64,28 @@ export interface Shown {
   bytes: number
   path: string
   cut: 'on' | 'off' | 'failed' | 'none'
+}
+
+export interface Info {
+  page: string
+  source: string
+  link?: string
+  artists: string[]
+  characters: string[]
+  series: string[]
+  tags: string[]
+  rating?: string
+  posted?: string
+  ext: string
+  uploader: string
+}
+
+export type Tuning = Framing
+
+export interface TunePanel {
+  field: number
+  held: Tuning
+  fill: number
 }
 
 export interface FindView {
@@ -100,6 +125,12 @@ export interface FindView {
   loaderFrom?: number
   mode: 'grid' | 'try'
   help: boolean
+  scene: number
+  details: boolean
+  info?: Info
+  tune: Tuning
+  untuned: Tuning
+  tuning?: TunePanel
   fetching?: { id: number; got: number; size: number }
   preparing?: number
   cutting?: number
@@ -155,11 +186,8 @@ const TIPS: [string, string][] = [
 const R = '\x1b[0m'
 const B = '\x1b[1m'
 const D = '\x1b[2m'
-const RED = '\x1b[31m'
 const GREEN = '\x1b[32m'
 const YELLOW = '\x1b[33m'
-const BLUE = '\x1b[1;34m'
-const MAGENTA = '\x1b[35m'
 
 const CSI: Record<string, string> = {
   A: 'up',
@@ -177,6 +205,8 @@ const CSI: Record<string, string> = {
   I: 'focus-in',
   O: 'focus-out',
   Z: 'shift-tab',
+  '1;2C': 'shift-right',
+  '1;2D': 'shift-left',
 }
 
 export function decodeKeys(input: string): string[] {
@@ -288,28 +318,46 @@ function spin(view: FindView): string {
 }
 
 function width(text: string): number {
-  return Array.from(text).length
+  return columns(text)
 }
 
-type Part = [string, string]
+function clip(text: string, room: number): string {
+  if (columns(text) <= room) {
+    return text
+  }
+  let out = ''
+  for (const ch of text) {
+    if (columns(out + ch) > room) {
+      break
+    }
+    out += ch
+  }
+  return out
+}
+
+type Part = [string, string, string?]
+
+function linked(text: string, link: string | undefined): string {
+  return link ? `\x1b]8;;${link}\x1b\\${text}\x1b]8;;\x1b\\` : text
+}
 
 class Line {
-  private readonly parts: { col: number; text: string; sgr: string }[] = []
+  private readonly parts: { col: number; text: string; sgr: string; link?: string }[] = []
   private readonly cols: number
 
   constructor(cols: number) {
     this.cols = cols
   }
 
-  put(col: number, text: string, sgr = ''): number {
-    this.parts.push({ col, text, sgr })
+  put(col: number, text: string, sgr = '', link?: string): number {
+    this.parts.push({ col, text, sgr, ...(link ? { link } : {}) })
     return col + width(text)
   }
 
   run(col: number, parts: Part[]): number {
     let c = col
-    for (const [text, sgr] of parts) {
-      c = this.put(c, text, sgr)
+    for (const [text, sgr, link] of parts) {
+      c = this.put(c, text, sgr, link)
     }
     return c
   }
@@ -324,14 +372,12 @@ class Line {
 
   render(): string {
     let out = ''
-    for (const { col, text, sgr } of this.parts) {
+    for (const { col, text, sgr, link } of this.parts) {
       if (col >= this.cols || col < 0) {
         continue
       }
-      const shown = Array.from(text)
-        .slice(0, this.cols - col)
-        .join('')
-      out += `\x1b[${col + 1}G${sgr}${shown}${sgr ? R : ''}`
+      const shown = clip(text, this.cols - col)
+      out += `\x1b[${col + 1}G${sgr}${linked(shown, link)}${sgr ? R : ''}`
     }
     return out
   }
@@ -378,7 +424,7 @@ function foot(line: Line, cols: number, accent: string, spec: Foot): void {
   }
   if (lead && size() > cols) {
     const keep = Math.max(0, width(lead[0]) - (size() - cols) - 1)
-    lead = [`${Array.from(lead[0]).slice(0, keep).join('')}…`, lead[1]]
+    lead = [`${clip(lead[0], keep)}…`, lead[1]]
   }
   let c = 0
   if (spec.badge) {
@@ -402,9 +448,61 @@ function foot(line: Line, cols: number, accent: string, spec: Foot): void {
   }
 }
 
-function specimen(lines: Line[], row: number, col: number, sw: number, maxRow: number, view: FindView): void {
-  const { ansi, selection, cursor } = view.colors
-  let cw = sw < 44 ? 3 : 4
+function roleSgr(role: string, view: FindView): string {
+  if (role === 'd') {
+    return D
+  }
+  if (role === 'b') {
+    return B
+  }
+  if (role === 's') {
+    return bg(view.colors.selection)
+  }
+  if (role === 'c') {
+    return bg(view.colors.cursor)
+  }
+  const m = /^([BK]?)(\d+)$/.exec(role)
+  if (!m) {
+    return ''
+  }
+  const n = Number(m[2])
+  const code = (base: number): number => (n < 8 ? base + n : base + 52 + n)
+  if (m[1] === 'K') {
+    return `\x1b[30;${code(40)}m`
+  }
+  return `\x1b[${m[1] === 'B' ? '1;' : ''}${code(30)}m`
+}
+
+function sceneTabs(line: Line | undefined, col: number, room: number, view: FindView, accent: string): void {
+  const at = SCENES.indexOf(sceneAt(view.scene))
+  const strip = SCENES.flatMap((scene, i): Part[] => [
+    ...(i ? ([['  ', '']] as Part[]) : []),
+    [scene.name, i === at ? B + accent : D],
+  ])
+  const fits = strip.reduce((n, [text]) => n + width(text), 0) <= room
+  line?.run(
+    col,
+    fits
+      ? strip
+      : [
+          [sceneAt(view.scene).name, B + accent],
+          [`  ${at + 1}/${SCENES.length}`, D],
+        ],
+  )
+}
+
+function specimen(
+  lines: Line[],
+  row: number,
+  col: number,
+  sw: number,
+  maxRow: number,
+  view: FindView,
+  accent: string,
+): void {
+  const { ansi, cursor } = view.colors
+  sceneTabs(lines[row - 2], col, sw, view, accent)
+  let cw = sw < WIDE ? 3 : 4
   if (sw >= 56) {
     cw = Math.min(7, Math.floor((sw + 1) / 8) - 1)
   }
@@ -412,68 +510,173 @@ function specimen(lines: Line[], row: number, col: number, sw: number, maxRow: n
   for (let i = 0; i < 8; i++) {
     c = (lines[row]?.put(c, '▀'.repeat(cw), fg(ansi[i] ?? cursor) + bg(ansi[i + 8] ?? cursor)) ?? c) + 1
   }
-  const prompt: Part = ['❯ ', GREEN]
-  const text: Part[][] = [
-    [
-      ['~/code/demo', BLUE],
-      [' on ', D],
-      ['main', MAGENTA],
-      [' +2', GREEN],
-      [' ~1', YELLOW],
-    ],
-  ]
-  text.push([prompt, ['git status -sb', '']])
-  if (sw >= 44) {
-    text.push([
-      ['## ', ''],
-      ['main', GREEN],
-      ['...', ''],
-      ['origin/main', RED],
-      [' [ahead 1]', YELLOW],
-    ])
-  }
-  text.push([
-    [' M', RED],
-    [' src/main.rs', ''],
-  ])
-  text.push([
-    ['??', RED],
-    [' notes.md', ''],
-  ])
-  text.push([])
-  if (sw >= 44) {
-    text.push([prompt, ['ls', '']])
-    text.push([
-      ['docs', BLUE],
-      ['  ', ''],
-      ['src', BLUE],
-      ['  ', ''],
-      ['tests', BLUE],
-      ['  Cargo.toml  README.md', ''],
-    ])
-    text.push([])
-  }
-  text.push([prompt, ['cargo test', '']])
-  text.push([
-    [' ✓', GREEN],
-    [' parses config', ''],
-  ])
-  const failed: Part[] = [
-    [' ✗', RED],
-    [' renders frame', ''],
-  ]
-  if (sw >= 44) {
-    failed.push(['  expected ', D], ['3', GREEN], [', received ', D], ['2', RED])
-  }
-  text.push(failed)
-  text.push([])
-  text.push([prompt, ['echo ', ''], ['selected text', bg(selection)], [' ', ''], [' ', bg(cursor)]])
-  text.forEach((parts, i) => {
-    const r = row + 2 + i
-    if (r <= maxRow) {
-      lines[r]?.run(col, parts)
+  let r = row + 2
+  for (const text of sceneAt(view.scene).lines) {
+    const parts = sceneParts(text, sw)
+    if (!parts) {
+      continue
     }
+    if (r > maxRow) {
+      return
+    }
+    lines[r]?.run(
+      col,
+      parts.map(([t, role]): Part => [t, roleSgr(role, view)]),
+    )
+    r++
+  }
+}
+
+function tagLines(tags: string[], room: number, most: number): string[] {
+  const out: string[][] = [[]]
+  for (const tag of tags) {
+    const line = out[out.length - 1] as string[]
+    if (line.length === 0 || width([...line, tag].join('  ')) <= room) {
+      line.push(tag)
+    } else if (out.length < most) {
+      out.push([tag])
+    } else {
+      break
+    }
+  }
+  let kept = out.reduce((n, line) => n + line.length, 0)
+  const last = out[out.length - 1] as string[]
+  while (kept < tags.length && last.length > 0 && width([...last, `+${tags.length - kept}`].join('  ')) > room) {
+    last.pop()
+    kept--
+  }
+  if (kept < tags.length) {
+    last.push(`+${tags.length - kept}`)
+  }
+  return out.filter((line) => line.length > 0).map((line) => line.join('  '))
+}
+
+function bare(url: string): string {
+  return url.replace(/^https?:\/\/(?:www\.)?/, '')
+}
+
+function credits(lines: Line[], row: number, col: number, view: FindView): void {
+  const info = view.info
+  const artists = info?.artists ?? []
+  const said: [string, Part][] = [
+    ['Post', info?.page ? [bare(info.page), '', info.page] : ['—', D]],
+    ['Source', info?.source ? [bare(info.source), '', info.link] : ['—', D]],
+    ['Artist', artists.length > 0 ? [artists.join('  '), ''] : ['—', D]],
+  ]
+  said.forEach(([label, value], i) => {
+    lines[row + i]?.put(col, label, D)
+    lines[row + i]?.run(col + 12, [value])
   })
+}
+
+function details(lines: Line[], row: number, col: number, room: number, maxRow: number, view: FindView): void {
+  const info = view.info
+  const tile = view.tiles[view.focus]
+  if (!info || !tile) {
+    return
+  }
+  const shown = view.shown?.id === tile.key ? view.shown : undefined
+  const at = col + 12
+  const text = Math.max(12, room - 12)
+  const file = [
+    `${tile.width}×${tile.height}${info.ext ? ` ${info.ext.toUpperCase()}` : ''}`,
+    ...(shown ? [megabytes(shown.bytes)] : []),
+  ].join(' · ')
+  const rated = [info.rating, tile.score > 0 ? `★${tile.score}` : '', info.posted].filter(Boolean).join(' · ')
+  const said: [string, Part[][]][] = [
+    ['Characters', tagLines(info.characters, text, 2).map((line): Part[] => [[line, '']])],
+    ['Series', tagLines(info.series, text, 1).map((line): Part[] => [[line, '']])],
+    ['Tags', tagLines(info.tags, text, 3).map((line): Part[] => [[line, '']])],
+    ['Rating', rated ? [[[rated, '']]] : []],
+    ['File', [[[file, ''], ...(shown ? ([['  ', '']] as Part[]) : []), ...(shown ? transparent(shown) : [])]]],
+    ['Uploader', info.uploader ? [[[info.uploader, '']]] : []],
+  ]
+  let r = row
+  for (const [label, values] of said) {
+    if (values.length === 0) {
+      continue
+    }
+    if (r + values.length - 1 > maxRow) {
+      return
+    }
+    lines[r]?.put(col, label, D)
+    for (const parts of values) {
+      lines[r]?.run(at, parts)
+      r++
+    }
+  }
+}
+
+const TUNE_LABELS = ['Size', 'Position', 'Opacity']
+const TUNE_ROWS = [0, 3, 6]
+
+function tunedField(view: FindView, field: number): boolean {
+  const { tune, untuned } = view
+  return field === 0
+    ? tune.size !== untuned.size
+    : field === 1
+      ? tune.at !== untuned.at
+      : tune.opacity !== untuned.opacity
+}
+
+function opacityText(opacity: number): string {
+  return opacity.toFixed(2)
+}
+
+function tunePanel(lines: Line[], r0: number, col: number, end: number, view: FindView, accent: string): void {
+  const panel = view.tuning
+  if (!panel) {
+    return
+  }
+  const tile = view.tiles[view.focus]
+  lines[r0 - 3]?.run(col, [
+    [view.palette, B + accent],
+    [`  Background${tile ? ` · ${tile.site} ${tile.id}` : ''}`, D],
+  ])
+  const track = Math.max(8, end - col - 21)
+  const lo = 20
+  const hi = Math.max(100, panel.fill)
+  for (const [k, label] of TUNE_LABELS.entries()) {
+    const r = r0 + (TUNE_ROWS[k] as number)
+    const on = panel.field === k
+    const style = on ? B : D
+    if (on) {
+      lines[r]?.put(col, '▶', accent)
+    }
+    lines[r]?.put(col + 2, label, style)
+    let value: string
+    if (k === 1) {
+      for (let i = 1; i <= 9; i++) {
+        const here = i === view.tune.at
+        lines[r0 + 2 + Math.floor((i - 1) / 3)]?.put(
+          col + 12 + ((i - 1) % 3) * 3,
+          here ? '■' : '·',
+          here ? B + accent : D,
+        )
+      }
+      value = POSITIONS[view.tune.at - 1] ?? 'center'
+    } else {
+      let knob: number
+      if (k === 0) {
+        const { size } = view.tune
+        knob = size === 'fill' ? track - 1 : Math.floor(((size - lo) * (track - 1)) / (hi - lo + 1))
+        value = size === 'fill' ? 'fill' : `${size}%`
+      } else {
+        knob = Math.floor((Math.round(view.tune.opacity * 100) * (track - 1)) / 100)
+        value = opacityText(view.tune.opacity)
+      }
+      knob = Math.max(0, Math.min(track - 1, knob))
+      lines[r]?.run(col + 12, [
+        ['━'.repeat(knob), accent],
+        ['●', B],
+        ['─'.repeat(track - 1 - knob), D],
+      ])
+    }
+    lines[r]?.right(end - 2, [[value, style]])
+    if (tunedField(view, k)) {
+      lines[r]?.put(end - 1, '↺', on ? B + accent : D)
+    }
+  }
 }
 
 function frameBox(lines: (Line | undefined)[], r0: number, c0: number, h: number, w: number, sgr: string): void {
@@ -802,10 +1005,13 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
     return
   }
   const shown = view.shown?.id === tile.key ? view.shown : undefined
-  const meta: Part[] = [badge(view, tile.site, tile.siteAnsi), ['  ', ''], [String(tile.id), B], ['  ', ''], dims(tile)]
-  if (tile.artist) {
-    meta.push([` · ${plain(tile.artist)}`, ''])
-  }
+  const meta: Part[] = [
+    badge(view, tile.site, tile.siteAnsi),
+    ['  ', ''],
+    [String(tile.id), B, view.info?.page || undefined],
+    ['  ', ''],
+    dims(tile),
+  ]
   if (tile.score > 0) {
     meta.push([` · ★${tile.score}`, D])
   }
@@ -814,9 +1020,6 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
   }
   if (tile.owner) {
     meta.push([` · ${tile.owner}`, D])
-  }
-  if (tile.origin) {
-    meta.push([` · ${tile.origin}`, D])
   }
   if (shown) {
     meta.push(['  ', ''], ...transparent(shown))
@@ -828,9 +1031,32 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
       [tile.mates.join(' '), D],
     ])
   }
-  specimen(lines, 3, 2, cols - 4, rows - 2, view)
+  credits(lines, 1, 2, view)
+  if (view.tuning) {
+    tunePanel(lines, 8, 2, 2 + Math.min(cols - 4, 60), view, accent)
+  } else if (view.details) {
+    details(lines, 5, 2, Math.min(cols - 4, Math.max(48, Math.floor(cols * 0.55))), rows - 2, view)
+  } else {
+    specimen(lines, 7, 2, cols - 4, rows - 2, view, accent)
+  }
   if (view.shown) {
     images.push({ id: TRY_ID + view.shown.id, path: view.shown.path, row: 0, col: 0, cols, rows, z: BELOW_BG })
+  }
+  if (view.tuning) {
+    foot(lines[rows - 1] as Line, cols, accent, {
+      badge: 'TUNE',
+      lead: status(view),
+      keys: [
+        ['↑↓', 'field'],
+        ['←→', 'step'],
+        ['=', 'reset'],
+        ['+', 'reset all'],
+        view.tuning.field === 1 ? ['1-9', 'place'] : ['⇧←→', '×10'],
+        ['enter', 'keep'],
+      ],
+      right: ['esc', 'undo'],
+    })
+    return
   }
   const lead = status(view)
   foot(lines[rows - 1] as Line, cols, accent, {
@@ -841,6 +1067,9 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
         ? [
             ['←→', 'browse'],
             ['enter', 'install'],
+            ['t', 'tune'],
+            ['i', 'details'],
+            ...(view.details ? [] : [['⇧←→', 'example'] as [string, string]]),
             ...(view.shown?.cut === 'on' || view.shown?.cut === 'off' ? [['x', 'cut out'] as [string, string]] : []),
             ['?', 'keys'],
           ]
@@ -848,6 +1077,16 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
     right: view.installing === undefined ? ['esc', 'grid'] : undefined,
   })
 }
+
+const TUNE_KEYS: [string, string][] = [
+  ['Field', '↑↓  size, position, opacity'],
+  ['Step', '←→  ·  ⇧←→ ×10'],
+  ['Place', '1-9  the nine positions'],
+  ['Reset', '=  this field back to its default  ·  +  every field'],
+  ['Keep', 'enter  back to try, installed with the picture'],
+  ['Undo', 'esc'],
+  ['Close', '?  esc'],
+]
 
 const KEYS: Record<FindView['mode'], [string, string][]> = {
   grid: [
@@ -867,6 +1106,9 @@ const KEYS: Record<FindView['mode'], [string, string][]> = {
   try: [
     ['Browse', '←→'],
     ['Install', 'enter'],
+    ['Tune', 't  size, position and opacity, installed with the picture'],
+    ['Details', 'i  characters, series, tags, rating and file, under Post, Source and Artist'],
+    ['Example', `⇧←→  ${SCENES.map((scene) => scene.name.toLowerCase()).join(', ')}`],
     ['Cut out', 'x  the background off or on, on an opaque picture'],
     ['Open', 'o  the post page in a browser'],
     ['Your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window'],
@@ -1122,7 +1364,7 @@ function panel(lines: Line[], cols: number, rows: number, view: FindView, accent
 }
 
 function help(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
-  const keys = KEYS[view.mode]
+  const keys = view.tuning ? TUNE_KEYS : KEYS[view.mode]
   const w = Math.min(cols - 2, Math.max(50, ...keys.map(([, value]) => width(value) + 16)))
   const laid = keys.map(([label, value]) => ({ label, parts: wrapped(value, w - 16) }))
   const h = laid.reduce((n, { parts }) => n + parts.length, 0) + 4

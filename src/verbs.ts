@@ -192,9 +192,8 @@ export const VERB_SPECS: VerbSpec[] = [
   },
   {
     name: 'image',
-    args: ['<palette>', '<action>'],
-    about:
-      'Switch a palette between its saved backgrounds, remove the one shown, or pass on tuning — preview calls this',
+    args: ['<palette>', '<action>', '[picture]'],
+    about: "Show one of a palette's saved backgrounds, remove one, or pass on tuning — preview calls this",
     section: 'setup',
     hidden: true,
   },

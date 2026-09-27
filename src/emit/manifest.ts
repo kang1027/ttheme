@@ -10,6 +10,7 @@ export interface PaletteEntry {
   group: string
   catalog?: string
   native?: string
+  nativeNames?: string[]
   lead?: boolean
   order: number
   ansiSource: string
@@ -54,6 +55,7 @@ export function paletteEntry(t: Theme): PaletteEntry {
     ...(t.base ? { base: t.base } : {}),
     group: t.group,
     ...(t.native ? { native: t.native } : {}),
+    ...(t.nativeNames ? { nativeNames: t.nativeNames } : {}),
     ...(t.lead ? { lead: true } : {}),
     order: t.order,
     ansiSource: t.ansiSource,
@@ -80,6 +82,7 @@ export function toTheme(entry: PaletteEntry): Theme {
     ...(entry.base ? { base: entry.base } : {}),
     group: entry.group,
     ...(entry.native ? { native: entry.native } : {}),
+    ...(entry.nativeNames ? { nativeNames: entry.nativeNames } : {}),
     lead: entry.lead === true,
     order: entry.order,
     ...(entry.default ? { role: 'default' as const } : {}),

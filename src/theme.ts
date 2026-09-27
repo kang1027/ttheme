@@ -40,6 +40,7 @@ export interface Theme {
   base?: string
   group: string
   native?: string
+  nativeNames?: string[]
   lead: boolean
   order: number
   role?: 'default'
@@ -309,6 +310,19 @@ function readGroups(dir: string): Group[] {
   })
 }
 
+function readNativeNames(file: string, raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    fail(file, 'meta.native_names must be a list of names, like ["後藤ひとり"]')
+  }
+  return raw.map((name, i) => {
+    const said = text(file, `meta.native_names[${i}]`, name)
+    if (said.includes('|')) {
+      fail(file, `meta.native_names[${i}] ${JSON.stringify(said)} contains |`)
+    }
+    return said
+  })
+}
+
 export function readTheme(file: string, source: string, place: Place): Theme {
   const doc = toml(file, source)
   const meta = table(doc.meta)
@@ -369,6 +383,7 @@ export function readTheme(file: string, source: string, place: Place): Theme {
     fail(file, `meta.booru must be a single booru tag, got ${JSON.stringify(booru)}`)
   }
   const booruSites = readBooruSites(file, meta.booru_sites, booru)
+  const nativeNames = meta.native_names === undefined ? undefined : readNativeNames(file, meta.native_names)
   const waive = Array.isArray(contrastRules.waive) ? contrastRules.waive.map(String) : []
   if (waive.length > 0 && typeof contrastRules.reason !== 'string') {
     fail(file, 'contrast.waive needs a contrast.reason explaining why')
@@ -380,6 +395,7 @@ export function readTheme(file: string, source: string, place: Place): Theme {
     ...(base ? { base } : {}),
     group: groupName,
     native: group?.native,
+    ...(nativeNames ? { nativeNames } : {}),
     lead: !shared && group?.lead === name,
     order: shared ? (from?.order ?? SHARED_ORDER) : Number(meta.order),
     role,

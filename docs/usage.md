@@ -52,8 +52,14 @@ current palette;
 `↑`/`↓` move (the tab repaints as the focus lands on a palette) and wrap
 around at either end, `←`/`→` fold and unfold (so do enter and space on a
 series), page up/down jump a screen (from the last row to the first, and back)
-and home/end to either end, typing filters by substring and underlines the match (ctrl-u clears it),
-enter applies, and esc steps back — first out of the filter, then out of the
+and home/end to either end, typing filters and underlines the match (ctrl-u clears it) —
+any text, Japanese included, against the palette, series and catalog names, each
+series' Japanese title and the character's names in Japanese and as its booru tag
+spells them, ignoring case and punctuation, so `ひとり` or `hitori` finds `bocchi`
+and `らきすた` finds Lucky☆Star; a row that matched on one of those other names
+shows it dimmed beside its own, and a Japanese input method composes in the
+search field itself.
+Enter applies, and esc steps back — first out of the filter, then out of the
 preview with the original colors restored. Each palette row carries its 16
 colors, normal over bright. The last line lists only the keys that work right
 there, names the mode when it is not plain browsing (`FILTER`, `TUNE`, `CONFIG`,
@@ -61,9 +67,10 @@ there, names the mode when it is not plain browsing (`FILTER`, `TUNE`, `CONFIG`,
 alt-c opens the [settings](#settings) in place — `↑`/`↓` pick one, `←`/`→` change it
 (the sort and the search hint animation change live), enter writes the changed
 lines to `config.zsh`, esc puts every value back. From 76
-columns on, a sample session sits against the right edge of the window — the
-16 colors, a prompt, git and test output, a selection — in the palette under
-the cursor. The list and the sample widen with the window (the sample up to 64
+columns on, a sample sits against the right edge of the window in the palette
+under the cursor — the 16 colors over one of five scenes, a shell session, code,
+a diff, logs and a process monitor, named in a strip above it; ⇧←→ switch
+scenes, and find's try-on opens on the one preview showed. The list and the sample widen with the window (the sample up to 64
 columns) and the gap between them takes the rest; the tuning panel takes the
 sample's place while open, and so does the key list once the sample is 48
 columns wide.

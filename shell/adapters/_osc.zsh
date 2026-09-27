@@ -71,9 +71,17 @@ __tt_pv_bg_find() { return 1 }
 
 __tt_pv_bg_images() { REPLY=1 }
 
-__tt_pv_bg_image() { : }
+__tt_pv_tune_open() { : }
+
+__tt_pv_bg_pick() { : }
+
+__tt_pv_bg_drop() { : }
 
 __tt_pv_bg_panel() { : }
+
+__tt_pv_bg_strip() { : }
+
+__tt_pv_bg_strip_off() { : }
 
 __tt_pv_bg_close() { : }
 

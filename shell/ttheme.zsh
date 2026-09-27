@@ -679,16 +679,45 @@ __tt_rotate() {
   __tt_announce
 }
 
+__tt_pv_norm() { REPLY=${(L)1//[^[:alnum:]]/} }
+
+__tt_pv_seek() {
+  local t part key REPLY
+  for t in ${(k)TTHEME_PALETTE}; do
+    key=""
+    for part in "$t" "${TTHEME_GROUP[$t]:-Other}" "${TTHEME_NATIVE[$t]}" "${TTHEME_CATALOG[$t]}" "${(@s:|:)TTHEME_NATIVE_NAMES[$t]}" "${TTHEME_CHARACTER[$t]}"; do
+      [[ -n $part ]] || continue
+      __tt_pv_norm "$part"
+      key+="|$REPLY"
+    done
+    pvseek[$t]=$key
+  done
+}
+
+__tt_pv_alias() {
+  REPLY=""
+  [[ -n $nflt && -n $2 ]] || return 0
+  local main
+  __tt_pv_norm "$1"
+  main=$REPLY
+  __tt_pv_norm "$2"
+  [[ $main != *$nflt* && $REPLY == *$nflt* ]] && REPLY=$2 || REPLY=""
+  return 0
+}
+
 __tt_pv_rows() {
   rtype=() rval=() rcnt=()
-  local g t c gm ruled=""
+  local g t c ruled="" nflt="" REPLY
   local -a ts cs loose inside
+  if [[ -n $flt ]]; then
+    (( ${#pvseek} )) || __tt_pv_seek
+    __tt_pv_norm "$flt"
+    nflt=$REPLY
+  fi
   for g in $groups; do
     ts=()
-    gm=""
-    [[ -n $flt && ${(L)g} == *$flt* ]] && gm=1
     for t in ${=gthemes[$g]}; do
-      [[ -z $flt || -n $gm || $t == *$flt* || ${(L)TTHEME_CATALOG[$t]} == *$flt* ]] && ts+=($t)
+      [[ -z $flt || ${pvseek[$t]} == *$nflt* ]] && ts+=($t)
     done
     [[ -n $flt ]] && (( ! ${#ts} )) && continue
     if [[ $g == *@* && -z $ruled ]]; then
@@ -753,9 +782,16 @@ __tt_pv_goto() {
   cur=1
 }
 
+__tt_pv_shows() {
+  REPLY=${bgview[$1]:-$1}
+  [[ -n $tune && $1 == "$tune" ]] && REPLY=$tpick
+  return 0
+}
+
 __tt_pv_focus() {
   [[ ${rtype[cur]} == thm ]] || return 0
-  (( resized )) || [[ ${rval[cur]} == "$bgname" ]] || __tt_pv_bg_show "${rval[cur]}"
+  __tt_pv_shows ${rval[cur]}
+  (( resized )) || [[ $REPLY == "$bgname" ]] || __tt_pv_bg_show "$REPLY"
   local spec=${TTHEME_PALETTE[${rval[cur]}]}
   [[ $spec == "$applied" ]] && return 0
   __tt_pv_paint "$spec"
@@ -854,8 +890,20 @@ __tt_pv_hl() {
   REPLY=${t[1,${#pre}]}$'\e[1;4m'$ac${t[${#pre}+1,${#pre}+${#flt}]}$'\e[22;24;39m'$2${t[${#pre}+${#flt}+1,-1]}
 }
 
+__tt_pv_fit() {
+  local extra=$1
+  REPLY=""
+  [[ -n $extra ]] || return 0
+  while [[ -n $extra ]] && (( ${(m)#extra} + 3 > w )); do
+    extra=${extra[1,-2]}
+  done
+  [[ -n $extra ]] || return 0
+  (( w -= ${(m)#extra} + 2 ))
+  REPLY="  "$d$extra$r
+}
+
 __tt_pv_row() {
-  local t=${rval[$1]} b=$'\e[1m' d=$'\e[2m' r=$'\e[22;24;39m' z=$'\e[0m' on="" gut="  " base="" lead=$'\e[2m' mark=" " name arrow=▸ ind="   "
+  local t=${rval[$1]} b=$'\e[1m' d=$'\e[2m' r=$'\e[22;24;39m' z=$'\e[0m' on="" gut="  " base="" lead=$'\e[2m' mark=" " name arrow=▸ ind="   " hl extra part
   local -i w
   (( color )) || b= d= r= z= lead=
   if (( $1 == cur )); then
@@ -878,9 +926,13 @@ __tt_pv_row() {
       lead=""
     fi
     __tt_pv_hl "$name" "$base"
+    hl=$REPLY
     w=$(( lw - 6 - ${(m)#name} - ${#rcnt[$1]} ))
+    __tt_pv_alias "$t" "${TTHEME_NATIVE[${${=gthemes[$t]}[1]}]}"
+    __tt_pv_fit "$REPLY"
+    extra=$REPLY
     (( w < 1 )) && w=1
-    REPLY=$gut$on" "$lead$arrow$r" "$base$REPLY$r${(l:w:: :)}$d${rcnt[$1]}$r" "$z
+    REPLY=$gut$on" "$lead$arrow$r" "$base$hl$r$extra${(l:w:: :)}$d${rcnt[$1]}$r" "$z
     return 0
   fi
   if [[ ${rtype[$1]} == cat ]]; then
@@ -907,13 +959,20 @@ __tt_pv_row() {
   name=${t##*/}
   [[ -n ${TTHEME_CATALOG[$t]} && ${TTHEME_GROUP[$t]} == *@* ]] && ind="     "
   __tt_pv_hl "$name" "$base"
+  hl=$REPLY
+  extra=""
+  for part in "${(@s:|:)TTHEME_NATIVE_NAMES[$t]}" "${TTHEME_CHARACTER[$t]}"; do
+    __tt_pv_alias "$name" "$part"
+    [[ -n $REPLY ]] && { extra=$REPLY; break }
+  done
   if (( color )); then
     [[ -n ${tstrip[$t]} ]] || __tt_pv_strip $t
     w=$(( lw - 16 - ${#ind} - ${#name} ))
+    __tt_pv_fit "$extra"
     (( w < 1 )) && w=1
-    REPLY=$gut$on"$ind$mark $base$REPLY$r${(l:w:: :)}${tstrip[$t]} "$z
+    REPLY=$gut$on"$ind$mark $base$hl$r$REPLY${(l:w:: :)}${tstrip[$t]} "$z
   else
-    REPLY="$gut$ind$mark $REPLY"
+    REPLY="$gut$ind$mark $hl${extra:+  $extra}"
   fi
 }
 
@@ -958,14 +1017,14 @@ __tt_pv_foot() {
     kk=(enter) kl=(confirm)
     right=$b"esc"$z$d" back"$z
   elif [[ -n $tune ]]; then
-    badge=TUNE kk=(↑↓ ←→) kl=(field step)
+    badge=TUNE kk=(↑↓ ←→ '=' +) kl=(field step reset "reset all")
     if (( tf == 2 )); then
       kl[2]=move kk+=(1-9) kl+=(place)
     else
       kk+=(⇧←→) kl+=(×10)
     fi
-    kk+=(space '=' enter)
-    if (( bgoff[$tune] )); then kl+=(show default keep); else kl+=(hide default keep); fi
+    kk+=(space enter)
+    if (( bgoff[$tpick] )); then kl+=(show keep); else kl+=(hide keep); fi
     __tt_pv_bg_images $tune
     (( REPLY > 1 )) && { kk+=(', .' D); kl+=("image ×$REPLY" remove) }
     __tt_pv_bg_findable $tune && { kk+=(f); kl+=(find) }
@@ -991,6 +1050,7 @@ __tt_pv_foot() {
       elif __tt_pv_bg_findable ${rval[cur]}; then
         kk+=(tab) kl+=("find bg")
       fi
+      (( split )) && { kk+=(⇧←→); kl+=(example) }
       [[ -n $flt ]] && { kk+=(bksp); kl+=(edit) }
     fi
     kk+=('?') kl+=(keys)
@@ -1050,15 +1110,17 @@ __tt_pv_foot() {
 __tt_pv_help() {
   local back="the tab" z=$'\e[0m' b=$'\e[1m' blank
   [[ -n ${TTHEME_PALETTE[$cn]} ]] && back=$cn
-  local -a hk=(Move Series Filter Apply) hv=(
+  local -a hk=(Move Series Filter "" Example Apply) hv=(
     "↑↓  home  end  pgup  pgdn"
     "←→  ·  enter or space on a series"
-    "a-z 0-9 -  ·  bksp  ·  ctrl-u clears"
+    "Any text  ·  bksp  ·  ctrl-u clears"
+    "Names and titles, in Japanese too"
+    "⇧←→  ${(Lj:, :)TTHEME_SCENES}"
     "enter  ·  esc restores $back"
   )
   if (( bgcw )); then
-    hk+=("Tune bg" "" "" "" "")
-    hv+=("tab  ·  finds one on the boorus, or takes your own, if none" "↑↓ field  ←→ step  ⇧←→ ×10  1-9 place" "space hides  ·  = default  ·  f adds one from the boorus or your own" "enter keeps  ·  esc undoes" ",  .  other saved images  ·  D removes this one")
+    hk+=("Tune bg" "" "" "" "" "")
+    hv+=("tab  ·  finds one on the boorus, or takes your own, if none" "↑↓ field  ←→ step  ⇧←→ ×10  1-9 place" "=  resets a field  ·  +  resets all" "space hides  ·  enter keeps  ·  esc undoes" ",  .  other pictures  ·  D removes one" "f  adds one from the boorus or your own")
   fi
   hk+=(Config "")
   hv+=("alt-c  ·  ↑↓ setting  ←→ value" "enter saves  ·  esc undoes")
@@ -1090,45 +1152,82 @@ __tt_pv_help() {
 }
 
 __tt_pv_specimen() {
-  local -a sp=(${=applied}) ln=() fg=()
+  local -a sp=(${=applied}) lines parts
   (( ${#sp} >= 20 )) || return 0
-  local z=$'\e[0m' d=$'\e[2m' sel cu cell line="" lo hi pr bd
-  local -i i r cw=4
-  if [[ $applied == "$painted" ]]; then
-    fg=($'\e[31m' $'\e[32m' $'\e[33m' $'\e[34m' $'\e[35m') bd=$'\e[1;34m'
-  else
-    for i in 6 7 8 9 10 17; do
-      lo=${sp[i]#\#}
-      printf -v cell '\e[38;2;%d;%d;%dm' $((16#${lo:0:2})) $((16#${lo:2:2})) $((16#${lo:4:2}))
-      fg+=($cell)
-    done
-    bd=$'\e[1m'$fg[6]
+  local z=$'\e[0m' d=$'\e[2m' cell hex fore line text piece role tabs="" built="" key="$applied|$painted|$scene|$sw|$sc|$ph"
+  local -A rs=(p "" d $'\e[2m' b $'\e[1m')
+  local -i i r=6 cw=4 k n=${#TTHEME_SCENES} at
+  (( n )) || return 0
+  if [[ $key == "$pvscene" ]]; then
+    out+=$pvscenes
+    return 0
   fi
-  pr=$fg[2]'❯'$z' '
+  at=$(( (scene % n + n) % n + 1 ))
+  if [[ $applied == "$painted" ]]; then
+    for (( i = 0; i < 16; i++ )); do
+      k=$(( i < 8 ? 30 + i : 82 + i ))
+      rs[$i]=$'\e['$k'm' rs[B$i]=$'\e[1;'$k'm' rs[K$i]=$'\e[30;'$(( k + 10 ))'m'
+    done
+  else
+    fore=${sp[5]#\#}
+    for (( i = 0; i < 16; i++ )); do
+      hex=${sp[i+5]#\#}
+      printf -v cell '\e[38;2;%d;%d;%dm' $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
+      rs[$i]=$cell
+      printf -v cell '\e[38;2;%d;%d;%d;48;2;%d;%d;%dm' $((16#${fore:0:2})) $((16#${fore:2:2})) $((16#${fore:4:2})) \
+        $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
+      rs[K$i]=$cell
+      hex=${sp[(i < 8 ? i + 13 : i + 5)]#\#}
+      printf -v cell '\e[1;38;2;%d;%d;%dm' $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
+      rs[B$i]=$cell
+    done
+  fi
+  printf -v cell '\e[48;2;%d;%d;%dm' $((16#${sp[4]:1:2})) $((16#${sp[4]:3:2})) $((16#${sp[4]:5:2}))
+  rs[s]=$cell
+  printf -v cell '\e[48;2;%d;%d;%dm' $((16#${sp[3]:1:2})) $((16#${sp[3]:3:2})) $((16#${sp[3]:5:2}))
+  rs[c]=$cell
+  if (( ${#${(j:  :)TTHEME_SCENES}} <= sw )); then
+    for (( k = 1; k <= n; k++ )); do
+      (( k > 1 )) && tabs+="  "
+      if (( k == at )); then
+        tabs+=$'\e[1m'$ac$TTHEME_SCENES[k]$z
+      else
+        tabs+=$d$TTHEME_SCENES[k]$z
+      fi
+    done
+  else
+    tabs=$'\e[1m'$ac$TTHEME_SCENES[at]$z"  "$d"$at/$n"$z
+  fi
+  built+=$'\e[2;'$sc'H'$tabs
   (( sw < 44 )) && cw=3
   (( sw >= 56 )) && cw=$(( (sw + 1) / 8 - 1 ))
   (( cw > 7 )) && cw=7
-  printf -v sel '\e[48;2;%d;%d;%dm' $((16#${sp[4]:1:2})) $((16#${sp[4]:3:2})) $((16#${sp[4]:5:2}))
-  printf -v cu '\e[48;2;%d;%d;%dm' $((16#${sp[3]:1:2})) $((16#${sp[3]:3:2})) $((16#${sp[3]:5:2}))
+  line=""
   for (( i = 0; i < 8; i++ )); do
-    lo=${sp[i+5]#\#} hi=${sp[i+13]#\#}
+    fore=${sp[i+5]#\#} hex=${sp[i+13]#\#}
     printf -v cell '\e[38;2;%d;%d;%d;48;2;%d;%d;%dm%s\e[0m ' \
-      $((16#${lo:0:2})) $((16#${lo:2:2})) $((16#${lo:4:2})) \
-      $((16#${hi:0:2})) $((16#${hi:2:2})) $((16#${hi:4:2})) "${(l:cw::▀:)}"
+      $((16#${fore:0:2})) $((16#${fore:2:2})) $((16#${fore:4:2})) \
+      $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2})) "${(l:cw::▀:)}"
     line+=$cell
   done
-  out+=$'\e[4;'$sc'H'$line
-  ln=($bd'~/code/demo'$z$d' on '$z$fg[5]'main'$fg[2]' +2'$fg[3]' ~1'$z "${pr}git status -sb")
-  (( sw >= 44 )) && ln+=('## '$fg[2]'main'$z'...'$fg[1]'origin/main'$fg[3]' [ahead 1]'$z)
-  ln+=($fg[1]' M'$z' src/main.rs' $fg[1]'??'$z' notes.md' "")
-  (( sw >= 44 )) && ln+=("${pr}ls" $bd'docs'$z'  '$bd'src'$z'  '$bd'tests'$z'  Cargo.toml  README.md' "")
-  ln+=("${pr}cargo test" $fg[2]' ✓'$z' parses config' $fg[1]' ✗'$z' renders frame')
-  (( sw >= 44 )) && ln[-1]+=$d'  expected '$z$fg[2]'3'$z$d', received '$z$fg[1]'2'$z
-  ln+=("" "${pr}echo ${sel}selected text${z} ${cu} ${z}")
-  for (( r = 1; r <= ${#ln}; r++ )); do
-    (( r + 5 < ph )) || break
-    out+=$'\e['$(( r + 5 ))';'$sc'H'${ln[r]}
+  built+=$'\e[4;'$sc'H'$line
+  lines=("${(@P)${:-TTHEME_SCENE_$at}}")
+  for line in "${lines[@]}"; do
+    [[ $line == «w»* ]] && (( sw < 44 )) && continue
+    [[ $line == «n»* ]] && (( sw >= 44 )) && continue
+    (( r < ph )) || break
+    parts=("${(@s:«:)line}")
+    text=$parts[1]
+    for piece in "${(@)parts[2,-1]}"; do
+      role=${piece%%»*}
+      [[ $role == [wn] ]] && role=p
+      text+=$z${rs[${role:-p}]}${piece#*»}
+    done
+    built+=$'\e['$r';'$sc'H'$text$z
+    (( ++r ))
   done
+  pvscene=$key pvscenes=$built
+  out+=$built
 }
 
 __tt_pv_tune() {
@@ -1149,32 +1248,54 @@ __tt_pv_tune() {
       __tt_pv_bg_adjust at $key
       ;;
     ' ') __tt_pv_bg_adjust on ;;
-    '=') __tt_pv_bg_adjust def ;;
-    ',') __tt_pv_bg_image prev ;;
-    '.') __tt_pv_bg_image next ;;
-    D) __tt_pv_bg_image drop ;;
+    '=') __tt_pv_bg_adjust def $tf ;;
+    '+') __tt_pv_bg_adjust def ;;
+    ',') __tt_pv_bg_pick -1 ;;
+    '.') __tt_pv_bg_pick 1 ;;
+    D) __tt_pv_bg_drop ;;
     f)
       __tt_pv_bg_findable $tune || return 0
       name=$tune
       __tt_pv_untune
       __tt_pv_bg_find $name
-      tune=$name tf=1 tsnap="${bgsize[$name]} ${bgpos[$name]} ${bgop[$name]} ${bgoff[$name]}"
+      __tt_pv_tune_open $name
       ;;
-    $'\r'|$'\n')
-      if [[ "${bgsize[$tune]} ${bgpos[$tune]} ${bgop[$tune]} ${bgoff[$tune]}" != "$tsnap" ]]; then
-        bgedit[$tune]=1 msg="Kept · saved when preview closes" msgt=200
-      fi
-      tune=""
-      ;;
+    $'\r'|$'\n') __tt_pv_tune_keep ;;
     esc) __tt_pv_untune ;;
     '?') help=1 ;;
   esac
   return 0
 }
 
+__tt_pv_tune_keep() {
+  local img was=${bgview[$tune]:-$tune}
+  local -i changed=0
+  for img in ${(k)tsnaps}; do
+    [[ "${bgsize[$img]} ${bgpos[$img]} ${bgop[$img]} ${bgoff[$img]}" == "${tsnaps[$img]}" ]] && continue
+    bgedit[$img]=1 changed=1
+  done
+  if [[ $tpick != "$was" ]]; then
+    changed=1
+    if [[ $tpick == "$tune" ]]; then
+      unset "bgview[$tune]" "bgswap[$tune]"
+    else
+      bgview[$tune]=$tpick bgswap[$tune]=${tpick##*:}
+    fi
+  fi
+  (( changed )) && msg="Kept · saved when preview closes" msgt=200
+  __tt_pv_bg_strip_off
+  tune="" tpick="" tsnaps=() bgname=""
+}
+
 __tt_pv_untune() {
-  local -a s=(${=tsnap})
-  bgsize[$tune]=$s[1] bgpos[$tune]=$s[2] bgop[$tune]=$s[3] bgoff[$tune]=$s[4] bgname="" tune=""
+  local img
+  local -a s
+  for img in ${(k)tsnaps}; do
+    s=(${=tsnaps[$img]})
+    bgsize[$img]=$s[1] bgpos[$img]=$s[2] bgop[$img]=$s[3] bgoff[$img]=$s[4]
+  done
+  __tt_pv_bg_strip_off
+  tune="" tpick="" tsnaps=() bgname=""
 }
 
 __tt_pv_regroup() {
@@ -1318,18 +1439,33 @@ __tt_pv_conf_panel() {
 }
 
 __tt_pv_flush() {
+  local REPLY
   print -rn -- "$out"
   if (( wiped )); then
     local bn=$bgname
-    [[ ${rtype[cur]} == thm ]] && bn=${rval[cur]}
+    if [[ ${rtype[cur]} == thm ]]; then
+      __tt_pv_shows ${rval[cur]}
+      bn=$REPLY
+    fi
     [[ -n $bn ]] && __tt_pv_bg_show "$bn" 1
   fi
-  printf '\e[?2026l'
+  if [[ -n $bgstrip ]]; then
+    __tt_pv_bg_strip ${=bgstrip}
+  elif (( ${#bgthumb} )); then
+    __tt_pv_bg_strip_off
+  fi
+  printf '\e[1;%dH\e[?2026l' $(( 4 + ${(m)#flt} ))
 }
 
 __tt_pv_draw() {
-  local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" REPLY
+  local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" nflt="" REPLY
   local -i lw sw split sc se=$(( pw - 2 )) h k i N=${#rval} mt=${#TTHEME_ORDER} wiped=0
+  local -a pk
+  bgstrip=""
+  if [[ -n $flt ]]; then
+    __tt_pv_norm "$flt"
+    nflt=$REPLY
+  fi
   __tt_pv_lw
   lw=$reply[1] sw=$reply[2]
   split=$(( sw > 0 )) sc=$(( pw - 1 - sw ))
@@ -1407,7 +1543,7 @@ __tt_pv_draw() {
   [[ -n $flt ]] && tail=$'\e['$(( lw - ${#cnt} ))'G'$cnt
   if [[ $1 == hint ]] && (( ! wiped )); then
     print -rn -- $'\e[H\e[0m\e['$lw'X'$line$tail
-    printf '\e[?2026l'
+    printf '\e[1;%dH\e[?2026l' $(( 4 + ${(m)#flt} ))
     return 0
   fi
   out+=$line$'\e[K'$tail$'\n\e[K\n'
@@ -1434,12 +1570,12 @@ __tt_pv_draw() {
       __tt_pv_head 1 $sc $se Keys
       __tt_pv_help
     elif [[ -n $tune ]]; then
-      (( bgoff[$tune] )) && state=off
+      (( bgoff[$tpick] )) && state=off
       src=Background
-      [[ -n ${bgfrom[$tune]} ]] && src+=" · ${bgfrom[$tune]}"
+      [[ -n ${bgfrom[$tpick]} ]] && src+=" · ${bgfrom[$tpick]}"
       (( ${#tune} + ${#src} + 6 > sw )) && src=Background
       __tt_pv_head 1 $sc $se $tune "$src" $state
-      __tt_pv_bg_panel $tune 4 $sc $se
+      __tt_pv_bg_panel $tpick 4 $sc $se
     elif (( conf )); then
       __tt_tilde "$TTHEME_CONFIG"
       src=$REPLY
@@ -1455,12 +1591,18 @@ __tt_pv_draw() {
     (( help && sw < 48 )) && __tt_pv_help
   else
     if [[ -n $tune ]]; then
-      (( bgoff[$tune] )) && state=off
+      (( bgoff[$tpick] )) && state=off
       src=Background
-      [[ -n ${bgfrom[$tune]} ]] && src+=" · ${bgfrom[$tune]}"
+      [[ -n ${bgfrom[$tpick]} ]] && src+=" · ${bgfrom[$tpick]}"
+      pk=(${=bgpics[$tune]})
+      if (( ${#pk} > 1 )); then
+        k=${pk[(Ie)${${tpick#$tune}#:}]}
+        (( k )) || k=${pk[(Ie)${bgact[$tune]}]}
+        src+=" · $k/${#pk}"
+      fi
       (( ${#tune} + ${#src} + 6 > lw )) && src=Background
       __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$src" $state
-      __tt_pv_bg_panel $tune $(( ph - 8 )) 1 $lw
+      __tt_pv_bg_panel $tpick $(( ph - 8 )) 1 $lw
     elif (( conf )); then
       __tt_pv_head $(( ph - 7 )) 1 $lw Config
       __tt_pv_conf_panel $(( ph - 6 )) 1 $lw
@@ -1706,7 +1848,7 @@ __tt_pv_handle() {
       [[ ${rtype[cur]} == thm ]] || return 0
       name=${rval[cur]}
       if __tt_pv_bg_state $name || { __tt_pv_bg_findable $name && __tt_pv_bg_find $name }; then
-        tune=$name tf=1 tsnap="${bgsize[$name]} ${bgpos[$name]} ${bgop[$name]} ${bgoff[$name]}"
+        __tt_pv_tune_open $name
       elif __tt_pv_bg_findable $name; then
         :
       elif (( bgcw )); then
@@ -1720,6 +1862,8 @@ __tt_pv_handle() {
       done
       ;;
     '?') help=1 ;;
+    sleft) (( --scene )) ;;
+    sright) (( ++scene )) ;;
     $'\x7f'|$'\x08')
       if [[ -n $flt ]]; then
         name=""
@@ -1729,9 +1873,9 @@ __tt_pv_handle() {
         __tt_pv_first "$name"
       fi
       ;;
-    [a-zA-Z0-9-])
+    [[:print:]])
       __tt_pv_lw
-      (( ${#flt} >= reply[1] - 12 )) && return 0
+      (( ${(m)#flt} + ${(m)#key} > reply[1] - 12 )) && return 0
       name=""
       [[ ${rtype[cur]} == thm ]] && name=${rval[cur]}
       flt+=${(L)key}
@@ -1751,9 +1895,11 @@ __tt_preview() {
   fi
   local orig=$TTHEME_SPEC applied=$TTHEME_SPEC painted=$TTHEME_SPEC flt="" sel="" cn="" cdot="" key="" REPLY="" cur=1 top=1 color=0 pw=80 ph=24 resized=1 expal="" exgrp="" exnext=0 gstep=0 gseed=0 tick=0
   local pick="" pk=1 pkdef=1 picked=0 canpick=0 bgcw=0 bgch=0 bgname="" bgshown="" bginc="" osd="" osdt=0
-  local tune="" tsnap="" tf=1 help=0 msg="" msgt=0 an="" bgrel=0 bgmx=0 bgmy=0 bganchor=0 bgcut="" bgnext=0 bgbytes=0
+  local tune="" tpick="" tf=1 help=0 msg="" msgt=0 an="" bgrel=0 bgmx=0 bgmy=0 bganchor=0 bgcut="" bgnext=0 bgbytes=0 bgstrip="" pvscene="" pvscenes=""
+  local -i scene=0
   local -a bgorder=()
   local -A bgfrom=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
+  local -A bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() pvseek=()
   local conf=0 cf=1
   local -a plabel=(" This tab " " Default ") csnap=()
   local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR) clabel=("New tabs" Announce "Search fx" Sort Blur)
@@ -1837,7 +1983,7 @@ __tt_preview() {
         __tt_shown "$sel" force && __tt_reload
       fi
     else
-      (( ${#bgedit} )) && [[ -n ${TTHEME_PALETTE[$cn]} ]] && { __tt_shown "$cn" && __tt_reload }
+      (( ${#bgedit} + ${#bgswap} )) && [[ -n ${TTHEME_PALETTE[$cn]} ]] && { __tt_shown "$cn" && __tt_reload }
     fi
   }
   return 0

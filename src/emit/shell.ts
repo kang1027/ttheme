@@ -1,14 +1,21 @@
 import pkg from '../../package.json' with { type: 'json' }
+import { SCENES } from '../scenes.ts'
 import { alphabetical } from '../theme.ts'
 import { helpText, VERB_SPECS } from '../verbs.ts'
 import { configTemplate, SETTING_NAMES } from '../wiring.ts'
 import type { Emitter, Output } from './index.ts'
 import { listed, type PaletteEntry, paletteEntry, swatch } from './manifest.ts'
 
+const UNQUOTABLE = /["$`\\]/
+
+function spoken(tag: string): string {
+  return tag.replace(/_\([^)]*\)$/, '').replaceAll('_', ' ')
+}
+
 export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminals: readonly string[] = []): string {
   for (const p of palettes) {
-    for (const field of [p.name, p.group, p.native ?? '', p.ansiSource]) {
-      if (/["$`\\]/.test(field)) {
+    for (const field of [p.name, p.group, p.native ?? '', ...(p.nativeNames ?? []), p.ansiSource]) {
+      if (UNQUOTABLE.test(field)) {
         throw new Error(`${p.name}: "${field}" contains a character that breaks zsh quoting`)
       }
     }
@@ -77,6 +84,22 @@ export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminal
     'typeset -gA TTHEME_NATIVE=(',
     ...palettes.filter((p) => p.native).map((p) => entry(p, p.native ?? '')),
     ')',
+    '',
+    "# the character's names in its original language, |-separated, and as its booru tag spells it: preview searches both",
+    'typeset -gA TTHEME_NATIVE_NAMES=(',
+    ...palettes.filter((p) => p.nativeNames).map((p) => entry(p, (p.nativeNames ?? []).join('|'))),
+    ')',
+    'typeset -gA TTHEME_CHARACTER=(',
+    ...palettes.filter((p) => p.booru && !UNQUOTABLE.test(p.booru)).map((p) => entry(p, spoken(p.booru ?? ''))),
+    ')',
+    '',
+    '# the example scenes preview draws beside the list (src/scenes.ts), each line as «role»text runs',
+    `typeset -ga TTHEME_SCENES=(${SCENES.map((scene) => scene.name).join(' ')})`,
+    ...SCENES.flatMap((scene, i) => [
+      `typeset -ga TTHEME_SCENE_${i + 1}=(`,
+      ...scene.lines.map((line) => `  ${quote(line)}`),
+      ')',
+    ]),
     '',
     '# the six colors a list row shows: foreground, the signature, then red and green',
     'typeset -gA TTHEME_SWATCH=(',

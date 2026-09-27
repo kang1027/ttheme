@@ -47,7 +47,7 @@ const RUNS: Record<string, Verb['run']> = {
   uninstall: (_, { yes }) => runUninstall(yes),
   build: (_, { only }) => build({ only }),
   find: ([name]) => runFind(name as string),
-  image: ([name, action]) => runImage(name as string, action as string),
+  image: ([name, action, key]) => runImage(name as string, action as string, key),
   redraw: () => runRedraw(),
 }
 

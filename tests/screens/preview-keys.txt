@@ -2,19 +2,19 @@
 
 
 ▌  ▸ Bocchi the Rock!                         1
-   ▸ Lucky☆Star                               1
-                     ╭─ Keys ─────────────────────────────────────────────────╮
+   ▸ Lucky☆Star      ╭─ Keys ─────────────────────────────────────────────────╮
                      │                                                        │
                      │  Move      ↑↓  home  end  pgup  pgdn                   │
                      │  Series    ←→  ·  enter or space on a series           │
-                     │  Filter    a-z 0-9 -  ·  bksp  ·  ctrl-u clears        │
+                     │  Filter    Any text  ·  bksp  ·  ctrl-u clears         │
+                     │            Names and titles, in Japanese too           │
+                     │  Example   ⇧←→  shell, code, diff, logs, monitor       │
                      │  Apply     enter  ·  esc restores the tab              │
                      │  Config    alt-c  ·  ↑↓ setting  ←→ value              │
                      │            enter saves  ·  esc undoes                  │
                      │  Close     ?  esc                                      │
                      │                                                        │
                      ╰────────────────────────────────────────────────────────╯
-
 
 
 

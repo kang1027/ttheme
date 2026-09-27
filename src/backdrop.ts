@@ -231,7 +231,13 @@ function place(source: Mask | Plane, frame: Frame, width: number, height: number
   return { width, height, data }
 }
 
-function inked(image: Rgba): { box: Box; clear: number; ink: Mask } {
+export interface Inked {
+  box: Box
+  clear: number
+  ink: Mask
+}
+
+export function inked(image: Rgba): Inked {
   const box = figureBox(image)
   return { box, clear: transparency(image, box), ink: inkOf(image, liftOf(image, box)) }
 }
@@ -270,10 +276,51 @@ function shade(mask: Mask, background: Hex, tone: Hex, opacity: number): Rgba {
   return { width: mask.width, height: mask.height, data }
 }
 
-export function tryOn(image: Rgba, colors: Colors, tone: Hue, width: number, height: number, blurring: number): Rgba {
-  const { box, clear, ink } = inked(image)
-  const fill = place(ink, fillFrame(box, width, height, clear), width, height)
-  return shade(quantize(blur(fill, blurring)), colors.background, tone.color, tone.opacity)
+export interface Framing {
+  size: 'fill' | number
+  at: number
+  opacity: number
+}
+
+export function tryOn(
+  held: Inked,
+  colors: Colors,
+  tone: Hue,
+  width: number,
+  height: number,
+  blurring: number,
+  framing?: Framing,
+): { image: Rgba; fill: number } {
+  const { box, clear, ink } = held
+  const frame = fillFrame(box, width, height, clear)
+  const fill = Math.round((100 * frame.at.w) / frame.crop.w / Math.min(width / box.w, height / box.h))
+  const size = framing?.size ?? 'fill'
+  const placed =
+    size === 'fill'
+      ? frame
+      : {
+          crop: box,
+          at: frameAt(
+            box.w,
+            box.h,
+            width,
+            height,
+            size,
+            framing?.at ?? 5,
+            false,
+            size > 100 ? Math.round(frame.focus * 100) : -1,
+          ),
+          focus: frame.focus,
+        }
+  return {
+    image: shade(
+      quantize(blur(place(ink, placed, width, height), blurring)),
+      colors.background,
+      tone.color,
+      framing?.opacity ?? tone.opacity,
+    ),
+    fill,
+  }
 }
 
 export function backgroundsDir(configHome: string): string {
@@ -341,6 +388,9 @@ function confText(dir: string, rack: Rack): string {
   return [
     ...(picture.from ? [`# from ${picture.from}`] : []),
     `# image ${picture.key} ${at + 1}/${rack.pictures.length}`,
+    ...rack.pictures.map((held) =>
+      [`# picture ${held.key} ${held.stem} ${held.fill} ${held.opacity}`, ...(held.from ? [held.from] : [])].join(' '),
+    ),
     `background-image = ${join(dir, picture.fill)}`,
     'background-image-fit = cover',
     'background-image-position = top-right',
@@ -349,6 +399,17 @@ function confText(dir: string, rack: Rack): string {
     `config-file = ?${picture.stem}.off.conf`,
     '',
   ].join('\n')
+}
+
+export function freshenConfs(configHome: string): void {
+  const dir = backgroundsDir(configHome)
+  for (const [name, rack] of Object.entries(readStore(dir).palettes)) {
+    const conf = join(dir, `${fileStem(name)}.conf`)
+    const text = confText(dir, rack)
+    if (readText(conf) !== text) {
+      writeAtomic(conf, text)
+    }
+  }
 }
 
 function save(dir: string, store: Store, names: string[]): void {
@@ -497,35 +558,24 @@ export function imageKey(origin: Origin): string {
   return `${origin.site}_${origin.id}`
 }
 
-export function switchImage(configHome: string, name: string, step: 1 | -1): { key: string; at: number; of: number } {
-  const dir = backgroundsDir(configHome)
-  const store = readStore(dir)
-  const rack = store.palettes[name]
-  if (!rack || rack.pictures.length < 2) {
-    throw new Error(`${name} has no other image`)
-  }
-  const of = rack.pictures.length
-  const at = (rack.pictures.findIndex((picture) => picture.key === rack.active) + step + of) % of
-  rack.active = (rack.pictures[at] as Picture).key
-  save(dir, store, [name])
-  return { key: rack.active, at: at + 1, of }
-}
-
-export function dropImage(configHome: string, name: string): { key: string; left: number } {
+export function dropImage(configHome: string, name: string, key?: string): { key: string; left: number } {
   const dir = backgroundsDir(configHome)
   const store = readStore(dir)
   const rack = store.palettes[name]
   if (!rack) {
     throw new Error(`${name} has no image`)
   }
-  const at = rack.pictures.findIndex((picture) => picture.key === rack.active)
+  const at = rack.pictures.findIndex((picture) => picture.key === (key ?? rack.active))
+  if (at === -1) {
+    throw new Error(`${name} has no picture ${key}`)
+  }
   const [gone] = rack.pictures.splice(at, 1) as [Picture]
   discard(dir, gone)
   const next = rack.pictures[at % Math.max(rack.pictures.length, 1)]
-  if (next) {
-    rack.active = next.key
-  } else {
+  if (!next) {
     delete store.palettes[name]
+  } else if (gone.key === rack.active) {
+    rack.active = next.key
   }
   save(dir, store, [name])
   return { key: gone.key, left: rack.pictures.length }
@@ -610,14 +660,19 @@ export function installBackdrop(
   return [...written, join(dir, `${fileStem(name)}.conf`)]
 }
 
-export function showImage(configHome: string, name: string, key: string): void {
+export function showImage(configHome: string, name: string, key: string): { at: number; of: number } {
   const dir = backgroundsDir(configHome)
   const store = readStore(dir)
   const rack = store.palettes[name]
-  if (rack?.pictures.some((picture) => picture.key === key) && rack.active !== key) {
+  const at = rack ? rack.pictures.findIndex((picture) => picture.key === key) : -1
+  if (!rack || at === -1) {
+    throw new Error(`${name} has no picture ${key}`)
+  }
+  if (rack.active !== key) {
     rack.active = key
     save(dir, store, [name])
   }
+  return { at: at + 1, of: rack.pictures.length }
 }
 
 export function rackOf(configHome: string, name: string): Picture[] {
