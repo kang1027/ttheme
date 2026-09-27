@@ -11,6 +11,18 @@ export function rgb(hex: Hex): [number, number, number] {
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
 }
 
+export function mix(a: Hex, b: Hex, t: number): Hex {
+  const from = rgb(a)
+  const to = rgb(b)
+  return `#${from
+    .map((c, i) =>
+      Math.round(c + ((to[i] ?? 0) - c) * t)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
+}
+
 export function luminance(hex: Hex): number {
   const [r, g, b] = rgb(hex).map((c) => {
     const s = c / 255

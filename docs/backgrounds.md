@@ -88,6 +88,22 @@ again. Pictures by the uploader of the backgrounds
 you already have in the same series come first and carry `≈`, so a series keeps
 one hand; anything under 1600 px on its long edge shows its size in yellow.
 
+While a search is on its way and the grid has nothing to show, the middle of it
+names the step it waits on — `Fetching posts`, `Ranking previews by palette
+colors  7/30`, `Checking PNG headers` — over a bar in the palette's cursor color
+that fills with the count or, while there is none, sweeps slowly across, and
+under it the sites, each brightening when its first page arrives. It rises out
+of the background in a third of a second and is gone the moment the first tiles
+land; the footer carries on with `Loading thumbnails · 14/24` for the tiles in
+view, and until the first posts arrive the line above it shows one of the keys
+only `?` lists. Scrolled to the end while the next page is on its way, the same
+loader sits in the lines under the last row. The grid scrolls a line at a time
+instead of jumping a row of tiles, the lines left under the last whole row show
+the top of the next one, and the bar on the right edge marks where you are
+among the posts fetched so far. iTerm2 cannot show part of a picture by itself,
+so find cuts the rows it needs first; there a tile half out of view shows up
+once the grid settles rather than sliding past the edge.
+
 `s` opens the settings — the ratings to list, the nudity and underwear tags to
 block, cutouts or all, newest or score, and whether runs fold — with ↑↓ on the
 setting, enter to save them to `config.zsh` and esc to put them back. ←→ change

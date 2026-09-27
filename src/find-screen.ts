@@ -1,5 +1,5 @@
 import { BLOCKS, type Block, KEY_SPAN, type Kind, type Narrow, type Rating, SITES } from './booru.ts'
-import { type Hex, rgb } from './color.ts'
+import { type Hex, mix, rgb } from './color.ts'
 
 export type Preset = 'cutouts' | 'all'
 export type Order = 'fit' | 'newest' | 'score'
@@ -49,7 +49,10 @@ export interface Tile {
   origin: string
   mates: string[]
   thumb?: string
+  missing?: boolean
 }
+
+export type Stage = 'fetch' | 'check'
 
 export interface Shown {
   id: number
@@ -80,14 +83,20 @@ export interface FindView {
   advanced: boolean
   typing?: string
   counts?: Count[]
-  colors: { cursor: Hex; selection: Hex; ansi: Hex[] }
+  colors: { cursor: Hex; selection: Hex; background: Hex; foreground: Hex; ansi: Hex[] }
   tiles: Tile[]
   installed: number[]
   checked: number
   total: number
   searching: boolean
+  stage: Stage
+  ranking?: { done: number; total: number }
+  sites: { name: string; arrived: boolean }[]
   focus: number
   top: number
+  scroll: number
+  beat: number
+  loaderFrom?: number
   mode: 'grid' | 'try'
   help: boolean
   fetching?: { id: number; got: number; size: number }
@@ -113,12 +122,15 @@ export interface Placement {
   col: number
   cols: number
   rows: number
+  crop?: number
   z: number
 }
 
 export interface Frame {
   lines: string[]
   images: Placement[]
+  loader: boolean
+  tick: boolean
 }
 
 export const TILE = { pitch: 25, cols: 22, rows: 9, height: 13 }
@@ -126,6 +138,18 @@ export const MIN = { cols: 25, rows: 16 }
 export const TRY_ID = 2 ** 31
 const BELOW_BG = -1073741826
 const SMALL = 1600
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const BAR = 56
+const FADE = 4
+const SWEEP = 20
+const TIP_BEATS = 50
+const TIPS: [string, string][] = [
+  ['space', 'unfolds a set of ×N'],
+  ['o', 'opens the post page in a browser'],
+  ['c', 'switches between cutouts and every post'],
+  ['a', 'opens the advanced filters'],
+  ['ctrl+v', 'tries on a picture from the clipboard — or drop one on the window'],
+]
 
 const R = '\x1b[0m'
 const B = '\x1b[1m'
@@ -220,10 +244,12 @@ export function cellReport(input: string): { cell: { w: number; h: number }; res
   return { cell: { h: Number(m[1]), w: Number(m[2]) }, rest: input.slice(0, x) + input.slice(x + 1 + m[0].length) }
 }
 
-export function gridShape(cols: number, rows: number): { perRow: number; rowsVis: number } {
+export function gridShape(cols: number, rows: number): { perRow: number; rowsVis: number; height: number } {
+  const height = rows - 4
   return {
-    perRow: Math.max(1, Math.floor((cols + 1) / TILE.pitch)),
-    rowsVis: Math.max(1, Math.floor((rows - 4) / TILE.height)),
+    perRow: Math.max(1, Math.floor((cols - 1) / TILE.pitch)),
+    rowsVis: Math.max(1, Math.floor(height / TILE.height)),
+    height,
   }
 }
 
@@ -231,8 +257,9 @@ export function transmit(p: Placement): string {
   return `\x1b_Ga=t,t=f,f=100,i=${p.id},q=2;${Buffer.from(p.path).toString('base64')}\x1b\\`
 }
 
-export function place(p: Placement): string {
-  return `\x1b[${p.row + 1};${p.col + 1}H\x1b_Ga=p,i=${p.id},p=${p.id},c=${p.cols},r=${p.rows},C=1,z=${p.z},q=2\x1b\\`
+export function place(p: Placement, cell: { w: number; h: number }): string {
+  const crop = p.crop === undefined ? '' : `,x=0,y=${p.crop * cell.h},w=${p.cols * cell.w},h=${p.rows * cell.h}`
+  return `\x1b[${p.row + 1};${p.col + 1}H\x1b_Ga=p,i=${p.id},p=${p.id}${crop},c=${p.cols},r=${p.rows},C=1,z=${p.z},q=2\x1b\\`
 }
 
 export function release(id: number): string {
@@ -245,6 +272,17 @@ function fg(hex: Hex): string {
 
 function bg(hex: Hex): string {
   return `\x1b[48;2;${rgb(hex).join(';')}m`
+}
+
+let beating = false
+
+function beat(view: FindView): number {
+  beating = true
+  return view.beat
+}
+
+function spin(view: FindView): string {
+  return SPINNER[beat(view) % SPINNER.length] as string
 }
 
 function width(text: string): number {
@@ -276,6 +314,10 @@ class Line {
 
   right(end: number, parts: Part[]): void {
     this.run(end - parts.reduce((n, [text]) => n + width(text), 0), parts)
+  }
+
+  center(room: number, parts: Part[]): void {
+    this.run(Math.floor((room - parts.reduce((n, [text]) => n + width(text), 0)) / 2), parts)
   }
 
   render(): string {
@@ -445,7 +487,7 @@ function specimen(lines: Line[], row: number, col: number, sw: number, maxRow: n
   })
 }
 
-function frameBox(lines: Line[], r0: number, c0: number, h: number, w: number, sgr: string): void {
+function frameBox(lines: (Line | undefined)[], r0: number, c0: number, h: number, w: number, sgr: string): void {
   lines[r0]?.put(c0, `╭${'─'.repeat(w - 2)}╮`, sgr)
   for (let r = r0 + 1; r < r0 + h - 1; r++) {
     lines[r]?.put(c0, '│', sgr)
@@ -532,9 +574,9 @@ function where(view: FindView): string {
   return view.site === 'all' ? 'any site' : view.site
 }
 
-function status(view: FindView): Part | undefined {
+function status(view: FindView, loading?: Part): Part | undefined {
   if (view.installing !== undefined) {
-    return [`Installing ${view.palette} ← ${named(view.installing)}`, YELLOW]
+    return [`${spin(view)} Installing ${view.palette} ← ${named(view.installing)}`, YELLOW]
   }
   if (view.hint) {
     return [view.hint, GREEN]
@@ -546,13 +588,19 @@ function status(view: FindView): Part | undefined {
     return [`${view.slow ?? view.site} asked to slow down · ${view.waiting}s`, YELLOW]
   }
   if (view.fetching) {
-    return [`Fetching ${view.fetching.id % KEY_SPAN} · ${progress(view.fetching.got, view.fetching.size)}`, YELLOW]
+    return [
+      `${spin(view)} Fetching ${view.fetching.id % KEY_SPAN} · ${progress(view.fetching.got, view.fetching.size)}`,
+      YELLOW,
+    ]
   }
   if (view.cutting !== undefined) {
-    return [`Cutting out ${view.cutting % KEY_SPAN}`, YELLOW]
+    return [`${spin(view)} Cutting out ${view.cutting % KEY_SPAN}`, YELLOW]
   }
   if (view.preparing !== undefined) {
-    return [`Preparing ${view.preparing % KEY_SPAN}`, YELLOW]
+    return [`${spin(view)} Preparing ${view.preparing % KEY_SPAN}`, YELLOW]
+  }
+  if (loading) {
+    return loading
   }
   if (view.saved) {
     return [view.saved, GREEN]
@@ -563,53 +611,168 @@ function status(view: FindView): Part | undefined {
   return undefined
 }
 
-function grid(lines: Line[], images: Placement[], cols: number, rows: number, view: FindView, accent: string): void {
-  const { perRow, rowsVis } = gridShape(cols, rows)
-  query(lines[0] as Line, cols, view, accent)
-  tabs(lines[1] as Line, cols, view)
-  for (let k = 0; k < perRow * rowsVis; k++) {
-    const i = view.top * perRow + k
-    const tile = view.tiles[i]
-    if (!tile) {
-      break
-    }
-    const r0 = 2 + Math.floor(k / perRow) * TILE.height
-    const c0 = (k % perRow) * TILE.pitch
-    const on = i === view.focus
-    if (on) {
-      frameBox(lines, r0, c0, TILE.height, TILE.pitch - 1, accent)
-    }
-    if (tile.thumb) {
-      images.push({ id: tile.key, path: tile.thumb, row: r0 + 1, col: c0 + 1, cols: TILE.cols, rows: TILE.rows, z: -1 })
-    }
-    lines[r0 + 10]?.run(c0 + 1, [
-      ...(view.installed.includes(tile.key) ? ([['✓ ', GREEN]] as Part[]) : []),
-      ...(view.site === 'all' ? ([['● ', `\x1b[${30 + tile.siteAnsi}m`]] as Part[]) : []),
-      [String(tile.id), on ? B : ''],
-      [' ', ''],
-      dims(tile),
-    ])
-    if (tile.mates.length > 0) {
-      lines[r0 + 10]?.put(c0 + TILE.cols, '≈', accent)
-    }
-    const credit = tile.artist ? plain(tile.artist) : tile.owner && `@${tile.owner}`
-    if (credit) {
-      lines[r0 + 11]?.put(c0 + 1, credit.slice(0, TILE.cols - 8), D)
-    }
-    const marks: Part[] = []
-    if (tile.score > 0) {
-      marks.push([`★${tile.score}`, D])
-    }
-    if (tile.variants > 1) {
-      marks.push([` ×${tile.variants}`, accent])
-    }
-    if (marks.length > 0) {
-      lines[r0 + 11]?.right(c0 + TILE.cols + 1, marks)
+function stageLabel(view: FindView): string {
+  if (view.ranking) {
+    return 'Ranking previews by palette colors'
+  }
+  if (view.stage === 'check') {
+    return view.preset === 'cutouts' ? 'Checking PNG headers' : 'Loading previews'
+  }
+  return 'Fetching posts'
+}
+
+function stageCount(view: FindView, gap: string): string {
+  return view.ranking ? `${gap}${view.ranking.done}/${view.ranking.total}` : ''
+}
+
+function bar(line: Line | undefined, x: number, w: number, view: FindView, k: number): void {
+  const { background, cursor, selection } = view.colors
+  const { ranking } = view
+  const fillTo = ranking ? Math.round((w * ranking.done) / ranking.total) : -1
+  const seg = Math.max(6, Math.round(w * 0.22))
+  const u = (beat(view) % (SWEEP * 2)) / SWEEP
+  const from = Math.round((w - seg) * (0.5 - 0.5 * Math.cos(Math.PI * (u < 1 ? u : 2 - u))))
+  const on = mix(background, cursor, k)
+  const off = mix(background, mix(selection, background, 0.15), k)
+  const cells = Array.from({ length: w }, (_, i) => {
+    const color = (fillTo >= 0 ? i < fillTo : i >= from && i < from + seg) ? on : off
+    return i === 0 || i === w - 1 ? mix(color, background, 0.55) : color
+  })
+  let start = 0
+  for (let i = 1; i <= w; i++) {
+    if (i === w || cells[i] !== cells[start]) {
+      line?.put(x + start, ' '.repeat(i - start), bg(cells[start] as Hex))
+      start = i
     }
   }
+}
+
+function loader(lines: (Line | undefined)[], top: number, height: number, room: number, view: FindView): void {
+  const { background, foreground } = view.colors
+  const k = view.loaderFrom === undefined ? 0 : Math.min(1, (beat(view) - view.loaderFrom) / FADE)
+  const row0 = top + (height >= 5 ? Math.floor((height - 5) / 2) : 0)
+  lines[row0]?.center(room, [
+    [stageLabel(view), B + fg(mix(background, foreground, k))],
+    [stageCount(view, '  '), fg(mix(background, mix(foreground, background, 0.45), k))],
+  ])
+  const w = Math.min(BAR, room - 8)
+  bar(lines[row0 + (height >= 3 ? 2 : 1)], Math.floor((room - w) / 2), w, view, k)
+  if (height < 5) {
+    return
+  }
+  lines[row0 + 4]?.center(
+    room,
+    view.sites.flatMap(({ name, arrived }, i): Part[] => [
+      ...(i ? ([['  ·  ', fg(mix(background, foreground, 0.25 * k))]] as Part[]) : []),
+      [name, fg(mix(background, arrived ? mix(foreground, background, 0.2) : foreground, arrived ? k : 0.32 * k))],
+    ]),
+  )
+}
+
+function rail(lines: Line[], cols: number, view: FindView, height: number, content: number, accent: string): void {
+  if (content <= height) {
+    return
+  }
+  const size = Math.max(1, Math.round((height * height) / content))
+  const at = Math.max(0, Math.min(height - size, Math.round((view.scroll * height) / content)))
+  for (let r = 0; r < height; r++) {
+    const on = r >= at && r < at + size
+    lines[2 + r]?.put(cols - 1, on ? '┃' : '│', on ? accent : D)
+  }
+}
+
+function loading(view: FindView, waiting: boolean, shown: Tile[]): Part | undefined {
+  if (waiting) {
+    return [`${spin(view)} ${stageLabel(view)}${stageCount(view, ' · ')}`, D]
+  }
+  const due = shown.filter((tile) => !tile.missing)
+  const ready = due.filter((tile) => tile.thumb).length
+  return ready < due.length ? [`${spin(view)} Loading thumbnails · ${ready}/${due.length}`, D] : undefined
+}
+
+function grid(lines: Line[], images: Placement[], cols: number, rows: number, view: FindView, accent: string): boolean {
+  const { perRow, rowsVis, height } = gridShape(cols, rows)
+  query(lines[0] as Line, cols, view, accent)
+  tabs(lines[1] as Line, cols, view)
+  const inside = lines.map((line, r) => (r >= 2 && r < 2 + height ? line : undefined))
+  const first = Math.floor(view.scroll / TILE.height)
+  const last = Math.floor((view.scroll + height - 1) / TILE.height)
+  const shown: Tile[] = []
+  for (let t = first; t <= last; t++) {
+    const r0 = 2 + t * TILE.height - view.scroll
+    for (let c = 0; c < perRow; c++) {
+      const i = t * perRow + c
+      const c0 = c * TILE.pitch
+      const tile = view.tiles[i]
+      if (!tile) {
+        continue
+      }
+      shown.push(tile)
+      const on = i === view.focus
+      if (on) {
+        frameBox(inside, r0, c0, TILE.height, TILE.pitch - 1, accent)
+      }
+      const top = r0 + 1
+      const from = Math.max(top, 2)
+      const to = Math.min(top + TILE.rows, 2 + height)
+      if (tile.thumb && to > from) {
+        images.push({
+          id: tile.key,
+          path: tile.thumb,
+          row: from,
+          col: c0 + 1,
+          cols: TILE.cols,
+          rows: to - from,
+          ...(to - from < TILE.rows ? { crop: from - top } : {}),
+          z: -1,
+        })
+      }
+      inside[r0 + 10]?.run(c0 + 1, [
+        ...(view.installed.includes(tile.key) ? ([['✓ ', GREEN]] as Part[]) : []),
+        ...(view.site === 'all' ? ([['● ', `\x1b[${30 + tile.siteAnsi}m`]] as Part[]) : []),
+        [String(tile.id), on ? B : ''],
+        [' ', ''],
+        dims(tile),
+      ])
+      if (tile.mates.length > 0) {
+        inside[r0 + 10]?.put(c0 + TILE.cols, '≈', accent)
+      }
+      const credit = tile.artist ? plain(tile.artist) : tile.owner && `@${tile.owner}`
+      if (credit) {
+        inside[r0 + 11]?.put(c0 + 1, credit.slice(0, TILE.cols - 8), D)
+      }
+      const marks: Part[] = []
+      if (tile.score > 0) {
+        marks.push([`★${tile.score}`, D])
+      }
+      if (tile.variants > 1) {
+        marks.push([` ×${tile.variants}`, accent])
+      }
+      if (marks.length > 0) {
+        inside[r0 + 11]?.right(c0 + TILE.cols + 1, marks)
+      }
+    }
+  }
+  const filled = Math.ceil(view.tiles.length / perRow) * TILE.height
+  rail(lines, cols, view, height, filled, accent)
+  const below = Math.max(2, 2 + filled - view.scroll)
+  const room = 2 + height - below
+  const waiting = view.searching && room >= 2
+  if (waiting) {
+    loader(inside, below, room, cols - 1, view)
+  }
+  const quiet = view.searching && view.tiles.length === 0
+  if (quiet && !view.error) {
+    const [key, label] = TIPS[Math.floor(beat(view) / TIP_BEATS) % TIPS.length] as [string, string]
+    lines[rows - 2]?.run(0, [
+      ['Tip  ', D],
+      [key, B],
+      [` ${label}`, D],
+    ])
+  }
   const above = view.top * perRow
-  const below = view.tiles.length - (view.top + rowsVis) * perRow
-  const scroll = [...(above > 0 ? [`↑ ${above} above`] : []), ...(below > 0 ? [`↓ ${below} more`] : [])]
+  const more = view.tiles.length - (view.top + rowsVis) * perRow
+  const scroll = [...(above > 0 ? [`↑ ${above} above`] : []), ...(more > 0 ? [`↓ ${more} more`] : [])]
   if (scroll.length > 0) {
     lines[rows - 2]?.put(0, scroll.join('   '), D)
   }
@@ -622,30 +785,26 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
       D,
     )
   }
-  const line = lines[rows - 1] as Line
-  const lead = status(view)
-  if (view.searching && view.tiles.length === 0 && !lead) {
-    foot(line, cols, accent, {
-      badge: 'FIND',
-      lead: [view.preset === 'cutouts' ? 'Checking PNG headers' : 'Fetching posts', D],
-      right: ['esc', 'back'],
-    })
-    return
-  }
-  foot(line, cols, accent, {
+  const stage = loading(view, waiting, shown)
+  const lead = status(view, stage)
+  foot(lines[rows - 1] as Line, cols, accent, {
     badge: 'FIND',
     lead,
-    keys: [
-      ['←↑↓→', 'move'],
-      ['enter', 'try on'],
-      ['tab', 'site'],
-      ['ctrl+v', 'picture'],
-      ['s', 'settings'],
-      ['/', 'search'],
-      ['?', 'keys'],
-    ],
+    keys:
+      quiet && lead === stage
+        ? []
+        : [
+            ['←↑↓→', 'move'],
+            ['enter', 'try on'],
+            ['tab', 'site'],
+            ['ctrl+v', 'picture'],
+            ['s', 'settings'],
+            ['/', 'search'],
+            ['?', 'keys'],
+          ],
     right: ['esc', 'back'],
   })
+  return waiting
 }
 
 function trial(lines: Line[], images: Placement[], cols: number, rows: number, view: FindView, accent: string): void {
@@ -1016,23 +1175,25 @@ export function renderFind(view: FindView, cols: number, rows: number): Frame {
   const lines = Array.from({ length: rows }, () => new Line(cols))
   const images: Placement[] = []
   const accent = fg(view.colors.cursor)
+  beating = false
   if (cols < MIN.cols || rows < MIN.rows) {
     lines[0]?.put(0, 'ttheme find', B + accent)
     lines[1]?.put(0, `Needs ${MIN.cols}×${MIN.rows} — now ${cols}×${rows}`)
     lines[2]?.put(0, 'esc quits', D)
-    return { lines: lines.map((l) => l.render()), images }
+    return { lines: lines.map((l) => l.render()), images, loader: false, tick: false }
   }
+  let waiting = false
   if (view.mode === 'try') {
     trial(lines, images, cols, rows, view, accent)
   } else {
-    grid(lines, images, cols, rows, view, accent)
+    waiting = grid(lines, images, cols, rows, view, accent)
   }
   if (view.mode === 'grid' && view.editing !== undefined && view.suggest?.length) {
     for (let r = 1; r < rows - 1; r++) {
       lines[r] = new Line(cols)
     }
     suggestions(lines, view, accent)
-    return { lines: lines.map((l) => l.render()), images: [] }
+    return { lines: lines.map((l) => l.render()), images: [], loader: false, tick: false }
   }
   if (view.help || view.panel !== undefined) {
     const keep = view.mode === 'try' ? images : []
@@ -1044,7 +1205,7 @@ export function renderFind(view: FindView, cols: number, rows: number): Frame {
     } else {
       panel(lines, cols, rows, view, accent)
     }
-    return { lines: lines.map((l) => l.render()), images: keep }
+    return { lines: lines.map((l) => l.render()), images: keep, loader: false, tick: false }
   }
-  return { lines: lines.map((l) => l.render()), images }
+  return { lines: lines.map((l) => l.render()), images, loader: waiting, tick: beating }
 }

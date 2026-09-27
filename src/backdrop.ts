@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { basename, isAbsolute, join } from 'node:path'
-import { type Hex, luminance, rgb } from './color.ts'
+import { type Hex, luminance, mix, rgb } from './color.ts'
 import { checkReadability } from './contrast.ts'
 import { writeAtomic } from './edits.ts'
 import type { ProfileBackground } from './emit/iterm2.ts'
@@ -69,18 +69,6 @@ export interface Original {
 export interface Origin {
   site: string
   id: number
-}
-
-export function mix(a: Hex, b: Hex, t: number): Hex {
-  const from = rgb(a)
-  const to = rgb(b)
-  return `#${from
-    .map((c, i) =>
-      Math.round(c + ((to[i] ?? 0) - c) * t)
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('')}`
 }
 
 function slotColor(colors: Colors, slot: string): Hex {

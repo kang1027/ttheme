@@ -17,6 +17,14 @@ interface Thumb {
   height: number
 }
 
+interface Band {
+  job: 'band'
+  from: string
+  to: string
+  y: number
+  height: number
+}
+
 interface Match {
   job: 'match'
   from: string
@@ -63,12 +71,13 @@ export interface Look {
   hash: string
 }
 
-type Task = Thumb | Match | Show | Backdrop | Redraw
-type Lane = 'tile' | 'view'
+type Task = Thumb | Band | Match | Show | Backdrop | Redraw
+type Lane = 'tile' | 'band' | 'view'
 type Result<T extends Task> = T extends Match ? Look : T extends Redraw ? Picture | null : number
 
 const LANES: Record<Task['job'], Lane> = {
   thumb: 'tile',
+  band: 'band',
   match: 'tile',
   show: 'view',
   backdrop: 'view',
@@ -102,6 +111,11 @@ async function work(task: Task): Promise<number | Look | Picture | null> {
   if (task.job === 'thumb') {
     mkdirSync(dirname(task.to), { recursive: true })
     writeFileSync(task.to, encodePng(contain(image, task.width, task.height)))
+    return 0
+  }
+  if (task.job === 'band') {
+    const data = image.data.subarray(task.y * image.width * 4, (task.y + task.height) * image.width * 4)
+    writeFileSync(task.to, encodePng({ width: image.width, height: task.height, data }))
     return 0
   }
   const clear = transparency(image)

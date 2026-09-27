@@ -80,12 +80,14 @@ import {
   gridShape,
   MIN,
   type Order,
+  type Placement,
   pageOf,
   place,
   type Row,
   release,
   renderFind,
   type Setting,
+  type Stage,
   stepped,
   TILE,
   type Tile,
@@ -94,7 +96,7 @@ import {
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
 import { configHome, refreshProfiles } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
-import { blurOf, settingDefault, withSetting } from './wiring.ts'
+import { blurOf, detectTerminal, settingDefault, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
 const SETTINGS: Setting[] = [
@@ -245,6 +247,11 @@ const PASTE_KEY = process.platform === 'win32' ? 'alt+v' : 'ctrl+v'
 const SCREENSHOT = process.platform === 'darwin' ? 'ctrl+shift+cmd+4 copies a screenshot' : 'copy a picture first'
 const TRY_WIDTH = 1280
 const LOOKAHEAD = 2
+const TICK = 80
+const GLIDE = 16
+const GLIDE_SHARE = 0.4
+const BAND_ID = 3 * 2 ** 30
+const BANDS_HELD = 256
 const KNOWN = 3
 const SUGGESTED = 8
 
@@ -278,6 +285,9 @@ interface Board {
   focus: number
   top: number
   searching: boolean
+  stage: Stage
+  ranking?: { done: number; total: number }
+  arrived: Set<string>
   error?: string
   note?: string
 }
@@ -301,6 +311,8 @@ function blank(key: string, searching: boolean): Board {
     focus: 0,
     top: 0,
     searching,
+    stage: 'fetch',
+    arrived: new Set(),
   }
 }
 
@@ -398,6 +410,14 @@ class Finder {
   private readonly renders = new Renderer()
   private readonly sent = new Map<number, string>()
   private readonly placed = new Map<number, string>()
+  private screen: string[] = []
+  private ticking?: NodeJS.Timeout
+  private gliding?: NodeJS.Timeout
+  private showing?: Board
+  private readonly thumbless = new Set<number>()
+  private readonly bands = detectTerminal(process.env) === 'iterm2'
+  private readonly bandFiles = new Map<string, { id: number; path: string; ready: boolean }>()
+  private nextBand = BAND_ID
   private current?: Current
   private fetch?: AbortController
   private settle?: NodeJS.Timeout
@@ -461,14 +481,24 @@ class Finder {
         advanced: setting.advanced,
         cursor: 0,
       })),
-      colors: { cursor: entry.cursor, selection: entry.selection, ansi: entry.ansi },
+      colors: {
+        cursor: entry.cursor,
+        selection: entry.selection,
+        background: entry.background,
+        foreground: entry.foreground,
+        ansi: entry.ansi,
+      },
       tiles: [],
       installed: [],
       checked: 0,
       total: 0,
       searching: tag !== '',
+      stage: 'fetch',
+      sites: [],
       focus: 0,
       top: 0,
+      scroll: 0,
+      beat: 0,
       mode: 'grid',
       help: false,
       editing: tag === '' ? '' : undefined,
@@ -550,6 +580,7 @@ class Finder {
       origin: originHost(post.source),
       mates: this.owners.get(site.key)?.get(post.owner) ?? [],
       thumb: this.thumbPath.get(key),
+      missing: this.thumbless.has(key),
     }
   }
 
@@ -564,9 +595,21 @@ class Finder {
     view.checked = board.checked
     view.total = board.total
     view.searching = board.searching
+    this.stageOf(board)
     view.note = board.note
     view.focus = Math.max(0, Math.min(board.focus, view.tiles.length - 1))
     view.top = board.top
+    if (this.showing !== board) {
+      this.showing = board
+      this.snap()
+    }
+  }
+
+  private stageOf(board: Board): void {
+    const view = this.view
+    view.stage = board.stage
+    view.ranking = board.ranking
+    view.sites = this.sites.map((site) => ({ name: site.name, arrived: board.arrived.has(site.name) }))
   }
 
   private syncSite(): void {
@@ -603,18 +646,20 @@ class Finder {
     void this.peek()
     this.draw()
     const code = await exit
+    this.session.abort()
     this.grabber.stop()
     this.write('\x1b[?1004l')
     this.attaching?.abort()
     clearTimeout(this.noticeTimer)
     clearTimeout(this.peekTimer)
-    this.session.abort()
     this.fetch?.abort()
     clearTimeout(this.settle)
     clearTimeout(this.partial)
     this.quietSuggest()
     this.quietCount()
     clearInterval(clock)
+    clearInterval(this.ticking)
+    clearTimeout(this.gliding)
     stdin.off('data', this.onData)
     stdout.off('resize', this.onResize)
     this.write('\x1b_Ga=d,d=A,q=2\x1b\\\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H')
@@ -955,7 +1000,9 @@ class Finder {
   private readonly onResize = (): void => {
     this.cols = process.stdout.columns || this.cols
     this.rows = process.stdout.rows || this.rows
+    this.screen = []
     this.scroll()
+    this.snap()
     if (this.view.mode === 'try' && this.current) {
       this.reveal()
     }
@@ -1464,6 +1511,7 @@ class Finder {
         this.thumbs()
         this.show()
         this.scroll()
+        this.glide()
         this.draw()
         return
       }
@@ -1528,6 +1576,7 @@ class Finder {
     view.focus = next
     this.board.focus = next
     this.scroll()
+    this.glide()
     void this.pump()
     if (view.mode === 'try') {
       this.select()
@@ -1546,6 +1595,53 @@ class Finder {
       view.top = row - rowsVis + 1
     }
     this.board.top = view.top
+  }
+
+  private glide(): void {
+    if (this.bands) {
+      this.prebake()
+    }
+    if (this.gliding) {
+      return
+    }
+    const span = gridShape(this.cols, this.rows).height
+    const step = (): void => {
+      const view = this.view
+      const target = view.top * TILE.height
+      let d = target - view.scroll
+      if (d === 0 || view.mode !== 'grid') {
+        view.scroll = target
+        const settled = this.gliding !== undefined
+        this.gliding = undefined
+        if (settled) {
+          this.draw()
+        }
+        return
+      }
+      if (Math.abs(d) > 2 * span) {
+        view.scroll = target - Math.sign(d) * span
+        d = target - view.scroll
+      }
+      view.scroll += Math.sign(d) * Math.max(1, Math.round(Math.abs(d) * GLIDE_SHARE))
+      this.draw()
+      this.gliding = setTimeout(step, GLIDE)
+    }
+    step()
+  }
+
+  private snap(): void {
+    clearTimeout(this.gliding)
+    this.gliding = undefined
+    this.view.scroll = this.view.top * TILE.height
+  }
+
+  private prebake(): void {
+    const view = this.view
+    for (const p of renderFind({ ...view, scroll: view.top * TILE.height }, this.cols, this.rows).images) {
+      if (p.crop !== undefined) {
+        this.band(p.path, p.crop, p.rows)
+      }
+    }
   }
 
   private query(site: Site, view: Terms = this.view): { tags: string; notes: string[] } | undefined {
@@ -1701,7 +1797,16 @@ class Finder {
     return posts
   }
 
+  private staged(board: Board): void {
+    if (board === this.board) {
+      this.stageOf(board)
+      this.draw()
+    }
+  }
+
   private async round(board: Board): Promise<void> {
+    board.stage = 'fetch'
+    this.staged(board)
     const due = SITES.flatMap((site) => {
       const source = board.sources.find((s) => s.site === site && !s.done)
       return source ? [source] : []
@@ -1709,7 +1814,10 @@ class Finder {
     const got = await Promise.all(
       due.map(async (source) => {
         try {
-          return { source, posts: await this.page(source.site, source.tags, source.page) }
+          const posts = await this.page(source.site, source.tags, source.page)
+          board.arrived.add(source.site.name)
+          this.staged(board)
+          return { source, posts }
         } catch (error) {
           if (board.sources.every((s) => s.site === source.site) || this.signal.aborted) {
             throw error
@@ -1758,12 +1866,21 @@ class Finder {
     } else {
       const rough = fitOrder(kept, this.frame(), this.matched)
       const head = rough.slice(0, this.need())
-      await this.looks(head)
+      const ranking = { done: 0, total: head.length }
+      board.ranking = ranking
+      this.staged(board)
+      await this.looks(head, () => {
+        ranking.done++
+        this.staged(board)
+      })
+      board.ranking = undefined
       if (!this.live(board)) {
         return
       }
       ordered = [...fitOrder(head, this.frame(), this.matched), ...rough.slice(head.length)]
     }
+    board.stage = 'check'
+    this.staged(board)
     for (const pick of ordered) {
       board.roundOf.set(pick, round)
     }
@@ -1849,11 +1966,12 @@ class Finder {
     }
   }
 
-  private async looks(picks: Pick[]): Promise<void> {
+  private async looks(picks: Pick[], each?: () => void): Promise<void> {
     let next = 0
     const lane = async () => {
       while (next < picks.length) {
         await this.look(picks[next++] as Pick)
+        each?.()
       }
     }
     await Promise.all(Array.from({ length: THUMB }, lane))
@@ -2121,11 +2239,15 @@ class Finder {
   }
 
   private thumbs(): void {
-    while (this.thumbing < THUMB && this.thumbQueue.length > 0) {
+    while (!this.signal.aborted && this.thumbing < THUMB && this.thumbQueue.length > 0) {
       const pick = this.thumbQueue.shift() as Pick
       this.thumbing++
       this.thumb(pick)
-        .catch(() => {})
+        .catch(() => {
+          this.thumbless.add(postKey(pick.site, pick.post.id))
+          this.show()
+          this.draw()
+        })
         .finally(() => {
           this.thumbing--
           this.thumbs()
@@ -2142,6 +2264,9 @@ class Finder {
     if (!existsSync(path)) {
       const thumb = this.previewPath(pick)
       await this.cached(from.site, thumb, from.url)
+      if (this.signal.aborted) {
+        return
+      }
       await this.renders.run({ job: 'thumb', from: thumb, to: path, width: w, height: h })
     }
     this.thumbPath.set(postKey(site, post.id), path)
@@ -2431,7 +2556,7 @@ class Finder {
   }
 
   private draw(): void {
-    if (this.dirty) {
+    if (this.dirty || this.signal.aborted) {
       return
     }
     this.dirty = true
@@ -2442,22 +2567,33 @@ class Finder {
   }
 
   private flush(): void {
+    if (this.signal.aborted) {
+      return
+    }
     const frame = renderFind(this.view, this.cols, this.rows)
-    let out = '\x1b[?2026h'
+    this.view.loaderFrom = frame.loader ? (this.view.loaderFrom ?? this.view.beat) : undefined
+    let out = ''
     frame.lines.forEach((line, r) => {
-      out += `\x1b[${r + 1};1H\x1b[K${line}`
+      if (this.screen[r] !== line) {
+        out += `\x1b[${r + 1};1H\x1b[K${line}`
+        this.screen[r] = line
+      }
     })
     const keep = new Set<number>()
-    for (const p of frame.images) {
+    for (const wanted of frame.images) {
+      const p = this.bands ? this.banded(wanted) : wanted
+      if (!p) {
+        continue
+      }
       keep.add(p.id)
       if (this.sent.get(p.id) !== p.path) {
         out += transmit(p)
         this.sent.set(p.id, p.path)
         this.placed.delete(p.id)
       }
-      const at = `${p.row};${p.col};${p.cols};${p.rows};${p.z}`
+      const at = `${p.row};${p.col};${p.cols};${p.rows};${p.crop};${p.z}`
       if (this.placed.get(p.id) !== at) {
-        out += place(p)
+        out += place(p, this.cell)
         this.placed.set(p.id, at)
       }
     }
@@ -2468,7 +2604,67 @@ class Finder {
         this.placed.delete(id)
       }
     }
-    this.write(`${out}\x1b[?2026l`)
+    if (out) {
+      this.write(`\x1b[?2026h${out}\x1b[?2026l`)
+    }
+    this.pace(frame.tick)
+  }
+
+  private pace(tick: boolean): void {
+    if (tick) {
+      this.ticking ??= setInterval(() => {
+        this.view.beat++
+        this.draw()
+      }, TICK)
+    } else if (this.ticking) {
+      clearInterval(this.ticking)
+      this.ticking = undefined
+    }
+  }
+
+  private banded(p: Placement): Placement | undefined {
+    if (p.crop === undefined) {
+      return p
+    }
+    const band = this.band(p.path, p.crop, p.rows, !this.gliding)
+    return band?.ready ? { ...p, id: band.id, path: band.path, crop: undefined } : undefined
+  }
+
+  private band(
+    from: string,
+    crop: number,
+    rows: number,
+    make = true,
+  ): { id: number; path: string; ready: boolean } | undefined {
+    const key = `${from}|${crop}|${rows}`
+    const held = this.bandFiles.get(key)
+    if (held || !make) {
+      return held
+    }
+    const id = this.nextBand++
+    const made = { id, path: join(this.scratch, `band-${id}.png`), ready: false }
+    this.bandFiles.set(key, made)
+    this.renders
+      .run({ job: 'band', from, to: made.path, y: crop * this.cell.h, height: rows * this.cell.h })
+      .then(() => {
+        made.ready = true
+        this.draw()
+      })
+      .catch(() => {})
+    this.trimBands()
+    return made
+  }
+
+  private trimBands(): void {
+    for (const [key, band] of this.bandFiles) {
+      if (this.bandFiles.size <= BANDS_HELD) {
+        return
+      }
+      if (band.ready && !this.sent.has(band.id)) {
+        this.bandFiles.delete(key)
+        rmSync(band.path, { force: true })
+      }
+    }
   }
 }
 
