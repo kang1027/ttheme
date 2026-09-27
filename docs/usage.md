@@ -92,8 +92,10 @@ yours to edit). From then on a tab that `cd`s into a pinned path takes its
 palette — symlinks resolve to the pinned directory — and `cd`ing out restores
 what the tab had before, unless you painted it by hand in between, in which
 case your pick stays. The nearest pinned ancestor wins, so a project can pin
-one palette and a subfolder another. Open tabs pick up a changed pins file on
-their next `cd`; `unpin` drops the pin on the current directory.
+one palette and a subfolder another, and where a directory has both a pin of
+its own and one for everything below, its own one wins there. Open tabs pick up
+a changed pins file on their next `cd`; `unpin` drops the pin on the current
+directory.
 
 ## Names and output
 

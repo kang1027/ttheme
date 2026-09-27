@@ -74,6 +74,7 @@ __tt_pins_load() {
     line=${line%%[[:space:]]##}
     [[ $line == [~/]*[[:space:]]* ]] || continue
     name=${line##*[[:space:]]} key=${${line%[[:space:]]*}%%[[:space:]]##}
+    [[ $key == \~ ]] && key=$HOME
     TTHEME_PINS[${key/#\~\//$HOME/}]=$name
     [[ -n ${TTHEME_PALETTE[$name]} ]] || print -u2 "ttheme: unknown palette '$name' pinned to $key"
   done
@@ -274,11 +275,12 @@ __tt_dir_rule() {
     [[ -n ${TTHEME_PALETTE[$TTHEME_PINS[$k]]} ]] || continue
     base=${${k%/\*\*}:A}
     if [[ $k == *"/**" ]]; then
-      [[ $p == "$base" || $p == "$base"/* ]] || continue
+      [[ $p == "$base" || $p == "${base%/}"/* ]] || continue
     else
       [[ $p == "$base" ]] || continue
     fi
-    (( ${#base} > bestlen )) && { best=$k; bestlen=${#base} }
+    (( ${#base} > bestlen )) || [[ ${#base} == $bestlen && $k != *"/**" ]] || continue
+    best=$k bestlen=${#base}
   done
   [[ -n $best ]] || return 1
   REPLY=$best

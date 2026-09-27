@@ -191,6 +191,18 @@ cd $proj-sibling; __tt_chpwd > /dev/null
 REPLY=; __tt_tilde $HOME/proj-home
 [[ $REPLY == "~/proj-home" ]] || { print -u2 "__tt_tilde kept the home prefix: $REPLY"; exit 1 }
 cd $OLDPWD
+(
+  HOME=$XDG_CONFIG_HOME/home
+  mkdir -p $HOME/work/api/v2 $HOME/work/site/x $HOME/notes
+  print -r -- "//**  rei" > $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=; __tt_pins_load
+  REPLY=; __tt_dir_rule $HOME/work && [[ $REPLY == "//**" ]] || { print -u2 "a pin on / and below skipped what is below it: $REPLY"; exit 1 }
+  print -l "~/work/**  homura" "~/work/site  kaito" "~/work/site/**  miku" "~/notes/**  nosuchpalette" "/nonexistent-ttheme/place/**  rei" "~  mio" > $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=; __tt_pins_load 2>/dev/null
+  REPLY=; __tt_dir_rule $HOME && [[ $REPLY == "$HOME" ]] || { print -u2 "a pin on ~ alone did not cover the home directory: $REPLY"; exit 1 }
+  REPLY=; __tt_dir_rule $HOME/work/site && [[ $REPLY == "$HOME/work/site" ]] || { print -u2 "a directory's own pin lost to its pin on everything below: $REPLY"; exit 1 }
+  REPLY=; __tt_dir_rule $HOME/work/site/x && [[ $REPLY == "$HOME/work/site/**" ]] || { print -u2 "a pin on everything below skipped a subdirectory: $REPLY"; exit 1 }
+) || exit 1
 print -r -- 'typeset -g TTHEME_STARTUP=rei' >> $TTHEME_HOME/palettes.zsh
 touch -t 203001010000 $TTHEME_HOME/palettes.zsh
 __tt_fresh
