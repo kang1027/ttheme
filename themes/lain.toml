@@ -1,5 +1,6 @@
 [meta]
 name = "lain"
+native_names = ["岩倉玲音"]
 group = "Lain"
 order = 42
 ansi_source = "IR Black"

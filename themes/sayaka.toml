@@ -1,5 +1,6 @@
 [meta]
 name = "sayaka"
+native_names = ["美樹さやか"]
 group = "Madoka Magica"
 order = 17
 ansi_source = "Teerb + Magica"

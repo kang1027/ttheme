@@ -1,5 +1,6 @@
 [meta]
 name = "ryo"
+native_names = ["山田リョウ"]
 group = "Bocchi the Rock!"
 order = 31
 ansi_source = "TokyoNight Storm"

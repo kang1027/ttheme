@@ -1,5 +1,6 @@
 [meta]
 name = "flandre"
+native_names = ["フランドール・スカーレット"]
 group = "Touhou Project"
 order = 96
 ansi_source = "Molokai"

@@ -1,5 +1,6 @@
 [meta]
 name = "jupiter"
+native_names = ["セーラージュピター", "木野まこと"]
 group = "Sailor Moon"
 order = 40
 ansi_source = "Everforest Dark Hard + Senshi"

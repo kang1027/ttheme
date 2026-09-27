@@ -1,5 +1,6 @@
 [meta]
 name = "panther"
+native_names = ["高巻杏", "パンサー"]
 group = "Persona 5"
 order = 51
 ansi_source = "Warm Neon + Phantom"

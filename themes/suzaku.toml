@@ -1,5 +1,6 @@
 [meta]
 name = "suzaku"
+native_names = ["枢木スザク"]
 group = "Code Geass"
 order = 116
 ansi_source = "Eclipse + Geass"

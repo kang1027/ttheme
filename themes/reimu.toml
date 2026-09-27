@@ -1,5 +1,6 @@
 [meta]
 name = "reimu"
+native_names = ["博麗霊夢"]
 group = "Touhou Project"
 order = 91
 ansi_source = "Firewatch"

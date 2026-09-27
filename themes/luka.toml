@@ -1,5 +1,6 @@
 [meta]
 name = "luka"
+native_names = ["巡音ルカ"]
 group = "Vocaloid"
 order = 6
 ansi_source = "Rose Pine"

@@ -1,5 +1,6 @@
 [meta]
 name = "miku"
+native_names = ["初音ミク"]
 group = "Vocaloid"
 order = 2
 ansi_source = "vauxe Miku"

@@ -1,5 +1,6 @@
 [meta]
 name = "komachi"
+native_names = ["比企谷小町"]
 group = "Oregairu"
 order = 113
 ansi_source = "Catppuccin Frappe + Service Club"

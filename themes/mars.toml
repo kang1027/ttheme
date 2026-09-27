@@ -1,5 +1,6 @@
 [meta]
 name = "mars"
+native_names = ["セーラーマーズ", "火野レイ"]
 group = "Sailor Moon"
 order = 39
 ansi_source = "Red Planet + Senshi"

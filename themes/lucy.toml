@@ -1,5 +1,6 @@
 [meta]
 name = "lucy"
+native_names = ["ルーシー"]
 group = "Cyberpunk: Edgerunners"
 order = 88
 ansi_source = "Mellow"

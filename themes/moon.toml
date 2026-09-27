@@ -1,5 +1,6 @@
 [meta]
 name = "moon"
+native_names = ["セーラームーン", "月野うさぎ"]
 group = "Sailor Moon"
 order = 37
 ansi_source = "Starlight"

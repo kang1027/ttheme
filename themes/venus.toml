@@ -1,5 +1,6 @@
 [meta]
 name = "venus"
+native_names = ["セーラーヴィーナス", "愛野美奈子"]
 group = "Sailor Moon"
 order = 41
 ansi_source = "Earthsong"

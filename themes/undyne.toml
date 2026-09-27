@@ -1,5 +1,6 @@
 [meta]
 name = "undyne"
+native_names = ["アンダイン"]
 group = "Undertale"
 order = 59
 ansi_source = "Sea Shells + Determination"

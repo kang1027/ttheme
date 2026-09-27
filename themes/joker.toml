@@ -1,5 +1,6 @@
 [meta]
 name = "joker"
+native_names = ["雨宮蓮", "来栖暁", "ジョーカー"]
 group = "Persona 5"
 order = 49
 ansi_source = "Red Alert + Phantom"

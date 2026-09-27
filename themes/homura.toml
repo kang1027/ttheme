@@ -1,5 +1,6 @@
 [meta]
 name = "homura"
+native_names = ["暁美ほむら"]
 group = "Madoka Magica"
 order = 16
 ansi_source = "Monokai Pro Machine"

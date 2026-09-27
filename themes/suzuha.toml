@@ -1,5 +1,6 @@
 [meta]
 name = "suzuha"
+native_names = ["阿万音鈴羽"]
 group = "Steins;Gate"
 order = 24
 ansi_source = "Gruvbox Dark + Lab"

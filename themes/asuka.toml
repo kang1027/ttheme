@@ -1,5 +1,6 @@
 [meta]
 name = "asuka"
+native_names = ["惣流・アスカ・ラングレー"]
 group = "Evangelion"
 order = 9
 ansi_source = "GitLab Dark"

@@ -1,5 +1,6 @@
 [meta]
 name = "sayori"
+native_names = ["サヨリ"]
 group = "Doki Doki Literature Club"
 order = 72
 ansi_source = "0x96f"

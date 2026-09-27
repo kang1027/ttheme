@@ -1,5 +1,6 @@
 [meta]
 name = "steph"
+native_names = ["ステファニー・ドーラ"]
 group = "No Game No Life"
 order = 141
 ansi_source = "Catppuccin Mocha + Blank"

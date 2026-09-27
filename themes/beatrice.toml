@@ -1,5 +1,6 @@
 [meta]
 name = "beatrice"
+native_names = ["ベアトリーチェ"]
 group = "Umineko"
 order = 78
 ansi_source = "Batman + Truth"

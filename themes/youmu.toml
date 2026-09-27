@@ -1,5 +1,6 @@
 [meta]
 name = "youmu"
+native_names = ["魂魄妖夢"]
 group = "Touhou Project"
 order = 94
 ansi_source = "Everforest Dark Med"

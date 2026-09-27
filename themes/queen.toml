@@ -1,5 +1,6 @@
 [meta]
 name = "queen"
+native_names = ["新島真", "クイーン"]
 group = "Persona 5"
 order = 53
 ansi_source = "Argonaut + Phantom"

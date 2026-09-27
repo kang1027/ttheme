@@ -1,5 +1,6 @@
 [meta]
 name = "kaito"
+native_names = ["カイト", "KAITO"]
 group = "Vocaloid"
 order = 7
 ansi_source = "Aardvark Blue + Crypton"

@@ -1,5 +1,6 @@
 [meta]
 name = "mugi"
+native_names = ["琴吹紬"]
 group = "K-On!"
 order = 85
 ansi_source = "Tomorrow Night Eighties"

@@ -1,5 +1,6 @@
 [meta]
 name = "bernkastel"
+native_names = ["フレデリカ・ベルンカステル"]
 group = "Umineko"
 order = 79
 ansi_source = "Challenger Deep"

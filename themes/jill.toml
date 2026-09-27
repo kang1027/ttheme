@@ -1,5 +1,6 @@
 [meta]
 name = "jill"
+native_names = ["ジル・スティングレイ"]
 group = "VA-11 Hall-A"
 order = 43
 ansi_source = "TokyoNight"

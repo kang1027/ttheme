@@ -1,5 +1,6 @@
 [meta]
 name = "mercury"
+native_names = ["セーラーマーキュリー", "水野亜美"]
 group = "Sailor Moon"
 order = 38
 ansi_source = "Glacier + Senshi"

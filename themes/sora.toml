@@ -1,5 +1,6 @@
 [meta]
 name = "sora"
+native_names = ["空"]
 group = "No Game No Life"
 order = 139
 ansi_source = "Citruszest + Blank"

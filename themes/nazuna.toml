@@ -1,5 +1,6 @@
 [meta]
 name = "nazuna"
+native_names = ["七草ナズナ"]
 group = "Call of the Night"
 order = 62
 ansi_source = "Purplepeter"

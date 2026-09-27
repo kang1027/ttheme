@@ -1,5 +1,6 @@
 [meta]
 name = "velvet"
+native_names = ["ベルベットルーム"]
 group = "Persona 5"
 order = 55
 ansi_source = "Tomorrow Night Blue"

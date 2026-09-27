@@ -1,5 +1,6 @@
 [meta]
 name = "battler"
+native_names = ["右代宮戦人"]
 group = "Umineko"
 order = 77
 ansi_source = "Deep"

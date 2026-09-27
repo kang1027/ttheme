@@ -1,5 +1,6 @@
 [meta]
 name = "tet"
+native_names = ["テト"]
 group = "No Game No Life"
 order = 144
 ansi_source = "Peppermint + Blank"

@@ -1,5 +1,6 @@
 [meta]
 name = "sans"
+native_names = ["サンズ"]
 group = "Undertale"
 order = 57
 ansi_source = "Galaxy"

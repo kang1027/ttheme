@@ -1,5 +1,6 @@
 [meta]
 name = "nightcity"
+native_names = ["ナイトシティ"]
 group = "Cyberpunk: Edgerunners"
 order = 90
 ansi_source = "Vibrant Ink"

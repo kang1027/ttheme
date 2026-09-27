@@ -1,5 +1,6 @@
 [meta]
 name = "mettaton"
+native_names = ["メタトン"]
 group = "Undertale"
 order = 60
 ansi_source = "Laser"

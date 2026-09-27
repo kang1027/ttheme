@@ -1,5 +1,6 @@
 [meta]
 name = "marisa"
+native_names = ["霧雨魔理沙"]
 group = "Touhou Project"
 order = 92
 ansi_source = "Apple Classic"

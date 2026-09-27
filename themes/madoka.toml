@@ -1,5 +1,6 @@
 [meta]
 name = "madoka"
+native_names = ["鹿目まどか"]
 group = "Madoka Magica"
 order = 15
 ansi_source = "Elegant + Magica"

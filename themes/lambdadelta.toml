@@ -1,5 +1,6 @@
 [meta]
 name = "lambdadelta"
+native_names = ["ラムダデルタ"]
 group = "Umineko"
 order = 80
 ansi_source = "Neon Purple + Truth"

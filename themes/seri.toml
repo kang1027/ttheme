@@ -1,5 +1,6 @@
 [meta]
 name = "seri"
+native_names = ["桔梗セリ"]
 group = "Call of the Night"
 order = 64
 ansi_source = "Birds Of Paradise"

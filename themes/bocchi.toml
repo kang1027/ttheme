@@ -1,5 +1,6 @@
 [meta]
 name = "bocchi"
+native_names = ["後藤ひとり"]
 group = "Bocchi the Rock!"
 order = 29
 ansi_source = "Sakura + Kessoku"

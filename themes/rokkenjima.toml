@@ -1,5 +1,6 @@
 [meta]
 name = "rokkenjima"
+native_names = ["六軒島"]
 group = "Umineko"
 order = 81
 ansi_source = "Sequoia Retro Dark + Truth"

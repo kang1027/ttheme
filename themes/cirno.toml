@@ -1,5 +1,6 @@
 [meta]
 name = "cirno"
+native_names = ["チルノ"]
 group = "Touhou Project"
 order = 93
 ansi_source = "Forest Blue"

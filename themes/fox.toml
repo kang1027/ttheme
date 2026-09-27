@@ -1,5 +1,6 @@
 [meta]
 name = "fox"
+native_names = ["喜多川祐介", "フォックス"]
 group = "Persona 5"
 order = 52
 ansi_source = "Nord"

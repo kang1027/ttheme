@@ -1,5 +1,6 @@
 [meta]
 name = "stella"
+native_names = ["ステラ・ホシイ"]
 group = "VA-11 Hall-A"
 order = 46
 ansi_source = "Scarlet Protocol + Glitch City"

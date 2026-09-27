@@ -1,5 +1,6 @@
 [meta]
 name = "rin"
+native_names = ["鏡音リン"]
 group = "Vocaloid"
 order = 4
 ansi_source = "Citruszest"

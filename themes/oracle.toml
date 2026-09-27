@@ -1,5 +1,6 @@
 [meta]
 name = "oracle"
+native_names = ["佐倉双葉", "ナビ"]
 group = "Persona 5"
 order = 54
 ansi_source = "Monokai Remastered"

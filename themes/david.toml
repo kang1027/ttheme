@@ -1,5 +1,6 @@
 [meta]
 name = "david"
+native_names = ["デイビッド・マルティネス", "デイヴィッド・マルティネス"]
 group = "Cyberpunk: Edgerunners"
 order = 87
 ansi_source = "Cobalt2 + Edgerunner"

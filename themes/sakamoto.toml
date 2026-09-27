@@ -1,5 +1,6 @@
 [meta]
 name = "sakamoto"
+native_names = ["阪本"]
 group = "Nichijou"
 order = 150
 ansi_source = "Red Sands + Nichijou"

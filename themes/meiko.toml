@@ -1,5 +1,6 @@
 [meta]
 name = "meiko"
+native_names = ["メイコ", "MEIKO"]
 group = "Vocaloid"
 order = 8
 ansi_source = "Sundried + Crypton"

@@ -1,5 +1,6 @@
 [meta]
 name = "len"
+native_names = ["鏡音レン"]
 group = "Vocaloid"
 order = 5
 ansi_source = "Srcery"

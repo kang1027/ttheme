@@ -1,5 +1,6 @@
 [meta]
 name = "hakase"
+native_names = ["東雲はかせ"]
 group = "Nichijou"
 order = 149
 ansi_source = "GitHub Dark Default + Nichijou"

@@ -1,5 +1,6 @@
 [meta]
 name = "toriel"
+native_names = ["トリエル"]
 group = "Undertale"
 order = 56
 ansi_source = "Shades Of Purple + Determination"

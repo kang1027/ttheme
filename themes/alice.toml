@@ -1,5 +1,6 @@
 [meta]
 name = "alice"
+native_names = ["アリス・ツーベルク", "アリス・シンセシス・サーティ"]
 group = "Sword Art Online"
 order = 131
 ansi_source = "Cobalt Next Dark + Aincrad"

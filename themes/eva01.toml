@@ -1,5 +1,6 @@
 [meta]
 name = "eva01"
+native_names = ["エヴァンゲリオン初号機"]
 group = "Evangelion"
 order = 13
 ansi_source = "Aura"

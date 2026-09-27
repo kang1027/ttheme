@@ -1,5 +1,6 @@
 [meta]
 name = "patchouli"
+native_names = ["パチュリー・ノーレッジ"]
 group = "Touhou Project"
 order = 95
 ansi_source = "SeedFlip Ultraviolet"

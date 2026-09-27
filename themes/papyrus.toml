@@ -1,5 +1,6 @@
 [meta]
 name = "papyrus"
+native_names = ["パピルス"]
 group = "Undertale"
 order = 58
 ansi_source = "Ubuntu + Determination"
