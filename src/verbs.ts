@@ -61,12 +61,18 @@ export const VERB_SPECS: VerbSpec[] = [
   },
   {
     name: 'pin',
-    args: [],
-    about: 'Pick a palette for this directory — cd into it repaints, cd out restores',
+    args: ['[directory]'],
+    about: 'Pick a palette for this directory, everything below it or its repository — cd in repaints, cd out restores',
     section: 'tab',
     shell: true,
   },
-  { name: 'unpin', args: [], about: 'Drop the palette pinned to this directory', section: 'tab', shell: true },
+  {
+    name: 'unpin',
+    args: ['[directory]'],
+    about: "Drop a pin — this directory's, every one below it, or the one above that paints it",
+    section: 'tab',
+    shell: true,
+  },
   {
     name: 'pins',
     args: [],

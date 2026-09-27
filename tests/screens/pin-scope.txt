@@ -15,10 +15,10 @@
 
 
 
+kita  → ~/work · this directory
+~/work ← here  kita  this directory  new
+└─ site        kita  this directory
 
-
-
-
-
-
-[APPLY] kita → [This directory]  And below    ~/work   enter confirm                        esc back
+Replaces konata on ~/work · and below
+Then here · kita pinned to this directory
+[PIN] kita → [This directory]  And below    ~/work   enter confirm                          esc back
