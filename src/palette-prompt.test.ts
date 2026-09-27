@@ -11,6 +11,7 @@ import {
   type PickerScope,
   pickerRows,
   seriesRows,
+  stepRow,
 } from './palette-prompt.ts'
 
 function entry(partial: Partial<PaletteEntry> & { name: string; group: string }): PaletteEntry {
@@ -37,6 +38,26 @@ const entries: PaletteEntry[] = [
   entry({ name: 'madoka', group: 'Madoka Magica', native: '魔法少女まどか☆マギカ' }),
   entry({ name: 'homura', group: 'Madoka Magica', native: '魔法少女まどか☆マギカ', lead: true }),
 ]
+
+test('stepRow wraps at either end, stops short of it on a page, and steps over a rule', () => {
+  const none = () => false
+  assert.equal(stepRow(4, 1, 5, none), 0)
+  assert.equal(stepRow(0, -1, 5, none), 4)
+  assert.equal(stepRow(2, 10, 5, none), 4)
+  assert.equal(stepRow(4, 10, 5, none), 0)
+  assert.equal(stepRow(2, -10, 5, none), 0)
+  assert.equal(stepRow(4, Number.POSITIVE_INFINITY, 5, none), 4)
+  assert.equal(stepRow(0, Number.NEGATIVE_INFINITY, 5, none), 0)
+  assert.equal(
+    stepRow(1, 1, 5, (i) => i === 2),
+    3,
+  )
+  assert.equal(
+    stepRow(3, -1, 5, (i) => i === 2),
+    1,
+  )
+  assert.equal(stepRow(0, 1, 0, none), 0)
+})
 
 test('matchesPalette filters by name, group and native title', () => {
   const madoka = entries[3]

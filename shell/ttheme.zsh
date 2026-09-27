@@ -1137,8 +1137,8 @@ __tt_pv_tune() {
   local name
   case $key in
     $'\x03') return 1 ;;
-    up) (( tf > 1 )) && tf=$(( tf - 1 )) ;;
-    down) (( tf < 3 )) && tf=$(( tf + 1 )) ;;
+    up) tf=$(( tf > 1 ? tf - 1 : 3 )) ;;
+    down) tf=$(( tf < 3 ? tf + 1 : 1 )) ;;
     left|right|sleft|sright)
       [[ $key == *left ]] && n=-1
       [[ $key == s* ]] && (( tf != 2 )) && n=$(( n * 10 ))
@@ -1190,8 +1190,8 @@ __tt_pv_regroup() {
 __tt_pv_conf() {
   case $key in
     $'\x03') return 1 ;;
-    up) (( cf > 1 )) && cf=$(( cf - 1 )) ;;
-    down) (( cf < ${#cvars} )) && cf=$(( cf + 1 )) ;;
+    up) cf=$(( cf > 1 ? cf - 1 : ${#cvars} )) ;;
+    down) cf=$(( cf < ${#cvars} ? cf + 1 : 1 )) ;;
     left|sleft) __tt_pv_conf_step -1 ;;
     right|sright) __tt_pv_conf_step 1 ;;
     $'\r'|$'\n') __tt_pv_conf_save ;;
@@ -1594,6 +1594,7 @@ __tt_pv_read() {
     "6~") key=pgdn ;;
     "1;2C") key=sright ;;
     "1;2D") key=sleft ;;
+    Z) key=stab ;;
     *) key=nop ;;
   esac
 }
@@ -1602,7 +1603,7 @@ __tt_pv_pick() {
   case $key in
     $'\x03') return 1 ;;
     esc) pick="" ;;
-    left|right|$'\t') pk=$(( 3 - pk )) ;;
+    left|right|$'\t'|stab) pk=$(( 3 - pk )) ;;
     $'\r'|$'\n')
       sel=$pick picked=$pk
       return 1
@@ -1662,22 +1663,43 @@ __tt_pv_handle() {
         __tt_pv_toggle
       fi
       ;;
-    up) (( cur > 1 )) && cur=$(( cur - 1 )); [[ ${rtype[cur]} == rule ]] && cur=$(( cur - 1 )) ;;
-    down) (( cur < ${#rval} )) && cur=$(( cur + 1 )); [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 )) ;;
+    up)
+      if (( cur > 1 )); then
+        cur=$(( cur - 1 ))
+        [[ ${rtype[cur]} == rule ]] && cur=$(( cur - 1 ))
+      elif (( ${#rval} )); then
+        cur=${#rval}
+      fi
+      ;;
+    down)
+      if (( cur < ${#rval} )); then
+        cur=$(( cur + 1 ))
+        [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 ))
+      elif (( ${#rval} )); then
+        cur=1
+      fi
+      ;;
     right) [[ ${rtype[cur]} == (hdr|cat) && -z ${exp[${rval[cur]}]} ]] && __tt_pv_toggle ;;
     left) __tt_pv_left ;;
     home) cur=1 ;;
     end) (( ${#rval} )) && cur=${#rval} ;;
     pgup)
-      cur=$(( cur - ph + 5 ))
-      (( cur < 1 )) && cur=1
-      [[ ${rtype[cur]} == rule ]] && cur=$(( cur - 1 ))
+      if (( cur <= 1 )); then
+        (( ${#rval} )) && cur=${#rval}
+      else
+        cur=$(( cur - ph + 5 ))
+        (( cur < 1 )) && cur=1
+        [[ ${rtype[cur]} == rule ]] && cur=$(( cur - 1 ))
+      fi
       ;;
     pgdn)
-      cur=$(( cur + ph - 5 ))
-      (( cur > ${#rval} )) && cur=${#rval}
-      (( cur < 1 )) && cur=1
-      [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 ))
+      if (( cur >= ${#rval} )); then
+        cur=1
+      else
+        cur=$(( cur + ph - 5 ))
+        (( cur > ${#rval} )) && cur=${#rval}
+        [[ ${rtype[cur]} == rule ]] && cur=$(( cur + 1 ))
+      fi
       ;;
     ' ') [[ ${rtype[cur]} == (hdr|cat) ]] && __tt_pv_toggle ;;
     $'\t')

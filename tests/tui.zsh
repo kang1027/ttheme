@@ -33,7 +33,7 @@ typeset -ga SCENARIOS=(
   'preview-folded  few    preview'
   'preview-open    few    preview  Down Right'
   'preview-keys    few    preview  ?'
-  'browse-market   market browse   Down Down Down Right Down Right Down'
+  'browse-market   market browse   Down Down Right Down Right Down'
   'preview-market  market preview  Down Right Down Right Down'
   'menu-market     market menu'
 )

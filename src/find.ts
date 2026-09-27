@@ -1096,8 +1096,9 @@ class Finder {
       void this.turn()
       return
     }
-    if (key === 'tab') {
-      this.tab = (this.tab + 1) % (SITES.length + 1)
+    if (key === 'tab' || key === 'shift-tab') {
+      const tabs = SITES.length + 1
+      this.tab = (this.tab + (key === 'tab' ? 1 : tabs - 1)) % tabs
       this.syncSite()
       void this.turn()
       return
@@ -1138,7 +1139,7 @@ class Finder {
     const page = pageOf(view)
     if (key === 'up' || key === 'down') {
       const k = page.indexOf(at) + (key === 'up' ? -1 : 1)
-      view.panel = page[Math.max(0, Math.min(page.length - 1, k))] ?? at
+      view.panel = page[(k + page.length) % page.length] ?? at
       this.draw()
       return
     }
@@ -1338,9 +1339,9 @@ class Finder {
     const text = view.editing ?? ''
     const shown = view.suggest ?? []
     if ((key === 'up' || key === 'down') && shown.length > 0) {
-      const at = view.pick ?? -1
-      const next = key === 'down' ? Math.min(shown.length - 1, at + 1) : at - 1
-      view.pick = next < 0 ? undefined : next
+      const at = view.pick ?? shown.length
+      const next = (at + (key === 'down' ? 1 : shown.length)) % (shown.length + 1)
+      view.pick = next === shown.length ? undefined : next
       this.draw()
       return
     }

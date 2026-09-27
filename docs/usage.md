@@ -49,9 +49,10 @@ in front of any command prints where an error came from, for a bug report.
 In `preview`, series and palettes are listed by name (`TTHEME_SORT=series`
 keeps the order they were added), groups start folded with the cursor on the
 current palette;
-`↑`/`↓` move (the tab repaints as the focus lands on a palette), `←`/`→` fold
-and unfold (so do enter and space on a series), page up/down and home/end
-jump, typing filters by substring and underlines the match (ctrl-u clears it),
+`↑`/`↓` move (the tab repaints as the focus lands on a palette) and wrap
+around at either end, `←`/`→` fold and unfold (so do enter and space on a
+series), page up/down jump a screen (from the last row to the first, and back)
+and home/end to either end, typing filters by substring and underlines the match (ctrl-u clears it),
 enter applies, and esc steps back — first out of the filter, then out of the
 preview with the original colors restored. Each palette row carries its 16
 colors, normal over bright. The last line lists only the keys that work right
@@ -137,7 +138,8 @@ still wins:
 
 The catalog is not installed wholesale: `init` installs the series you pick, and
 `init --yes` none at all. `ttheme browse` opens it as a live picker in four
-tabs — `tab` moves on, `shift+tab` back, and each tab keeps its own filter:
+tabs — `tab` moves on, `shift+tab` back, and each tab keeps its own filter;
+`↑`/`↓`, page up/down and home/end move through a list as they do in preview:
 
 - **Catalog** is every palette of every market you added. Groups fold and
   unfold, typing filters (a query has no spaces, `space` is the pick key), the

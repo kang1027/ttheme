@@ -46,7 +46,7 @@ A palette with no background yet can find one: on it in `preview`, tab opens
 **find**, which searches for the palette's character tag (`meta.booru`) and lays
 the results out as a grid of thumbnails. It opens on **all**, every site's posts
 ranked together; tab moves to danbooru, konachan, yande.re and zerochan alone,
-then back. The boorus share one tag vocabulary, and zerochan names characters in
+then back, and shift+tab goes the other way. The boorus share one tag vocabulary, and zerochan names characters in
 words (`Gotou Hitori`), which find asks for with underscores (`gotou_hitori`);
 where a site calls the character something else, the palette names it there in
 `[meta.booru_sites]`. danbooru and yande.re carry every rating and

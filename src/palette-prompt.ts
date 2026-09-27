@@ -101,6 +101,32 @@ export function isMarket(group: string): boolean {
   return group.includes('@')
 }
 
+export function stepRow(at: number, delta: number, count: number, rule: (i: number) => boolean): number {
+  const last = count - 1
+  if (last < 0) {
+    return at
+  }
+  let next: number
+  if (!Number.isFinite(delta)) {
+    next = delta > 0 ? last : 0
+  } else if (delta > 0) {
+    next = at >= last ? 0 : Math.min(last, at + delta)
+  } else {
+    next = at <= 0 ? last : Math.max(0, at + delta)
+  }
+  return rule(next) ? next + Math.sign(delta) : next
+}
+
+export function pageStep(name: string | undefined, size: number): number | undefined {
+  const steps: Record<string, number> = {
+    home: Number.NEGATIVE_INFINITY,
+    end: Number.POSITIVE_INFINITY,
+    pageup: -size,
+    pagedown: size,
+  }
+  return name === undefined ? undefined : steps[name]
+}
+
 function ruled(rows: Row[]): Row[] {
   const at = rows.findIndex((r) => r.kind === 'group' && isMarket(r.name))
   return at > 0 && rows.slice(0, at).some((r) => r.kind === 'group')
@@ -295,13 +321,7 @@ export class PaletteList {
   }
 
   move(delta: number): void {
-    let next = this.cursor + delta
-    if (this.rows[next]?.kind === 'rule') {
-      next += delta
-    }
-    if (next >= 0 && next < this.rows.length) {
-      this.cursor = next
-    }
+    this.cursor = stepRow(this.cursor, delta, this.rows.length, (i) => this.rows[i]?.kind === 'rule')
     this.sync()
   }
 
@@ -548,7 +568,10 @@ export class PalettePrompt extends Prompt<string> {
       }
     })
     this.on('key', (_char, key) => {
-      if (key?.name === 'space') {
+      const page = pageStep(key?.name, this.list.maxItems)
+      if (page !== undefined) {
+        this.list.move(page)
+      } else if (key?.name === 'space') {
         this.list.pick()
       }
     })

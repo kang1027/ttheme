@@ -176,6 +176,7 @@ const CSI: Record<string, string> = {
   '6~': 'pgdn',
   I: 'focus-in',
   O: 'focus-out',
+  Z: 'shift-tab',
 }
 
 export function decodeKeys(input: string): string[] {
@@ -852,7 +853,7 @@ const KEYS: Record<FindView['mode'], [string, string][]> = {
   grid: [
     ['Move', '←↑↓→  home  end  pgup  pgdn'],
     ['Try on', 'enter'],
-    ['Site', `tab  all, ${SITES.map((site) => site.name).join(', ')}`],
+    ['Site', `tab  shift+tab  all, ${SITES.map((site) => site.name).join(', ')}`],
     ['Posts', 'c  cutouts or every post'],
     ['Search', '/  a tag, a post URL or an id'],
     ['Your own', 'ctrl+v or v  a picture from the clipboard · drop one on the window or paste its link'],

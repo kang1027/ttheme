@@ -14,9 +14,11 @@ import {
   NORMAL,
   PaletteList,
   type PromptFx,
+  pageStep,
   paletteExample,
   RESET,
   SearchHint,
+  stepRow,
   YELLOW,
 } from './palette-prompt.ts'
 import { counted, type Refreshed } from './refresh.ts'
@@ -234,7 +236,10 @@ export class BrowsePanel extends Prompt<string> {
       }
       return
     }
-    if (key?.name === 'tab') {
+    const page = pageStep(key?.name, this.maxItems)
+    if (page !== undefined) {
+      this.move(page)
+    } else if (key?.name === 'tab') {
       this.switchTab(key.shift ? -1 : 1)
     } else if (key?.name === 'space') {
       this.activate()
@@ -316,13 +321,7 @@ export class BrowsePanel extends Prompt<string> {
     const key = this.tab === 'markets' ? 'markets' : 'errors'
     const rules =
       key === 'markets' ? this.marketRows().map((r) => r.kind === 'rule') : this.problemRows().map(() => false)
-    let next = this.cursor[key] + delta
-    if (rules[next]) {
-      next += delta
-    }
-    if (next >= 0 && next < rules.length) {
-      this.cursor[key] = next
-    }
+    this.cursor[key] = stepRow(this.cursor[key], delta, rules.length, (i) => rules[i] === true)
   }
 
   private side(right: boolean): void {
