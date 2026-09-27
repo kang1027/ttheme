@@ -17,8 +17,8 @@ export type Kind = 'comic' | 'monochrome' | 'sketch' | 'chibi'
 export const RATINGS: Rating[] = ['safe', 'questionable', 'explicit']
 export const BLOCKS: Block[] = ['nudity', 'underwear']
 export const KINDS: Kind[] = ['comic', 'monochrome', 'sketch', 'chibi']
-export const SCORES = ['off', '10', '50']
-export const SIZES = ['off', '1080', '1800']
+export const SCORES = ['off', '5', '10', '25', '50', '100']
+export const SIZES = ['off', '720', '1080', '1440', '1800', '2560']
 
 const EXPOSED: Record<Block, Set<string>> = {
   nudity: new Set(['nude', 'naked', 'topless', 'bottomless', 'nipples', 'naked_towel', 'undressing']),
@@ -104,6 +104,7 @@ export interface Site {
   parse(text: string): Post[]
   count(text: string): number
   guesses?(post: Post): string[]
+  counts?(tags: string): boolean
 }
 
 function listing(dir: string): string[] {
@@ -307,7 +308,8 @@ export function parseCount(xml: string): number {
 
 export function parseCounts(text: string): number {
   const raw: unknown = text.trim() ? JSON.parse(text) : {}
-  return Number((raw as { counts?: { posts?: unknown } }).counts?.posts) || 0
+  const posts = (raw as { counts?: { posts?: unknown } }).counts?.posts
+  return posts === null ? Number.NaN : Number(posts) || 0
 }
 
 interface Spec {
@@ -384,6 +386,18 @@ export function siteSet(value: string | undefined): string[] {
 
 export function narrowOf(score: string | undefined, size: string | undefined, png: string | undefined): Narrow {
   return { score: Number(score) || 0, size: Number(size) || 0, png: png === 'on' }
+}
+
+export function tagList(value: string | undefined): string[] {
+  return [
+    ...new Set(
+      (value ?? '')
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .map((tag) => tag.replace(/^-+/, ''))
+        .filter(Boolean),
+    ),
+  ]
 }
 
 function tiers(safe: string[], questionable: string[], explicit: string[]): Record<Rating, Set<string>> {
@@ -505,6 +519,7 @@ function zerochan(raw: Spec): Site {
     pageUrl: (id) => `${spec.origin}/${id}`,
     parse: parseZerochan,
     count: parseZerochanCount,
+    counts: (tags) => zerochanPath(tags).split(',').length === 1 && !('d' in zerochanParams(tags)),
     guesses: (post) =>
       (post.tags.includes('transparent_background') ? ['png', 'jpg'] : ['jpg', 'png']).map((ext) =>
         post.preview.replace(ZEROCHAN_SAMPLES, ZEROCHAN_FILES).replace(/\.600\.(\d+)\.jpg$/, `.full.$1.${ext}`),

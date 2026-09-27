@@ -95,9 +95,15 @@ a value; on the two rows of checkboxes (rating and block) they move between the
 boxes and space ticks one, so `safe` and `explicit` can be listed without
 `questionable`, or underwear let through while nudity stays blocked. At least
 one rating stays ticked. `a` turns the panel to its advanced page — the lowest
-score, the shortest side a picture must reach (1080 or 1800 px), the sites the
-all tab mixes, the kinds of picture to hide by tag (comic, monochrome, sketch,
-chibi) and PNG only — and back; enter saves both pages. Each site is asked to
+score, the shortest side a picture must reach, the sites the all tab mixes, the
+kinds of picture to hide by tag (comic, monochrome, sketch, chibi), tags of your
+own to hide and PNG only — and back. Under the rows the panel says what the one
+under the cursor does and which sites keep it, and what each site holds for the
+query at the values on screen before they are saved (`makise_kurisu: danbooru
+572 · konachan 42 · yande.re 213 · zerochan no count` at 1600 px), counted again
+a moment after each change. ←→ steps the score and size, a number typed on
+either row sets any other, and enter on `hide tags` takes the tags to type;
+enter or `s` saves both pages. Each site is asked to
 filter by what it can (danbooru takes its size, score and file-type terms
 without counting them against its two tags, zerochan its own `large` and
 `huge`), every post is checked again on arrival, and a site that cannot keep a

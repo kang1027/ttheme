@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cellReport, decodeKeys } from './find-screen.ts'
+import { cellReport, decodeKeys, stepped } from './find-screen.ts'
 
 test('cellReport reads the xterm cell size in pixels', () => {
   assert.deepEqual(cellReport('x\x1b[6;34;14ty'), { cell: { h: 34, w: 14 }, rest: 'xy' })
@@ -18,4 +18,13 @@ test('cellReport waits for a report that has not fully arrived', () => {
 
 test('decodeKeys reads the picture paste keys and focus reports', () => {
   assert.deepEqual(decodeKeys('\x16\x1bv\x1b[I\x1b[O\x1b'), ['ctrl-v', 'alt-v', 'focus-in', 'focus-out', 'esc'])
+})
+
+test('a step from a typed value goes to the nearest step that way, and steps wrap around', () => {
+  const sizes = ['off', '720', '1080', '1440', '1800', '2560']
+  assert.equal(stepped(sizes, '1600', 1), '1800')
+  assert.equal(stepped(sizes, '1600', -1), '1440')
+  assert.equal(stepped(sizes, '3000', 1), 'off')
+  assert.equal(stepped(sizes, '2560', 1), 'off')
+  assert.equal(stepped(sizes, 'off', -1), '2560')
 })

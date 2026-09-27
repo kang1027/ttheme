@@ -36,6 +36,7 @@ import {
   type Site,
   siteSet,
   sweepCache,
+  tagList,
   tagsOf,
 } from './booru.ts'
 
@@ -107,6 +108,22 @@ test('the advanced filters ask each site in its own terms, and danbooru takes th
   assert.equal(tagsOf('amane_suzuha transparent_background order:score'), 3, 'an order still counts')
   const url = new URL(zero.postsUrl('gotou_hitori dimension:huge', 0))
   assert.deepEqual([url.pathname, url.searchParams.get('d')], ['/gotou+hitori', 'huge'])
+})
+
+test('typed hide tags read as one lowercase list, commas or spaces, a leading minus dropped', () => {
+  assert.deepEqual(tagList('Cosplay, multiple_girls  -ai-generated cosplay'), [
+    'cosplay',
+    'multiple_girls',
+    'ai-generated',
+  ])
+  assert.deepEqual(tagList(undefined), [])
+})
+
+test('a zerochan count means something only for one plain tag, since its filters leave the count as it was', () => {
+  assert.equal(zero.counts?.('makise_kurisu'), true)
+  assert.equal(zero.counts?.('makise_kurisu dimension:huge'), false)
+  assert.equal(zero.counts?.('makise_kurisu transparent_background'), false)
+  assert.equal(dan.counts, undefined, 'the boorus count every query they are asked')
 })
 
 test('hidden kinds are told by tag, in every site spelling, and none hides nothing', () => {
@@ -357,6 +374,7 @@ test('parseDanbooru takes the artist, the score, the 360 px preview and only the
 test('parseCounts reads the number danbooru answers a count query with', () => {
   assert.equal(parseCounts('{"counts":{"posts":1026}}'), 1026)
   assert.equal(parseCounts(''), 0)
+  assert.ok(Number.isNaN(parseCounts('{"counts":{"posts":null}}')), 'a count danbooru gave up on is unknown, not 0')
 })
 
 test('postRef turns a pasted post page, a site:id or a bare number into one post to jump to', () => {

@@ -5,21 +5,32 @@ export type Preset = 'cutouts' | 'all'
 export type Order = 'fit' | 'newest' | 'score'
 export type Sets = 'fold' | 'show'
 
+export type Entry = 'number' | 'text'
+
 export interface Setting {
   name: string
   label: string
+  about: string
   choices: string[]
   multi?: { read(raw: string | undefined): string[]; none?: string }
+  entry?: Entry
   advanced?: boolean
 }
 
 export interface Row {
   label: string
+  about: string
   choices: string[]
   value: string
   multi?: { none?: string }
+  entry?: Entry
   advanced?: boolean
   cursor: number
+}
+
+export interface Count {
+  site: string
+  count?: number
 }
 
 export interface Tile {
@@ -62,9 +73,12 @@ export interface FindView {
   narrow: Narrow
   enabled: string[]
   hide: Kind[]
+  hideTags: string[]
   settings: Row[]
   panel?: number
   advanced: boolean
+  typing?: string
+  counts?: Count[]
   colors: { cursor: Hex; selection: Hex; ansi: Hex[] }
   tiles: Tile[]
   installed: number[]
@@ -487,7 +501,7 @@ function query(line: Line, cols: number, view: FindView, accent: string): void {
     ...(view.narrow.size > 0 ? [`≥${view.narrow.size}px`] : []),
     ...(view.narrow.score > 0 ? [`score≥${view.narrow.score}`] : []),
     ...(view.narrow.png ? ['png'] : []),
-    ...(view.hide.length > 0 ? [`hides ${view.hide.join('+')}`] : []),
+    ...(view.hide.length + view.hideTags.length > 0 ? [`hides ${[...view.hide, ...view.hideTags].join('+')}`] : []),
     ...(skipped.length > 0 ? [`all skips ${skipped.join('+')}`] : []),
   ]
   line.put(c, `  ${state.join('  ')}`, D)
@@ -697,7 +711,7 @@ const KEYS: Record<FindView['mode'], [string, string][]> = {
     ['unfold', 'space  a set of ×N'],
     ['open', 'o  the post page in a browser'],
     ['settings', 's  rating, block, posts, solo, order, sets, remove bg'],
-    ['advanced', 'a in settings  min score, min size, sites, hide, png only'],
+    ['advanced', 'a in settings  min score, min size, sites, hide, hide tags, png only'],
     ['back', 'esc returns to preview'],
     ['close', '?  esc'],
   ],
@@ -716,62 +730,189 @@ export function pageOf(view: Pick<FindView, 'settings' | 'advanced'>): number[] 
   return view.settings.flatMap((row, i) => (Boolean(row.advanced) === view.advanced ? [i] : []))
 }
 
-function panel(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
-  const at = view.panel ?? 0
-  const shown = pageOf(view).map((i) => ({ row: view.settings[i] as Row, i }))
-  const label = Math.max(...view.settings.map((row) => row.label.length))
-  const widest = Math.max(
-    ...view.settings.map((row) => row.choices.reduce((n, c) => n + c.length + (row.multi ? 6 : 3), 0)),
-  )
-  const w = Math.min(cols - 2, Math.max(28, label + widest + 8))
-  const h = shown.length + 4
-  const x = Math.floor((cols - w) / 2)
-  const y = Math.max(2, Math.floor((rows - h) / 2))
-  const title = view.advanced ? 'settings · advanced' : 'settings'
-  lines[y]?.put(x, `╭─ ${title} ${'─'.repeat(Math.max(0, w - title.length - 5))}╮`)
-  for (let r = y + 1; r < y + h - 1; r++) {
-    lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
+export function stepped(choices: readonly string[], value: string, step: 1 | -1): string {
+  const at = choices.indexOf(value)
+  if (at !== -1) {
+    return choices[(at + step + choices.length) % choices.length] as string
   }
-  shown.forEach(({ row, i }, n) => {
-    const line = lines[y + 2 + n] as Line
-    line.put(x + 3, row.label, i === at ? B : D)
-    let c = x + 5 + label
-    const on = row.value.split(' ')
-    row.choices.forEach((choice, k) => {
-      const lit = on.includes(choice)
-      const under = row.multi && i === at && k === row.cursor ? '4;' : ''
-      const text = row.multi ? ` ${lit ? '[x]' : '[ ]'} ${choice} ` : ` ${choice} `
-      c = line.put(c, text, lit ? `\x1b[${under}7;${30 + view.siteAnsi}m` : under ? `\x1b[4m${D}` : D) + 1
-    })
+  const n = Number(value) || 0
+  const next =
+    step > 0 ? choices.find((c) => (Number(c) || 0) > n) : [...choices].reverse().find((c) => (Number(c) || 0) < n)
+  return next ?? (choices[step > 0 ? 0 : choices.length - 1] as string)
+}
+
+export function wrapped(text: string, room: number): string[] {
+  const out: string[] = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    if (line && width(line) + 1 + width(word) > room) {
+      out.push(line)
+      line = word
+    } else {
+      line = line ? `${line} ${word}` : word
+    }
+  }
+  return line ? [...out, line] : out
+}
+
+interface Chip {
+  text: string
+  sgr: string
+}
+
+function chips(row: Row, focused: boolean, typing: string | undefined, ansi: number): Chip[] {
+  const lit = `\x1b[7;${30 + ansi}m`
+  const typed = focused && typing !== undefined
+  if (row.entry === 'text') {
+    return [typed ? { text: ` ${typing}█ `, sgr: lit } : { text: ` ${row.value || 'none'} `, sgr: row.value ? lit : D }]
+  }
+  const on = typed ? [] : row.value.split(' ')
+  const out = row.choices.map((choice, k): Chip => {
+    const shown = on.includes(choice)
+    const under = row.multi && focused && k === row.cursor ? '4;' : ''
+    return {
+      text: row.multi ? ` ${shown ? '[x]' : '[ ]'} ${choice} ` : ` ${choice} `,
+      sgr: shown ? `\x1b[${under}7;${30 + ansi}m` : under ? `\x1b[4m${D}` : D,
+    }
   })
-  lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
-  foot(lines[rows - 1] as Line, cols, accent, {
-    badge: 'SET',
+  if (typed) {
+    return [...out, { text: ` ${typing}█ `, sgr: lit }]
+  }
+  return row.entry === 'number' && !row.choices.includes(row.value)
+    ? [...out, { text: ` ${row.value} `, sgr: lit }]
+    : out
+}
+
+function tally(view: FindView): string {
+  if (!view.tag) {
+    return ''
+  }
+  if (!view.counts) {
+    return `${view.tag}: counting…`
+  }
+  const each = view.counts.map(
+    ({ site, count }) => `${site}\u00a0${count === undefined ? 'no\u00a0count' : count.toLocaleString('en-US')}`,
+  )
+  return `${view.tag}: ${each.join(' · ')}`
+}
+
+function panelKeys(view: FindView, row: Row | undefined): { keys: [string, string][]; right: [string, string] } {
+  const page = view.advanced ? 'basic' : 'advanced'
+  if (view.typing !== undefined) {
+    return {
+      keys: [
+        ['⌫', 'erase'],
+        ['enter', 'done'],
+      ],
+      right: ['esc', 'cancel'],
+    }
+  }
+  if (row?.entry) {
+    return {
+      keys: [
+        ['↑↓', 'setting'],
+        ...(row.entry === 'number' ? ([['←→', 'step']] as [string, string][]) : []),
+        ['a', page],
+        ['enter', 'type'],
+        ['s', 'save'],
+      ],
+      right: ['esc', 'undo'],
+    }
+  }
+  return {
     keys: [
       ['↑↓', 'setting'],
       ['←→', 'value'],
-      ['a', view.advanced ? 'basic' : 'advanced'],
-      ['space', 'toggle'],
+      ['a', page],
+      ...(row?.multi ? ([['space', 'toggle']] as [string, string][]) : []),
       ['enter', 'save'],
     ],
     right: ['esc', 'undo'],
+  }
+}
+
+function panel(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
+  const at = view.panel ?? 0
+  const label = Math.max(...view.settings.map((row) => width(row.label)))
+  const lead = 5 + label
+  const need = Math.max(
+    ...view.settings.map(
+      (row) => lead + chips(row, false, undefined, 0).reduce((n, c) => n + width(c.text) + 1, 0) + 2,
+    ),
+  )
+  const w = Math.min(cols - 2, Math.max(40, need))
+  const room = w - lead - 2
+  const laid = pageOf(view).map((i) => {
+    const row = view.settings[i] as Row
+    const packed: Chip[][] = [[]]
+    let used = 0
+    for (const chip of chips(row, i === at, view.typing, view.siteAnsi)) {
+      const cw = width(chip.text) + 1
+      if (used > 0 && used + cw > room) {
+        packed.push([])
+        used = 0
+      }
+      packed[packed.length - 1]?.push(chip)
+      used += cw
+    }
+    return { row, i, packed }
   })
+  const text = w - 6
+  const aboutRoom = Math.max(...laid.map(({ row }) => wrapped(row.about, text).length))
+  const about = wrapped(view.settings[at]?.about ?? '', text)
+  const counted = wrapped(tally(view), text)
+  const countRoom = view.tag ? Math.max(2, counted.length) : 0
+  const body = laid.reduce((n, { packed }) => n + packed.length, 0)
+  const h = body + aboutRoom + countRoom + 5
+  const x = Math.floor((cols - w) / 2)
+  const y = Math.max(2, Math.floor((rows - h) / 2))
+  const title = view.advanced ? 'settings · advanced' : 'settings'
+  lines[y]?.put(x, `╭─ ${title} ${'─'.repeat(Math.max(0, w - width(title) - 5))}╮`)
+  for (let r = y + 1; r < y + h - 1; r++) {
+    lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
+  }
+  let r = y + 2
+  for (const { row, i, packed } of laid) {
+    lines[r]?.put(x + 3, row.label, i === at ? B : D)
+    for (const chipLine of packed) {
+      let c = x + lead
+      for (const chip of chipLine) {
+        c = (lines[r] as Line).put(c, chip.text, chip.sgr) + 1
+      }
+      r++
+    }
+  }
+  lines[y + 3 + body]?.put(x + 3, '─'.repeat(w - 6), D)
+  about.forEach((line, k) => {
+    lines[y + 4 + body + k]?.put(x + 3, line)
+  })
+  counted.forEach((line, k) => {
+    lines[y + 4 + body + aboutRoom + k]?.put(x + 3, line, D)
+  })
+  lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
+  const { keys, right } = panelKeys(view, view.settings[at])
+  foot(lines[rows - 1] as Line, cols, accent, { badge: 'SET', keys, right })
 }
 
 function help(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
   const keys = KEYS[view.mode]
-  const w = Math.min(cols - 2, 50)
-  const h = keys.length + 4
+  const w = Math.min(cols - 2, Math.max(50, ...keys.map(([, value]) => width(value) + 16)))
+  const laid = keys.map(([label, value]) => ({ label, parts: wrapped(value, w - 16) }))
+  const h = laid.reduce((n, { parts }) => n + parts.length, 0) + 4
   const x = Math.floor((cols - w) / 2)
   const y = Math.max(2, Math.floor((rows - h) / 2))
   lines[y]?.put(x, `╭─ keys ${'─'.repeat(w - 9)}╮`)
   for (let r = y + 1; r < y + h - 1; r++) {
     lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
   }
-  keys.forEach(([label, value], i) => {
-    lines[y + 2 + i]?.put(x + 3, label, B)
-    lines[y + 2 + i]?.put(x + 13, value.slice(0, w - 16))
-  })
+  let r = y + 2
+  for (const { label, parts } of laid) {
+    lines[r]?.put(x + 3, label, B)
+    for (const part of parts) {
+      lines[r]?.put(x + 13, part)
+      r++
+    }
+  }
   lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
   foot(lines[rows - 1] as Line, cols, accent, { badge: 'KEYS', right: ['? esc', 'close'] })
 }

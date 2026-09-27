@@ -147,11 +147,11 @@ const CONFIG_SETTINGS = {
     default: 'on',
   },
   TTHEME_FIND_MIN_SCORE: {
-    doc: '# the lowest score find lists: off, 10 or 50 — danbooru, konachan and yande.re filter by it, zerochan keeps no score (default off)',
+    doc: '# the lowest score find lists: off, or a number such as 5, 10, 25, 50 or 100 — danbooru, konachan and yande.re filter by it, zerochan keeps no score (default off)',
     default: 'off',
   },
   TTHEME_FIND_MIN_SIZE: {
-    doc: '# the shortest side a picture find lists must reach, in pixels: off, 1080 or 1800 (default off)',
+    doc: '# the shortest side a picture find lists must reach, in pixels: off, or a number such as 720, 1080, 1440, 1800 or 2560 (default off)',
     default: 'off',
   },
   TTHEME_FIND_SITES: {
@@ -161,6 +161,10 @@ const CONFIG_SETTINGS = {
   TTHEME_FIND_HIDE: {
     doc: '# the kinds of picture find leaves out by tag: comic, monochrome, sketch, chibi, or none to keep them all (default none)',
     default: 'none',
+  },
+  TTHEME_FIND_HIDE_TAGS: {
+    doc: '# more tags find leaves out, spaced — e.g. "cosplay multiple_girls" (default none)',
+    default: '',
   },
   TTHEME_FIND_PNG: {
     doc: '# on lists PNG originals only — a zerochan post counts only where danbooru holds the same file (default off)',

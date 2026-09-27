@@ -64,6 +64,7 @@ import {
   type Site,
   siteSet,
   sweepCache,
+  tagList,
   tagsOf,
 } from './booru.ts'
 import { booruTags, find, readAvailable, siteTags } from './catalog.ts'
@@ -71,6 +72,7 @@ import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
 import {
   CELL_QUERY,
+  type Count,
   cellReport,
   decodeKeys,
   type FindView,
@@ -79,9 +81,11 @@ import {
   type Order,
   pageOf,
   place,
+  type Row,
   release,
   renderFind,
   type Setting,
+  stepped,
   TILE,
   type Tile,
   transmit,
@@ -93,31 +97,126 @@ import { blurOf, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
 const SETTINGS: Setting[] = [
-  { name: 'TTHEME_FIND_RATING', label: 'rating', choices: RATINGS, multi: { read: ratingSet } },
-  { name: 'TTHEME_FIND_BLOCK', label: 'block', choices: BLOCKS, multi: { read: blockSet, none: 'none' } },
-  { name: 'TTHEME_FIND_POSTS', label: 'posts', choices: ['all', 'cutouts'] },
-  { name: 'TTHEME_FIND_SOLO', label: 'solo', choices: ['on', 'off'] },
-  { name: 'TTHEME_FIND_ORDER', label: 'order', choices: ['fit', 'newest', 'score'] },
-  { name: 'TTHEME_FIND_SETS', label: 'sets', choices: ['fold', 'show'] },
-  ...(canRemoveBackground() ? [{ name: 'TTHEME_FIND_REMOVE_BG', label: 'remove bg', choices: ['on', 'off'] }] : []),
-  { name: 'TTHEME_FIND_MIN_SCORE', label: 'min score', choices: SCORES, advanced: true },
-  { name: 'TTHEME_FIND_MIN_SIZE', label: 'min size', choices: SIZES, advanced: true },
+  {
+    name: 'TTHEME_FIND_RATING',
+    label: 'rating',
+    about: 'the ratings to list, each site read in its own words — space ticks one, and one stays ticked',
+    choices: RATINGS,
+    multi: { read: ratingSet },
+  },
+  {
+    name: 'TTHEME_FIND_BLOCK',
+    label: 'block',
+    about: 'posts tagged with nudity or underwear are left out — space unticks one',
+    choices: BLOCKS,
+    multi: { read: blockSet, none: 'none' },
+  },
+  {
+    name: 'TTHEME_FIND_POSTS',
+    label: 'posts',
+    about: 'every post of the character, or only the transparent cutouts',
+    choices: ['all', 'cutouts'],
+  },
+  {
+    name: 'TTHEME_FIND_SOLO',
+    label: 'solo',
+    about:
+      'on keeps the posts known to show the character alone — checked as posts arrive, so the counts below leave it out',
+    choices: ['on', 'off'],
+  },
+  {
+    name: 'TTHEME_FIND_ORDER',
+    label: 'order',
+    about: 'fit ranks each page by how well a post makes a backdrop; newest; or score',
+    choices: ['fit', 'newest', 'score'],
+  },
+  {
+    name: 'TTHEME_FIND_SETS',
+    label: 'sets',
+    about: 'one picture posted over and over, or held by another site too: fold it into one tile, or show each',
+    choices: ['fold', 'show'],
+  },
+  ...(canRemoveBackground()
+    ? [
+        {
+          name: 'TTHEME_FIND_REMOVE_BG',
+          label: 'remove bg',
+          about: 'cut the character out of an opaque picture you try on, with macOS Vision',
+          choices: ['on', 'off'],
+        },
+      ]
+    : []),
+  {
+    name: 'TTHEME_FIND_MIN_SCORE',
+    label: 'min score',
+    about:
+      'posts scored at least this — danbooru, konachan and yande.re; zerochan keeps no score. ←→ steps, or type any number',
+    choices: SCORES,
+    entry: 'number',
+    advanced: true,
+  },
+  {
+    name: 'TTHEME_FIND_MIN_SIZE',
+    label: 'min size',
+    about: 'the shorter side of a picture, in px — every site filters it. ←→ steps, or type any number',
+    choices: SIZES,
+    entry: 'number',
+    advanced: true,
+  },
   {
     name: 'TTHEME_FIND_SITES',
     label: 'sites',
+    about: 'the sites the all tab mixes — each keeps its own tab. space ticks one, and one stays ticked',
     choices: SITES.map((site) => site.name),
     multi: { read: siteSet },
     advanced: true,
   },
-  { name: 'TTHEME_FIND_HIDE', label: 'hide', choices: KINDS, multi: { read: kindSet, none: 'none' }, advanced: true },
-  { name: 'TTHEME_FIND_PNG', label: 'png only', choices: ['off', 'on'], advanced: true },
+  {
+    name: 'TTHEME_FIND_HIDE',
+    label: 'hide',
+    about: "comics, monochrome, sketches or chibi, told by tag in every site's spelling — checked as posts arrive",
+    choices: KINDS,
+    multi: { read: kindSet, none: 'none' },
+    advanced: true,
+  },
+  {
+    name: 'TTHEME_FIND_HIDE_TAGS',
+    label: 'hide tags',
+    about: 'posts with any of these tags are left out, spaced like cosplay multiple_girls — checked as posts arrive',
+    choices: [],
+    entry: 'text',
+    advanced: true,
+  },
+  {
+    name: 'TTHEME_FIND_PNG',
+    label: 'png only',
+    about:
+      'PNG originals only — danbooru counts it, the others are told by the file; zerochan only where danbooru holds it',
+    choices: ['off', 'on'],
+    advanced: true,
+  },
 ]
 
 function initial(setting: Setting, raw: string | undefined): string {
   if (setting.multi) {
     return setting.multi.read(raw).join(' ') || (setting.multi.none as string)
   }
+  if (setting.entry === 'number') {
+    return /^\d+$/.test(raw ?? '') && Number(raw) > 0 ? String(Number(raw)) : 'off'
+  }
+  if (setting.entry === 'text') {
+    return tagList(raw).join(' ')
+  }
   return setting.choices.find((choice) => choice === raw) ?? (setting.choices[0] as string)
+}
+
+interface Terms {
+  tag: string
+  preset: FindView['preset']
+  order: FindView['order']
+  rating: FindView['rating']
+  narrow: FindView['narrow']
+  enabled: FindView['enabled']
 }
 
 const ORDERS: Order[] = ['fit', 'newest', 'score']
@@ -133,6 +232,8 @@ function completable(token: string): boolean {
 const PROBE = 12
 const ALL_ANSI = 4
 const SUGGEST_WAIT = 150
+const COUNT_WAIT = 300
+const DIGITS = 6
 const THUMB = 12
 const PRELOAD = 2
 const SETTLE = 150
@@ -303,6 +404,8 @@ class Finder {
   private partial?: NodeJS.Timeout
   private suggestTimer?: NodeJS.Timeout
   private suggesting?: AbortController
+  private countTimer?: NodeJS.Timeout
+  private counting?: AbortController
   private input = ''
   private typed = ''
   private readonly grabber = new Grabber(
@@ -345,12 +448,15 @@ class Finder {
       narrow: this.narrowed(),
       enabled: siteSet(this.setting('TTHEME_FIND_SITES')),
       hide: kindSet(this.setting('TTHEME_FIND_HIDE')),
+      hideTags: tagList(this.setting('TTHEME_FIND_HIDE_TAGS')),
       advanced: false,
       settings: SETTINGS.map((setting) => ({
         label: setting.label,
         choices: [...setting.choices],
         value: this.setting(setting.name),
         multi: setting.multi && { none: setting.multi.none },
+        about: setting.about,
+        entry: setting.entry,
         advanced: setting.advanced,
         cursor: 0,
       })),
@@ -506,6 +612,7 @@ class Finder {
     clearTimeout(this.settle)
     clearTimeout(this.partial)
     this.quietSuggest()
+    this.quietCount()
     clearInterval(clock)
     stdin.off('data', this.onData)
     stdout.off('resize', this.onResize)
@@ -963,6 +1070,7 @@ class Finder {
     if (key === 's') {
       view.panel = 0
       view.advanced = false
+      this.recount()
       this.draw()
       return
     }
@@ -975,6 +1083,10 @@ class Finder {
     const view = this.view
     const at = view.panel ?? 0
     const row = view.settings[at]
+    if (view.typing !== undefined && row) {
+      this.typeKey(row, key)
+      return
+    }
     const page = pageOf(view)
     if (key === 'up' || key === 'down') {
       const k = page.indexOf(at) + (key === 'up' ? -1 : 1)
@@ -988,13 +1100,18 @@ class Finder {
       this.draw()
       return
     }
-    if ((key === 'left' || key === 'right') && row) {
+    if (row?.entry && (key === 'enter' || (row.entry === 'number' && /^[0-9]$/.test(key)))) {
+      view.typing = key === 'enter' ? (row.entry === 'text' ? row.value : '') : key
+      this.draw()
+      return
+    }
+    if ((key === 'left' || key === 'right') && row && row.entry !== 'text') {
       const step = key === 'left' ? -1 : 1
       if (row.multi) {
         row.cursor = (row.cursor + step + row.choices.length) % row.choices.length
       } else {
-        const index = row.choices.indexOf(row.value)
-        row.value = row.choices[(index + step + row.choices.length) % row.choices.length] as string
+        row.value = stepped(row.choices, row.value, step)
+        this.recount()
       }
       this.draw()
       return
@@ -1005,6 +1122,7 @@ class Finder {
       const empty = row.multi.none
       if (next.length > 0 || empty !== undefined) {
         row.value = next.length > 0 ? next.join(' ') : (empty as string)
+        this.recount()
         this.draw()
       }
       return
@@ -1015,13 +1133,104 @@ class Finder {
       })
       view.panel = undefined
       view.advanced = false
+      this.quietCount()
       this.draw()
       return
     }
-    if (key === 'enter' || key === 'alt-c') {
+    if (key === 'enter' || key === 's' || key === 'alt-c') {
       view.panel = undefined
       view.advanced = false
+      this.quietCount()
       this.adopt()
+    }
+  }
+
+  private typeKey(row: Row, key: string): void {
+    const view = this.view
+    const typed = view.typing ?? ''
+    if (key === 'esc') {
+      view.typing = undefined
+      this.draw()
+      return
+    }
+    if (key === 'enter' || key === 'up' || key === 'down') {
+      row.value =
+        row.entry === 'number' ? (Number(typed) > 0 ? String(Number(typed)) : 'off') : tagList(typed).join(' ')
+      view.typing = undefined
+      this.recount()
+      if (key === 'enter') {
+        this.draw()
+        return
+      }
+      this.panelKey(key)
+      return
+    }
+    if (key === 'backspace') {
+      view.typing = typed.slice(0, -1)
+      this.draw()
+      return
+    }
+    const fits = row.entry === 'number' ? /^[0-9]$/.test(key) && typed.length < DIGITS : /^[\x20-\x7e]$/.test(key)
+    if (fits) {
+      view.typing = typed + key
+      this.draw()
+    }
+  }
+
+  private quietCount(): void {
+    clearTimeout(this.countTimer)
+    this.counting?.abort()
+    this.counting = undefined
+  }
+
+  private recount(): void {
+    this.quietCount()
+    this.view.counts = undefined
+    if (!this.view.tag) {
+      return
+    }
+    const asked = new AbortController()
+    this.counting = asked
+    this.countTimer = setTimeout(() => void this.countPending(asked), COUNT_WAIT)
+  }
+
+  private pending(): Terms {
+    const value = (name: string) =>
+      this.view.settings[SETTINGS.findIndex((setting) => setting.name === name)]?.value ?? this.setting(name)
+    return {
+      tag: this.view.tag,
+      preset: value('TTHEME_FIND_POSTS') === 'all' ? 'all' : 'cutouts',
+      order: orderOf(value('TTHEME_FIND_ORDER')),
+      rating: ratingSet(value('TTHEME_FIND_RATING')),
+      narrow: narrowOf(value('TTHEME_FIND_MIN_SCORE'), value('TTHEME_FIND_MIN_SIZE'), value('TTHEME_FIND_PNG')),
+      enabled: siteSet(value('TTHEME_FIND_SITES')),
+    }
+  }
+
+  private async countPending(asked: AbortController): Promise<void> {
+    const terms = this.pending()
+    const sites = this.site ? [this.site] : SITES.filter((site) => terms.enabled.includes(site.name))
+    const signal = AbortSignal.any([this.signal, asked.signal])
+    const counts = await Promise.all(
+      sites.map(async (site): Promise<Count> => {
+        const plan = this.query(site, terms)
+        if (!plan) {
+          return { site: site.name, count: 0 }
+        }
+        if (site.counts && !site.counts(plan.tags)) {
+          return { site: site.name }
+        }
+        try {
+          const count = await fetchCount(site, plan.tags, signal)
+          return { site: site.name, ...(Number.isFinite(count) ? { count } : {}) }
+        } catch {
+          return { site: site.name }
+        }
+      }),
+    )
+    if (this.counting === asked && this.view.panel !== undefined) {
+      this.view.counts = counts
+      this.draw()
     }
   }
 
@@ -1049,6 +1258,7 @@ class Finder {
     view.narrow = this.narrowed()
     view.enabled = siteSet(this.setting('TTHEME_FIND_SITES'))
     view.hide = kindSet(this.setting('TTHEME_FIND_HIDE'))
+    view.hideTags = tagList(this.setting('TTHEME_FIND_HIDE_TAGS'))
     this.boards.clear()
     this.current = undefined
     view.shown = undefined
@@ -1337,8 +1547,7 @@ class Finder {
     this.board.top = view.top
   }
 
-  private query(site: Site): { tags: string; notes: string[] } | undefined {
-    const view = this.view
+  private query(site: Site, view: Terms = this.view): { tags: string; notes: string[] } | undefined {
     const names = view.tag === this.entry.booru ? siteTags(this.entry, site.key) : [view.tag]
     if (names.length === 0) {
       return undefined
@@ -1348,7 +1557,7 @@ class Finder {
     const clash = either && cutouts.includes('~')
     const wanted = [
       either ? names.map((name) => `~${name}`).join(' ') : (names[0] as string),
-      site.rate(this.view.rating),
+      site.rate(view.rating),
       ...site.narrow(view.narrow),
       clash ? '' : cutouts,
       view.order === 'score' ? site.best : '',
@@ -1421,7 +1630,10 @@ class Finder {
   private async tally(gen: number, board: Board, plans: { site: Site; tags: string }[]): Promise<void> {
     const counts = await Promise.allSettled(plans.map(({ site, tags }) => fetchCount(site, tags, this.signal)))
     if (gen === this.gen) {
-      board.total = counts.reduce((sum, count) => sum + (count.status === 'fulfilled' ? count.value : 0), 0)
+      board.total = counts.reduce(
+        (sum, count) => sum + (count.status === 'fulfilled' && Number.isFinite(count.value) ? count.value : 0),
+        0,
+      )
       this.show()
       this.draw()
     }
@@ -1739,7 +1951,8 @@ class Finder {
       Math.min(post.width, post.height) < size ||
       (site.scored && post.score < score) ||
       (png && post.ext !== 'png') ||
-      hidden(post, this.view.hide).length > 0
+      hidden(post, this.view.hide).length > 0 ||
+      this.view.hideTags.some((tag) => post.tags.includes(tag))
     ) {
       return false
     }
