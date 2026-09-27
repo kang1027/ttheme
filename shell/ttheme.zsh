@@ -437,6 +437,196 @@ __tt_unpin() {
   return 1
 }
 
+__tt_map_tip() {
+  local -a p=(${=TTHEME_PALETTE[$1]})
+  local c=${p[3]#\#}
+  REPLY=""
+  (( color && ${#p} >= 20 )) || return 0
+  printf -v REPLY '\e[38;2;%d;%d;%dm' $((16#${c:0:2})) $((16#${c:2:2})) $((16#${c:4:2}))
+}
+
+__tt_map_chip() {
+  local -a p=(${=TTHEME_PALETTE[$1]})
+  local bg=${p[1]#\#} fg=${p[2]#\#}
+  if (( ! color )); then
+    printf -v REPLY '%-*s' $2 "$1"
+  elif (( ${#p} >= 20 )); then
+    printf -v REPLY '\e[48;2;%d;%d;%d;38;2;%d;%d;%dm %-*s \e[0m' $((16#${bg:0:2})) $((16#${bg:2:2})) $((16#${bg:4:2})) \
+      $((16#${fg:0:2})) $((16#${fg:2:2})) $((16#${fg:4:2})) $2 "$1"
+  else
+    printf -v REPLY '\e[2m %-*s \e[0m' $2 "$1"
+  fi
+}
+
+__tt_map_under() {
+  local b name
+  local -i len=-1
+  REPLY=""
+  for b in ${(k)below}; do
+    name=${below[$b]}
+    [[ -n ${TTHEME_PALETTE[$name]} && ( $1 == "$b" || $1 == "${b%/}"/* ) ]] || continue
+    (( ${#b} > len )) && { REPLY=$name len=${#b} }
+  done
+}
+
+__tt_map_link() {
+  local at=$1 root=/
+  [[ $at == "$home" || $at == "$home"/* ]] && root=$home
+  (( ${roots[(Ie)$root]} )) || roots+=("$root")
+  while [[ $at != "$root" && -z ${parent[$at]} ]]; do
+    parent[$at]=${at:h}
+    at=${at:h}
+  done
+}
+
+__tt_map_chain() {
+  local at=$1 lbl=$2
+  local -a ks
+  while [[ -z ${own[$at]}${below[$at]} && $at != "$here" ]]; do
+    ks=(${(k)parent[(Re)$at]})
+    (( ${#ks} == 1 )) || break
+    at=$ks[1] lbl+=/${at:t}
+  done
+  reply=("$at" "${lbl:-/}")
+}
+
+__tt_map_line() {
+  local at=$1 lbl=$4 name=${own[$1]:-${below[$1]}} note="" flag="" b=$'\e[1m' d=$'\e[2m' z=$'\e[0m'
+  local -i w=$(( $3 + ${(m)#lbl} ))
+  (( color )) || b= d= z=
+  if [[ -n $name ]]; then
+    lbl=$b$lbl$z
+    if [[ -n ${own[$at]} ]]; then
+      note="this directory"
+      [[ -n ${below[$at]} ]] && note+=" · ${below[$at]} below"
+    else
+      note="and below"
+    fi
+    [[ -n ${TTHEME_PALETTE[$name]} ]] || flag="not installed"
+    [[ -d $at ]] || flag+="${flag:+ · }no such directory"
+  else
+    lbl=$d$lbl$z
+  fi
+  if [[ $at == "$here" ]]; then
+    lbl+=" $htip$b← here$z"
+    (( w += 7 ))
+  fi
+  ml+=("$2$lbl") mw+=($w) mp+=("$name") mo+=("$note") mf+=("$flag")
+}
+
+__tt_map_walk() {
+  local at=$1 pre=$2 tip z=$'\e[0m' REPLY
+  local -i i
+  local -a ks=(${(oi)${(k)parent[(Re)$1]}}) reply
+  (( color )) || z=
+  __tt_map_under "$at"
+  __tt_map_tip "$REPLY"
+  tip=$REPLY
+  (( color )) && [[ -z $tip ]] && tip=$'\e[2m'
+  for (( i = 1; i <= ${#ks}; i++ )); do
+    __tt_map_chain "$ks[i]" "${ks[i]:t}"
+    if (( i < ${#ks} )); then
+      __tt_map_line "$reply[1]" "$pre$tip├─ $z" $(( $3 + 3 )) "$reply[2]"
+      __tt_map_walk "$reply[1]" "$pre$tip│  $z" $(( $3 + 3 ))
+    else
+      __tt_map_line "$reply[1]" "$pre$tip└─ $z" $(( $3 + 3 )) "$reply[2]"
+      __tt_map_walk "$reply[1]" "$pre   " $(( $3 + 3 ))
+    fi
+  done
+}
+
+__tt_map_tree() {
+  local home=${HOME:a} here=${PWD:a} k base root line rule="" htip="" REPLY d=$'\e[2m' y=$'\e[33m' z=$'\e[0m'
+  local -A own=() below=() parent=() tstrip=()
+  local -a roots=() order=() ml=() mp=() mo=() mf=() mw=() reply
+  local -i i maxw=0 namew=0
+  (( color )) || d= y= z=
+  for k in ${(k)TTHEME_PINS}; do
+    base=${k%/\*\*}
+    [[ -z $base || $base == /* ]] || continue
+    base=${${base:-/}:a}
+    if [[ $k == *"/**" ]]; then
+      below[$base]=$TTHEME_PINS[$k]
+    else
+      own[$base]=$TTHEME_PINS[$k]
+    fi
+    __tt_map_link "$base"
+  done
+  __tt_map_link "$here"
+  __tt_dir_rule "$PWD" && rule=$REPLY
+  [[ -n $rule ]] && __tt_map_tip "$TTHEME_PINS[$rule]" && htip=$REPLY
+  (( ${roots[(Ie)$home]} )) && order+=("$home")
+  [[ $home != / ]] && (( ${roots[(Ie)/]} )) && order+=(/)
+  for root in $order; do
+    if [[ $root == / ]]; then
+      __tt_map_chain / ""
+    else
+      __tt_map_chain "$root" "~"
+    fi
+    __tt_map_line "$reply[1]" "" 0 "$reply[2]"
+    __tt_map_walk "$reply[1]" "" 0
+  done
+  for (( i = 1; i <= ${#ml}; i++ )); do
+    [[ -n $mp[i] ]] || continue
+    (( mw[i] > maxw )) && maxw=$mw[i]
+    (( ${#mp[i]} > namew )) && namew=${#mp[i]}
+  done
+  for (( i = 1; i <= ${#ml}; i++ )); do
+    line=$ml[i]
+    if [[ -n $mp[i] ]]; then
+      __tt_map_chip "$mp[i]" $namew
+      line+=${(l:maxw - mw[i] + 2:: :)}$REPLY"  "
+      if (( color )) && [[ -n ${TTHEME_PALETTE[$mp[i]]} ]]; then
+        [[ -n ${tstrip[$mp[i]]} ]] || __tt_pv_strip "$mp[i]"
+        line+=${tstrip[$mp[i]]}"  "
+      elif (( color )); then
+        line+=${(l:13:: :)}
+      fi
+      line+=$d$mo[i]$z
+      [[ -n $mf[i] ]] && line+=$y" · "$mf[i]$z
+    fi
+    print -r -- "$line"
+  done
+  print
+  if [[ -n $rule ]]; then
+    k=$TTHEME_PINS[$rule]
+    __tt_map_chip "$k" ${#k}
+    line=$REPLY
+    if [[ ${${rule%/\*\*}:A} == "${PWD:A}" ]]; then
+      base="this directory"
+    else
+      __tt_tilde "$rule"
+      base=${${REPLY%/\*\*}:-/}
+    fi
+    [[ $rule == *"/**" ]] && base+=" and below"
+    print -r -- "Here · $line pinned to $base"
+  else
+    print -r -- "Here · no pin — this tab keeps the palette it wears"
+  fi
+  __tt_tilde "$TTHEME_PINS_FILE"
+  print -r -- "${d}ttheme pin picks one here · ttheme unpin drops it · $REPLY$z"
+}
+
+__tt_pins_map() {
+  emulate -L zsh
+  local k REPLY
+  local -i color=0
+  __tt_pins_load
+  if [[ ! -t 1 ]]; then
+    for k in ${(oi)${(k)TTHEME_PINS}}; do
+      __tt_tilde "$k"
+      print -r -- "$REPLY"$'\t'"$TTHEME_PINS[$k]"
+    done
+    return 0
+  fi
+  if (( ! ${#TTHEME_PINS} )); then
+    print -r -- 'No pins yet — `ttheme pin` picks a palette for this directory'
+    return 0
+  fi
+  __tt_color && color=1
+  __tt_map_tree
+}
+
 __tt_keep() {
   local note
   note=$(__tt_cli default "$1") || return 1
@@ -2050,6 +2240,7 @@ ttheme() {
     preview) __tt_preview ;;
     pin) __tt_preview pin ;;
     unpin) __tt_unpin ;;
+    pins) __tt_pins_map ;;
   esac
 }
 

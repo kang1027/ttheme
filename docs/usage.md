@@ -14,6 +14,7 @@ This tab
   next                                           Advance this tab to the next palette
   pin                                            Pick a palette for this directory — cd into it repaints, cd out restores
   unpin                                          Drop the palette pinned to this directory
+  pins                                           Map every pinned directory as a tree in its palette's colors, and the pin that covers this one
 
 New tabs
   default <palette>                              Make a palette the one new tabs open with
@@ -96,6 +97,31 @@ one palette and a subfolder another, and where a directory has both a pin of
 its own and one for everything below, its own one wins there. Open tabs pick up
 a changed pins file on their next `cd`; `unpin` drops the pin on the current
 directory.
+
+`pins` draws them as a map: every pinned directory in a tree from `~`, and in
+another from `/` for those outside your home, with a run of directories that
+hold no pin folded into one row. Each pin shows its palette's name in that
+palette's own background and foreground, then its six colors and how far it
+reaches. The branches below an **and below** pin are drawn in its cursor color,
+so each palette's ground shows at a glance; the directory you are in is marked
+`← here` in the color of the pin that covers it, and the line under the tree
+names that pin:
+
+```
+~
+├─ notes      ryo     and below · not installed
+└─ work       konata  and below
+   ├─ api/v2 ← here
+   └─ site    kita    this directory
+/srv/archive  kita    and below · no such directory
+
+Here · konata pinned to ~/work and below
+ttheme pin picks one here · ttheme unpin drops it · ~/.config/ttheme/pins
+```
+
+A pin whose palette is not installed, or whose directory is gone, stays in the
+file and does nothing; the map says which. Piped, `pins` prints one line per pin
+instead: its path, a tab and its palette.
 
 ## Names and output
 

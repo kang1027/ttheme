@@ -17,6 +17,8 @@ out=$(ttheme use city 2>&1) && { print -u2 "ttheme use took a bad name"; exit 1 
 ttheme --frobnicate 2>/dev/null && { print -u2 "ttheme took an unknown option"; exit 1 }
 ttheme next extra 2>/dev/null && { print -u2 "ttheme next took an extra argument"; exit 1 }
 [[ $(ttheme pin --help) == "Usage: ttheme pin"* ]] || { print -u2 "ttheme pin --help did not describe pin"; exit 1 }
+[[ $(ttheme pins --help) == "Usage: ttheme pins"$'\n\n'"Map every pinned directory"* ]] || { print -u2 "ttheme pins --help did not describe pins"; exit 1 }
+ttheme pins extra 2>/dev/null && { print -u2 "ttheme pins took an extra argument"; exit 1 }
 out=$(ttheme preview </dev/null 2>&1) && { print -u2 "ttheme preview ran without a tty"; exit 1 }
 [[ $out == *"needs a terminal"* ]] || { print -u2 "preview tty guard broke: $out"; exit 1 }
 EDITOR=true ttheme config > /dev/null || { print -u2 "ttheme config broke"; exit 1 }
@@ -202,6 +204,36 @@ cd $OLDPWD
   REPLY=; __tt_dir_rule $HOME && [[ $REPLY == "$HOME" ]] || { print -u2 "a pin on ~ alone did not cover the home directory: $REPLY"; exit 1 }
   REPLY=; __tt_dir_rule $HOME/work/site && [[ $REPLY == "$HOME/work/site" ]] || { print -u2 "a directory's own pin lost to its pin on everything below: $REPLY"; exit 1 }
   REPLY=; __tt_dir_rule $HOME/work/site/x && [[ $REPLY == "$HOME/work/site/**" ]] || { print -u2 "a pin on everything below skipped a subdirectory: $REPLY"; exit 1 }
+  cd $HOME/work/api/v2
+  color=0
+  out=$(__tt_map_tree)
+  want=(
+    "~                          mio            this directory"
+    "├─ notes                   nosuchpalette  and below · not installed"
+    "└─ work                    homura         and below"
+    "   ├─ api/v2 ← here"
+    "   └─ site                 kaito          this directory · miku below"
+    "/nonexistent-ttheme/place  rei            and below · no such directory"
+    ""
+    "Here · homura pinned to ~/work and below"
+    "ttheme pin picks one here · ttheme unpin drops it · $TTHEME_PINS_FILE"
+  )
+  [[ $out == ${(F)want} ]] || { print -u2 "the pins map drew:"; print -ru2 -- $out; exit 1 }
+  color=1
+  out=$(__tt_map_tree)
+  __tt_map_tip homura
+  [[ ${${(f)out}[4]} == "   $REPLY├─ "$'\e[0m\e[2mapi/v2\e[0m '"$REPLY"$'\e[1m← here\e[0m' ]] ||
+    { print -u2 "the pins map did not draw homura's branches, or the here mark, in homura's color: ${(q+)${(f)out}[4]}"; exit 1 }
+  [[ ${${(f)out}[2]} == $'\e[2m├─ \e[0m\e[1mnotes\e[0m'* ]] || { print -u2 "a branch outside every pin was not dim: ${(q+)${(f)out}[2]}"; exit 1 }
+  cd $HOME/work/site
+  [[ ${${(f)"$(color=0 __tt_map_tree)"}[-2]} == "Here · kaito pinned to this directory" ]] ||
+    { print -u2 "the pins map named the wrong pin here: ${${(f)"$(color=0 __tt_map_tree)"}[-2]}"; exit 1 }
+  out=$(__tt_pins_map)
+  want=("/nonexistent-ttheme/place/**"$'\t'rei "$HOME"$'\t'mio "~/notes/**"$'\t'nosuchpalette "~/work/**"$'\t'homura "~/work/site"$'\t'kaito "~/work/site/**"$'\t'miku)
+  [[ $out == ${(F)want} ]] || { print -u2 "piped, pins did not print path and palette per line:"; print -ru2 -- $out; exit 1 }
+  rm -f $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=x
+  [[ -z $(__tt_pins_map) ]] || { print -u2 "piped, pins printed something with nothing pinned"; exit 1 }
 ) || exit 1
 print -r -- 'typeset -g TTHEME_STARTUP=rei' >> $TTHEME_HOME/palettes.zsh
 touch -t 203001010000 $TTHEME_HOME/palettes.zsh

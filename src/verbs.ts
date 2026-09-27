@@ -68,6 +68,13 @@ export const VERB_SPECS: VerbSpec[] = [
   },
   { name: 'unpin', args: [], about: 'Drop the palette pinned to this directory', section: 'tab', shell: true },
   {
+    name: 'pins',
+    args: [],
+    about: "Map every pinned directory as a tree in its palette's colors, and the pin that covers this one",
+    section: 'tab',
+    shell: true,
+  },
+  {
     name: 'config',
     args: [],
     about: 'Edit settings in $EDITOR — they apply in new tabs',

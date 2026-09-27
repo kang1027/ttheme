@@ -17,6 +17,7 @@ typeset -gA STATES=(
   empty  ''
   few    'konata kita'
   market 'konata fix@shop/arcade'
+  pinned 'konata kita'
 )
 
 typeset -ga SCENARIOS=(
@@ -36,6 +37,7 @@ typeset -ga SCENARIOS=(
   'browse-market   market browse   Down Down Right Down Right Down'
   'preview-market  market preview  Down Right Down Right Down'
   'menu-market     market menu'
+  'pins-map        pinned pins'
 )
 
 fixture_home() {
@@ -54,6 +56,10 @@ fixture_home() {
     env -i PATH=$PATH HOME=$home XDG_CONFIG_HOME=$home \
       node $ROOT/bin/ttheme.js add $palettes > /dev/null
   fi
+  if [[ $state == pinned ]]; then
+    mkdir -p $home/work/api/v2 $home/work/site $home/notes
+    print -l '~/work/**  konata' '~/work/site  kita' '~/notes/**  ryo' '/nonexistent-ttheme/archive/**  kita' > $home/ttheme/pins
+  fi
   print -r -- $home
 }
 
@@ -63,6 +69,7 @@ command_for() {
     browse|list|add|remove) print -r -- "node $ROOT/bin/ttheme.js $target" ;;
     preview) print -r -- "source $home/ttheme/ttheme.zsh; ttheme preview" ;;
     menu) print -r -- "source $home/ttheme/ttheme.zsh; ttheme" ;;
+    pins) print -r -- "source $home/ttheme/ttheme.zsh; cd ~/work/api/v2; ttheme pins" ;;
     *) print -u2 "unknown target $target"; return 1 ;;
   esac
 }
