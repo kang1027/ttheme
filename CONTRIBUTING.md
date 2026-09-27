@@ -10,8 +10,8 @@ lives in a market of your own, and anyone can add it:
 
 ```sh
 ttheme market init dust           # <you>@dust, in ~/.config/ttheme/market/dust — prints how to publish it
-ttheme new rei --from rei         # <you>@dust/rei
-ttheme edit rei                   # $EDITOR; the gate's numbers are shown, never enforced
+ttheme new rei                    # <you>@dust/rei, from blank in the palette editor (--from rei starts from rei)
+ttheme edit rei                   # the same editor; the gate's numbers are shown, never enforced
 ```
 
 A market is a repository with `palettes/<palette>.toml`, a `ttheme-market.json`

@@ -127,17 +127,17 @@ export const VERB_SPECS: VerbSpec[] = [
   {
     name: 'new',
     args: ['<name>'],
-    about: 'Make a palette of your own, <you>@<market>/<name>, in your local market — installed at once',
+    about: 'Make a palette of your own, <you>@<market>/<name>, from blank in the palette editor — installed at once',
     section: 'own',
     flags: {
-      from: { type: 'string', value: '<palette>', about: 'The palette to start from — the default one when left out' },
+      from: { type: 'string', value: '<palette>', about: "Open the editor on this palette's colors instead of blank" },
       in: { type: 'string', value: '<market>', about: 'The local market to put it in, when you have more than one' },
     },
   },
   {
     name: 'edit',
     args: ['<palette>'],
-    about: 'Change one of your palettes in $EDITOR — the contrast gate advises, never refuses',
+    about: 'Change one of your palettes in the palette editor — the contrast gate advises, never refuses',
     section: 'own',
   },
   {

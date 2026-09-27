@@ -54,7 +54,7 @@ export function srgb(l: number, c: number, h: number): number[] | undefined {
   })
 }
 
-function inGamut(l: number, c: number, h: number): Hex {
+export function inGamut(l: number, c: number, h: number): Hex {
   let lo = 0
   let hi = c
   if (srgb(l, c, h) === undefined) {

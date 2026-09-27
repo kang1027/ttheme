@@ -4,7 +4,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { type Draft, fromCode, paletteToml, readMarketDir, readOwnText, recolor, shareCode } from './own.ts'
+import {
+  type Draft,
+  fromCode,
+  paletteToml,
+  readMarketDir,
+  readOwnText,
+  recolor,
+  resign,
+  shareCode,
+  withPictures,
+} from './own.ts'
 
 const draft: Draft = {
   name: 'kecan0406@dust/rei',
@@ -65,16 +75,23 @@ test('the TOML a draft writes reads back as the same palette', () => {
   assert.deepEqual(theme.ansi, draft.ansi)
 })
 
-test('recolor rewrites the foreground, selection and ANSI list and nothing else', () => {
+test('recolor rewrites the twenty colors and nothing else', () => {
   const source = paletteToml(draft)
   const ansi = draft.ansi.map((c, i) => (i === 1 ? '#ff0000' : c))
-  const out = recolor(source, { foreground: '#ffffff', selectionBackground: '#000080', ansi })
+  const colors = { background: '#101010', foreground: '#ffffff', cursor: '#00ff00', selection: '#000080', ansi }
+  const out = recolor(source, colors)
   const theme = readOwnText(draft.name, out, [])
+  assert.equal(theme.background, '#101010')
   assert.equal(theme.foreground, '#ffffff')
+  assert.equal(theme.cursor, '#00ff00')
   assert.equal(theme.selectionBackground, '#000080')
   assert.equal(theme.ansi[1], '#ff0000')
-  assert.equal(theme.background, draft.background)
+  assert.deepEqual(theme.signatureSlots, draft.signature)
   assert.equal(out.split('\n').length, source.split('\n').length)
+  const marked = readOwnText(draft.name, resign(out, ['ansi1', 'foreground', 'cursor']), [])
+  assert.deepEqual(marked.signatureSlots, ['ansi1', 'foreground', 'cursor'])
+  const pictured = readOwnText(draft.name, withPictures(out, [{ site: 'danbooru', id: 42, size: 'fill' }]), [])
+  assert.deepEqual(pictured.pictures?.at(-1), { site: 'danbooru', id: 42, size: 'fill' })
 })
 
 test('a market takes its catalogs from folders, keeps loose palettes after them, and skips a name used twice', () => {

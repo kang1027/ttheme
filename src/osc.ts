@@ -18,6 +18,12 @@ export function paletteOsc(entry: PaletteEntry): string {
   ].join('')
 }
 
+const SLOT_CODES = ['11', '10', '12', '17', ...Array.from({ length: 16 }, (_, i) => `4;${i}`)]
+
+export function slotOsc(slot: number, color: string): string {
+  return `\x1b]${SLOT_CODES[slot]};${color}\x1b\\`
+}
+
 export function parseOscColors(text: string): Map<string, string> {
   const colors = new Map<string, string>()
   for (const part of text.split('\x1b')) {

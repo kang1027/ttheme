@@ -122,10 +122,13 @@ page](https://kecan0406.github.io/ttheme/market) lists the public ones.
 
 ### Your own palettes
 
-`ttheme new rei --from rei` makes `<you>@<market>/rei`, named after your GitHub
-handle and a market name the first `new` asks for, in
-`~/.config/ttheme/market/<market>`, and installs it. `ttheme edit rei` opens it
-in `$EDITOR`; `ttheme check --fix` suggests colors that pass the gate.
+`ttheme new rei` opens the palette editor on a blank palette: a few seeds grow
+twenty colors that pass the contrast gate, then each one is tuned in OKLCH while
+the terminal repaints as you go. It makes `<you>@<market>/rei`, named after your
+GitHub handle and a market name the first `new` asks for, in
+`~/.config/ttheme/market/<market>`, and installs it; `--from rei` starts from
+rei's colors instead. `ttheme edit rei` opens the same editor, and `ttheme check
+--fix` suggests colors that pass the gate.
 
 A local market is already a repository layout: `palettes/*.toml` (a folder
 under it, such as `palettes/night/`, is a catalog), the
@@ -156,7 +159,7 @@ from the booru the way `find` does.
 | `ttheme pin` / `unpin` | A palette for this directory — `cd` in repaints, `cd` out restores |
 | `ttheme browse` | Pick palettes and markets — tab moves between Catalog, Installed, Markets and Errors |
 | `ttheme market add <owner/repo>` | Add someone's market (`#v1` pins it) — `ttheme market` lists yours; `search`, `remove` too |
-| `ttheme new <name> --from <palette>` | Make a palette of your own; `edit`, `check`, `share` follow |
+| `ttheme new <name>` | Make a palette of your own in the palette editor (`--from <palette>` starts from its colors); `edit`, `check`, `share` follow |
 | `ttheme on` / `off` | Wear the default again / give the terminal its own colors back |
 | `ttheme config` | Settings in `$EDITOR` |
 

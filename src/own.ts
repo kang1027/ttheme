@@ -4,6 +4,7 @@ import { SITES } from './booru.ts'
 import { isHex } from './color.ts'
 import { GATE_RULES, measure, RULES } from './contrast.ts'
 import { type PaletteEntry, paletteEntry, toTheme } from './emit/manifest.ts'
+import type { Colors } from './seeds.ts'
 import { type Identity, isLocal, localIdentity, marketId, marketSources } from './sources.ts'
 import {
   type Group,
@@ -184,6 +185,23 @@ export function draftOf(entry: PaletteEntry, name = entry.name, reason?: string)
 
 const q = (value: string) => JSON.stringify(value)
 
+function pictureToml(p: SharedPicture): string[] {
+  return [
+    '[[picture]]',
+    `site = ${q(p.site)}`,
+    `id = ${p.id}`,
+    ...(p.size === undefined ? [] : [`size = ${typeof p.size === 'number' ? p.size : q(p.size)}`]),
+    ...(p.position === undefined ? [] : [`position = ${q(p.position)}`]),
+    ...(p.opacity === undefined ? [] : [`opacity = ${p.opacity}`]),
+  ]
+}
+
+export function withPictures(text: string, pictures: readonly SharedPicture[]): string {
+  return pictures.length === 0
+    ? text
+    : `${text.replace(/\n*$/, '\n')}${pictures.map((p) => `\n${pictureToml(p).join('\n')}\n`).join('')}`
+}
+
 export function paletteToml(d: Draft): string {
   const lines = [
     '[meta]',
@@ -216,16 +234,7 @@ export function paletteToml(d: Draft): string {
     lines.push('', '[contrast]', `waive = [${d.waive.map(q).join(', ')}]`, `reason = ${q(d.reason ?? '')}`)
   }
   for (const p of d.pictures ?? []) {
-    lines.push('', '[[picture]]', `site = ${q(p.site)}`, `id = ${p.id}`)
-    if (p.size !== undefined) {
-      lines.push(`size = ${typeof p.size === 'number' ? p.size : q(p.size)}`)
-    }
-    if (p.position !== undefined) {
-      lines.push(`position = ${q(p.position)}`)
-    }
-    if (p.opacity !== undefined) {
-      lines.push(`opacity = ${p.opacity}`)
-    }
+    lines.push('', ...pictureToml(p))
   }
   return `${lines.join('\n')}\n`
 }
@@ -400,7 +409,19 @@ export function fromCode(code: string): Draft {
   }
 }
 
-export function recolor(text: string, colors: Pick<Theme, 'foreground' | 'selectionBackground' | 'ansi'>): string {
+export function colorsOfTheme(
+  theme: Pick<Theme, 'background' | 'foreground' | 'cursor' | 'selectionBackground' | 'ansi'>,
+): Colors {
+  return {
+    background: theme.background,
+    foreground: theme.foreground,
+    cursor: theme.cursor,
+    selection: theme.selectionBackground,
+    ansi: theme.ansi,
+  }
+}
+
+export function recolor(text: string, colors: Colors): string {
   const start = text.indexOf('ansi = [')
   const end = text.indexOf(']', start)
   if (start < 0 || end < 0) {
@@ -408,9 +429,21 @@ export function recolor(text: string, colors: Pick<Theme, 'foreground' | 'select
   }
   let index = 0
   const block = text.slice(start, end).replace(/"#[0-9a-fA-F]{6}"/g, () => q(colors.ansi[index++] as string))
-  return (text.slice(0, start) + block + text.slice(end))
-    .replace(/^(foreground\s*=\s*)"#[0-9a-fA-F]{6}"/m, (_, key) => `${key}${q(colors.foreground)}`)
-    .replace(/^(selection_background\s*=\s*)"#[0-9a-fA-F]{6}"/m, (_, key) => `${key}${q(colors.selectionBackground)}`)
+  const keys: [string, string][] = [
+    ['background', colors.background],
+    ['foreground', colors.foreground],
+    ['cursor', colors.cursor],
+    ['selection_background', colors.selection],
+  ]
+  return keys.reduce(
+    (out, [key, color]) =>
+      out.replace(new RegExp(`^(${key}\\s*=\\s*)"#[0-9a-fA-F]{6}"`, 'm'), (_, head) => `${head}${q(color)}`),
+    text.slice(0, start) + block + text.slice(end),
+  )
+}
+
+export function resign(text: string, signature: string[]): string {
+  return text.replace(/^(signature\s*=\s*)\[[^\]]*\]/m, (_, head) => `${head}[${signature.map(q).join(', ')}]`)
 }
 
 export function gateLines(entry: PaletteEntry): string[] {

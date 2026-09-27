@@ -1,15 +1,17 @@
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
-import * as p from '@clack/prompts'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { dropImage, imageKey, rackOf, showImage } from './backdrop.ts'
 import { available, find, gateFailures, readCatalog, readKept, writeKept } from './catalog.ts'
+import { runEditor } from './editor-screen.ts'
 import { writeAtomic } from './edits.ts'
 import { type Manifest, type PaletteEntry, paletteEntry, toTheme } from './emit/manifest.ts'
+import { findFor } from './find.ts'
 import { fixGate, type Move } from './fix.ts'
 import { ensureLocal } from './markets.ts'
+import { colorless, queryTerminalColors, restoreOsc } from './osc.ts'
 import {
   CODE,
+  colorsOfTheme,
   type Draft,
   draftOf,
   fromCode,
@@ -20,11 +22,16 @@ import {
   paletteToml,
   readOwnText,
   recolor,
+  resign,
   shareCode,
+  withPictures,
 } from './own.ts'
-import { commit, configHome, type Installed, readInstalled, startupPalette, sync } from './palettes.ts'
-import { bringPictures, heldPictures, since } from './pictures.ts'
-import { marketOf, nameProblem } from './theme.ts'
+import type { Choice, Edited, EditorOptions } from './palette-editor.ts'
+import { commit, configHome, type Installed, readInstalled, refreshProfiles, sync } from './palettes.ts'
+import { bringPictures, heldPictures } from './pictures.ts'
+import { grow, SEEDS } from './seeds.ts'
+import { marketOf, nameProblem, type SharedPicture, type Theme } from './theme.ts'
+import { detectTerminal } from './wiring.ts'
 
 function tty(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true
@@ -71,10 +78,99 @@ export function adopt(home: string, code: string, catalog: Manifest): string {
   return entry.name
 }
 
+const SIGNATURE = ['background', 'foreground', 'cursor']
+
+function problemOf(read: () => unknown): string | undefined {
+  try {
+    read()
+    return undefined
+  } catch (error) {
+    return (error as Error).message
+  }
+}
+
+function choicesOf(home: string, catalog: Manifest, except: string): Choice[] {
+  return available(home, catalog, false)
+    .palettes.filter((e) => e.name !== except)
+    .map((e) => ({
+      name: e.name,
+      colors: {
+        background: e.background,
+        foreground: e.foreground,
+        cursor: e.cursor,
+        selection: e.selection,
+        ansi: e.ansi,
+      },
+    }))
+}
+
+interface Shelf {
+  count: () => number
+  added: () => number
+  fresh: () => SharedPicture[]
+  discard: () => void
+}
+
+function shelfFor(home: string, name: string): Shelf {
+  const before = new Set(rackOf(home, name).map((picture) => picture.key))
+  return {
+    count: () => rackOf(home, name).length,
+    added: () => rackOf(home, name).filter((picture) => !before.has(picture.key)).length,
+    fresh: () => (heldPictures(home, name) ?? []).filter((picture) => !before.has(imageKey(picture))),
+    discard: () => {
+      const gone = rackOf(home, name).filter((picture) => !before.has(picture.key))
+      for (const picture of gone) {
+        showImage(home, name, picture.key)
+        dropImage(home, name)
+      }
+      if (gone.length > 0) {
+        refreshProfiles(home)
+      }
+    },
+  }
+}
+
+function merged(...lists: (readonly SharedPicture[] | undefined)[]): SharedPicture[] | undefined {
+  const seen = new Map<string, SharedPicture>()
+  for (const picture of lists.flatMap((list) => list ?? [])) {
+    seen.set(imageKey(picture), picture)
+  }
+  return seen.size > 0 ? [...seen.values()] : undefined
+}
+
+function finder(
+  home: string,
+  name: string,
+  catalog: Manifest,
+  text: (edited: Edited) => string,
+): EditorOptions['find'] {
+  return async (edited, start) => {
+    const entry = paletteEntry(readOwnText(name, text(edited), catalog.palettes))
+    const { saved } = await findFor(home, entry, start)
+    return { ...(saved ? { note: saved } : {}), count: rackOf(home, name).length }
+  }
+}
+
+async function editColors(options: EditorOptions): Promise<Edited | undefined> {
+  const terminal = detectTerminal(process.env)
+  const live = !colorless() && !process.env.TMUX && terminal !== 'warp'
+  const saved = live ? await queryTerminalColors() : new Map<string, string>()
+  try {
+    return await runEditor(options, {
+      live,
+      color: !colorless(),
+      ...(terminal === 'iterm2' ? { only: [0, 1] } : {}),
+    })
+  } finally {
+    if (live) {
+      process.stdout.write(restoreOsc(saved))
+    }
+  }
+}
+
 export async function runNew(name: string, from: string | undefined, into: string | undefined): Promise<void> {
   const home = configHome()
   const catalog = readCatalog(home)
-  const state = readInstalled(home)
   const market = await ensureLocal(home, into)
   const full = name.includes('/') ? name : `${market.id}/${name}`
   const problem = nameProblem(full)
@@ -88,35 +184,45 @@ export async function runNew(name: string, from: string | undefined, into: strin
   if (existsSync(path)) {
     throw new Error(`${full} already exists — \`ttheme edit ${full}\` changes it`)
   }
-  const view = available(home, catalog)
-  const origin = from ?? startupPalette(state)
-  if (!origin) {
-    throw new Error('--from names the palette to start from')
+  const source = from ? find(available(home, catalog).palettes, from) : undefined
+  if (!tty()) {
+    throw new Error('new opens the palette editor — run it in a terminal')
   }
-  const source = find(view.palettes, origin)
-  const base = marketOf(source.name) ? source.base : source.default ? undefined : source.name
-  const { base: _, ansiSource: __, group: ___, ...rest } = draftOf(source, full, `kept from ${source.name}`)
-  const held = heldPictures(home, source.name) ?? source.pictures
-  const content = paletteToml({ ...rest, ...(base ? { base } : {}), ...(held ? { pictures: held } : {}) })
-  readOwnText(full, content, catalog.palettes)
+  const base = source && (marketOf(source.name) ? source.base : source.default ? undefined : source.name)
+  const kept = source ? draftOf(source, full, `kept from ${source.name}`) : undefined
+  const held = source ? (heldPictures(home, source.name) ?? source.pictures) : undefined
+  const { base: _, ansiSource: __, group: ___, ...rest } = kept ?? { name: full, signature: SIGNATURE, ...grow(SEEDS) }
+  const shelf = shelfFor(home, full)
+  const toml = ({ colors, signature }: Edited) => {
+    const pictures = merged(held, shelf.fresh())
+    return paletteToml({ ...rest, ...colors, signature, ...(base ? { base } : {}), ...(pictures ? { pictures } : {}) })
+  }
+  const edited = await editColors({
+    title: 'New palette',
+    name: full,
+    ...(kept ? { colors: kept } : {}),
+    signature: rest.signature,
+    ...(rest.waive ? { waive: rest.waive } : {}),
+    palettes: choicesOf(home, catalog, full),
+    pictures: shelf.count(),
+    find: finder(home, full, catalog, toml),
+    check: (e) => problemOf(() => readOwnText(full, toml(e), catalog.palettes)),
+  })
+  if (!edited) {
+    shelf.discard()
+    console.log('Nothing made')
+    return
+  }
   mkdirSync(dirname(path), { recursive: true })
-  writeAtomic(path, content)
+  writeAtomic(path, toml(edited))
   const { state: now } = install(home, catalog, [full])
-  console.log(`  + ${full}  from ${source.name}\n    ${path}`)
+  console.log(`  + ${full}${source ? `  from ${source.name}` : ''}\n    ${path}`)
   await bringPictures(
     home,
     available(home, catalog).palettes.filter((e) => e.name === full),
     now.terminals,
   )
-  console.log(`\n\`ttheme edit ${full}\` changes its colors · \`ttheme use ${full}\` wears it`)
-}
-
-function editor(path: string): void {
-  const command = process.env.VISUAL || process.env.EDITOR || 'vi'
-  const run = spawnSync('sh', ['-c', `${command} "$1"`, 'sh', path], { stdio: 'inherit' })
-  if (run.status !== 0) {
-    throw new Error(`${command} exited ${run.status ?? run.signal}`)
-  }
+  console.log(`\n\`ttheme use ${full}\` wears it · \`ttheme edit ${full}\` opens it again`)
 }
 
 function failuresOf(name: string, source: string, catalog: Manifest): string[] {
@@ -142,52 +248,55 @@ export async function runEdit(name: string): Promise<void> {
     )
   }
   if (!tty()) {
-    throw new Error('edit opens your editor — run it in a terminal')
+    throw new Error('edit opens the palette editor — run it in a terminal')
   }
   const before = readFileSync(path, 'utf8')
-  const draft = join(mkdtempSync(join(tmpdir(), 'ttheme-edit-')), basename(path))
-  writeFileSync(draft, before)
-  let failing: string[] = []
+  let theme: Theme
   try {
-    for (;;) {
-      editor(draft)
-      const after = readFileSync(draft, 'utf8')
-      if (after === before) {
-        console.log('Nothing changed')
-        return
-      }
-      try {
-        failing = failuresOf(full, after, catalog)
-      } catch (error) {
-        console.log(`\n${(error as Error).message}\n`)
-        const again = await p.confirm({ message: `${full} cannot be read like this — edit it again?` })
-        if (p.isCancel(again) || !again) {
-          console.log('Kept the old one')
-          return
-        }
-        continue
-      }
-      writeAtomic(path, after)
-      break
-    }
-  } finally {
-    rmSync(dirname(draft), { recursive: true, force: true })
+    theme = readOwnText(full, before, catalog.palettes)
+  } catch (error) {
+    throw new Error(`${path} cannot be read — ${(error as Error).message}`)
   }
+  const shelf = shelfFor(home, full)
+  const listed = new Set((theme.pictures ?? []).map((picture) => imageKey(picture)))
+  const rewrite = ({ colors, signature }: Edited) =>
+    withPictures(
+      resign(recolor(before, colors), signature),
+      shelf.fresh().filter((picture) => !listed.has(imageKey(picture))),
+    )
+  const edited = await editColors({
+    title: 'Edit palette',
+    name: full,
+    colors: colorsOfTheme(theme),
+    signature: theme.signatureSlots,
+    waive: theme.waive,
+    palettes: choicesOf(home, catalog, full),
+    pictures: shelf.count(),
+    find: finder(home, full, catalog, rewrite),
+    check: (e) => problemOf(() => readOwnText(full, rewrite(e), catalog.palettes)),
+  })
+  if (!edited) {
+    shelf.discard()
+    console.log('Nothing changed')
+    return
+  }
+  const after = rewrite(edited)
+  if (after === before) {
+    console.log(shelf.added() > 0 ? `Kept the pictures you added to ${full}` : 'Nothing changed')
+    return
+  }
+  writeAtomic(path, after)
   if (state.palettes.includes(full)) {
     sync(home, catalog, state)
   }
   console.log(
     `Saved ${full}${state.palettes.includes(full) ? ' — new tabs and `ttheme use` wear it' : ` — \`ttheme add ${full}\` installs it`}`,
   )
+  const failing = failuresOf(full, after, catalog)
   if (failing.length > 0) {
     console.log(
       `\nIt misses the contrast gate:\n${failing.join('\n')}\n\`ttheme check --fix ${full}\` suggests colors that pass`,
     )
-  }
-  const entry = available(home, catalog).palettes.find((e) => e.name === full)
-  const old = paletteEntry(readOwnText(full, before, catalog.palettes))
-  if (entry && state.palettes.includes(full)) {
-    await bringPictures(home, [since(entry, old.pictures)], state.terminals)
   }
 }
 
@@ -224,7 +333,7 @@ export function runCheck(name: string, fix = false): number {
     console.log(`\n\`ttheme check --fix ${entry.name}\` writes them`)
     return 1
   }
-  writeAtomic(path, recolor(readFileSync(path, 'utf8'), theme))
+  writeAtomic(path, recolor(readFileSync(path, 'utf8'), colorsOfTheme(theme)))
   if (state.palettes.includes(entry.name)) {
     sync(home, catalog, state)
   }

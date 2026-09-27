@@ -502,8 +502,10 @@ class Finder {
   private readonly catalog: Manifest
   private readonly entry: PaletteEntry
   private readonly blurring: number
+  private readonly start: Start | undefined
 
-  constructor(home: string, catalog: Manifest, entry: PaletteEntry, tag: string) {
+  constructor(home: string, catalog: Manifest, entry: PaletteEntry, tag: string, start?: Start) {
+    this.start = start
     this.home = home
     this.catalog = catalog
     this.entry = entry
@@ -706,7 +708,13 @@ class Finder {
     await this.features()
     this.grabber.start()
     this.write('\x1b[?1004h')
-    void this.peek()
+    if (this.start && 'paste' in this.start) {
+      this.pasted(this.start.paste)
+    } else if (this.start) {
+      void this.fromClipboard()
+    } else {
+      void this.peek()
+    }
     this.draw()
     const code = await exit
     this.session.abort()
@@ -741,6 +749,10 @@ class Finder {
 
   get saved(): string | undefined {
     return this.view.saved
+  }
+
+  get installs(): number {
+    return this.view.installed.length
   }
 
   private finish(code: number): void {
@@ -2915,6 +2927,18 @@ class Finder {
       }
     }
   }
+}
+
+export type Start = { paste: string } | { clipboard: true }
+
+export async function findFor(
+  home: string,
+  entry: PaletteEntry,
+  start?: Start,
+): Promise<{ saved: string | undefined; installs: number }> {
+  const finder = new Finder(home, readAvailable(home), entry, entry.booru ?? '', start)
+  await finder.run()
+  return { saved: finder.saved, installs: finder.installs }
 }
 
 export async function runFind(name: string): Promise<number> {

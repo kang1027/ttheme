@@ -968,7 +968,7 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
   if (scroll.length > 0) {
     lines[rows - 2]?.put(0, scroll.join('   '), D)
   }
-  if (!view.searching && view.tiles.length === 0 && !view.error) {
+  if (!view.searching && view.tiles.length === 0 && !view.error && view.tag) {
     lines[3]?.put(
       0,
       view.preset === 'cutouts'

@@ -30,8 +30,8 @@ Palettes
   market [action] [source]                       The markets you added — add, remove and search them; init makes one of your own
 
 Your own
-  new [--from <palette>] [--in <market>] <name>  Make a palette of your own, <you>@<market>/<name>, in your local market — installed at once
-  edit <palette>                                 Change one of your palettes in $EDITOR — the contrast gate advises, never refuses
+  new [--from <palette>] [--in <market>] <name>  Make a palette of your own, <you>@<market>/<name>, from blank in the palette editor — installed at once
+  edit <palette>                                 Change one of your palettes in the palette editor — the contrast gate advises, never refuses
   check [--fix] <palette>                        Measure a palette against the contrast gate and suggest colors that pass
   share <palette>                                Print a share code — ttheme add <code> installs it anywhere, pictures included
 
@@ -272,11 +272,49 @@ tells a day has passed. Failed tries are kept in
 ## Your own palettes
 
 ```sh
-ttheme new rei --from rei        # kecan0406@dust/rei, installed at once
-ttheme edit rei                  # $EDITOR; the bare name works for yours
+ttheme new rei                   # kecan0406@dust/rei, from blank in the palette editor
+ttheme new rei --from rei        # the same, starting from rei's colors and pictures
+ttheme edit rei                  # the same editor; the bare name works for yours
 ttheme check --fix rei           # colors that pass the gate, written in
 ttheme share rei                 # tt1:… — anyone runs ttheme add tt1:…
 ```
+
+`new` opens the palette editor full screen on a blank palette (it needs 80×24).
+It starts on the seeds: the lightness of the background and the foreground, a
+hue and a tint for the neutrals and the cursor, and one lightness and chroma the
+accents share, each accent on the hue its ANSI role reads as. Every slider is
+drawn in the colors it would give, and whatever the seeds, the twenty colors they
+grow pass the gate. enter moves to the slots, where `edit` opens too:
+
+- The left side lists the twenty colors, normal and bright side by side, each with
+  its contrast on the background and ✗ where the gate misses, and the gate's nine
+  rules under them. `↑↓` picks a slot, `←→` its normal or bright.
+- The right side shows the slot: hex, rgb and OKLCH, the color it started as, a
+  gradient for lightness, chroma and hue that is the color each step would give
+  (`░` past the sRGB edge), what the gate says about it — its contrast, its ANSI
+  role's hue band, how far its bright drifts, what it reads as — and a specimen
+  of a shell session in the draft's colors.
+- `tab` tunes the slot, as preview tunes a picture: `↑↓` lightness, chroma or hue,
+  `←→` a step, `⇧←→` five (ten degrees of hue), `0`–`9` a jump along the range,
+  enter keeps and esc puts it back. `#` takes `#rrggbb`, `rgb(r g b)` or
+  `oklch(l c h)`, and so does a paste.
+- `c` and `v` copy a color between slots, `=` makes a bright follow its normal,
+  `r` puts a slot back, `*` marks a signature color, `f` moves the colors the gate
+  misses, `o` takes another palette's colors, `s` goes back to the seeds, `u` and
+  ctrl+r undo and redo, and space shows the colors you started from. `?` lists
+  the keys; enter saves and esc asks before it throws changes away.
+- Pictures come in without leaving the editor: `p` opens `find` on the colors
+  being edited, and a picture dropped on the window or pasted — the file, its
+  path or its link, or the clipboard's with ctrl+v or an empty paste — opens
+  straight in find's try-on, cut out and tinted as find does. Whatever find
+  installs is counted in the title line; a post from a booru is listed in the
+  palette's `[[picture]]` tables when you save, your own picture stays on your
+  machine, and cancelling takes back what was added.
+
+While the editor is open the terminal wears the colors being edited, one changed
+slot at a time — in iTerm2, where each OSC color is a profile change, only the
+background and foreground, with the rest drawn in the editor — and gets its own
+colors back when it closes. `--from <palette>` skips the seeds.
 
 Your palettes are files in a local market: the first `new` asks for its name and
 creates `~/.config/ttheme/market/<name>` (`ttheme market init <name>` makes one
@@ -296,7 +334,7 @@ that, anyone runs `ttheme market add <you>/ttheme-<name>`.
 
 A palette can list background posts by number with their framing, in
 `[[picture]]` tables. `new` and `share` fill them in from the pictures you have
-up; `add`, a new `[[picture]]` in `edit`, and `update` fetch the posts on your
+up; `add` and `update` fetch the posts on your
 machine through your own rating and block settings, cut them out and tint them as
 `find` does. A picture you drop is not fetched again. When a palette's colors
 change — `edit`, `update` — its pictures take the new tone at once, keeping their
