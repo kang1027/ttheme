@@ -10,9 +10,11 @@ interface Row {
 interface Kind {
   character: boolean
   deprecated: boolean
+  renamed?: string
 }
 
 const GAP = 350
+const ZEROCHAN_GAP = 1100
 const TIMEOUT = 30_000
 const TRIES = 3
 const CHARACTER = 4
@@ -88,6 +90,25 @@ async function kinds(site: Site, names: string[]): Promise<Map<string, Kind>> {
     }
     return found
   }
+  if (site.key === 'zerochan') {
+    for (const name of names) {
+      await sleep(ZEROCHAN_GAP)
+      const response = await fetch(site.countUrl(name), {
+        headers: { 'User-Agent': 'ttheme-palette-skill' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(TIMEOUT),
+      })
+      const to = response.headers.get('location')
+      const text = await response.text()
+      if (to) {
+        const renamed = decodeURIComponent(new URL(to, site.origin).pathname.slice(1).replace(/\+/g, ' '))
+        found.set(name, { character: true, deprecated: false, renamed })
+      } else if (response.ok) {
+        found.set(name, { character: / is a character from /.test(text), deprecated: false })
+      }
+    }
+    return found
+  }
   for (const name of names) {
     const tags = (await json(`${site.origin}/tag.json?${new URLSearchParams({ name, limit: '0' })}`)) as {
       name: string
@@ -108,7 +129,7 @@ const cells = await Promise.all(
   SITES.map(async (site) => {
     const out: { text: string; flag: string }[] = []
     for (const [i, row] of rows.entries()) {
-      if (i > 0) await sleep(GAP)
+      if (i > 0) await sleep(site.key === 'zerochan' ? ZEROCHAN_GAP : GAP)
       const names = row.names.get(site.key) ?? []
       if (names.length === 0) {
         out.push({ text: 'none', flag: '' })
@@ -120,6 +141,7 @@ const cells = await Promise.all(
         const off = names.flatMap((name) => {
           const kind = known.get(name)
           if (!kind) return count > 0 && site.key !== 'danbooru' ? [] : [`${name} is not a tag`]
+          if (kind.renamed) return [`${name} is ${site.name}'s alias of ${kind.renamed}`]
           return kind.deprecated ? [`${name} is deprecated`] : kind.character ? [] : [`${name} is not a character`]
         })
         out.push({

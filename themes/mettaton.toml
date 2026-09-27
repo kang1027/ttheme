@@ -8,6 +8,7 @@ signature = ["cursor", "ansi13", "ansi3"]
 
 [meta.booru_sites]
 yande = []
+zerochan = "mettaton_ex"
 
 [colors]
 background = "#1d151b"

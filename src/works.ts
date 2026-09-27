@@ -8,6 +8,7 @@ const REFS: [RegExp, string][] = [
   [/yande\.re\/post\/show\/(\d+)/, 'yande'],
   [/konachan\.(?:com|net)\/post\/show\/(\d+)/, 'konachan'],
   [/danbooru\.donmai\.us\/(?:posts|post\/show)\/(\d+)/, 'danbooru'],
+  [/zerochan\.net\/(\d+)(?:[?#\s]|$)/, 'zerochan'],
 ]
 
 export interface Shape {

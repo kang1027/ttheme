@@ -51,7 +51,7 @@ A palette may name posts by number, with how to frame them:
 
 ```toml
 [[picture]]
-site = "yande"          # danbooru, konachan or yande
+site = "yande"          # danbooru, konachan, yande or zerochan
 id = 825034             # the post's number on that site — never a URL
 size = 60               # optional: "fill" (the default) or a percentage, 20-999
 position = "center"     # optional: top-left … bottom-right, top-right by default
@@ -98,8 +98,8 @@ One palette per pull request. At most three open at a time.
 - `meta.signature` names three palette slots that must resolve to three
   different colors — they are what the site draws as the palette's identity.
 - `meta.booru` is the character's booru tag (`kaname_madoka`,
-  `lucy_(cyberpunk)`), which `preview` searches on danbooru, konachan and
-  yande.re when someone looks for a background. Check it on danbooru first —
+  `lucy_(cyberpunk)`), which `preview` searches on danbooru, konachan,
+  yande.re and zerochan when someone looks for a background. Check it on danbooru first —
   it should be a character tag with posts. Leave it out for
   palettes that are not one character (a place, a concept). It is a search
   term; posts go in `[[picture]]`, by number.

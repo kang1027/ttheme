@@ -9,6 +9,7 @@ signature = ["cursor", "foreground", "ansi9"]
 [meta.booru_sites]
 konachan = "beatrice"
 yande = "beatrice"
+zerochan = "beatrice_(umineko_no_naku_koro_ni)"
 
 [colors]
 background = "#19180d"

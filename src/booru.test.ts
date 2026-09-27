@@ -21,20 +21,22 @@ import {
   parseMoebooru,
   parseSuggestions,
   parseTagList,
+  parseZerochan,
+  parseZerochanCount,
   postRef,
   rated,
   ratingSet,
+  redirected,
   rendition,
   retryAfter,
   SITES,
   type Site,
   sweepCache,
   tagsOf,
-  untunneled,
 } from './booru.ts'
 
 const site = (key: string) => SITES.find((s) => s.key === key) as Site
-const [dan, kona, yande] = [site('danbooru'), site('konachan'), site('yande')]
+const [dan, kona, yande, zero] = [site('danbooru'), site('konachan'), site('yande'), site('zerochan')]
 
 test('only the ratings a site calls safe pass, each site read in its own vocabulary', () => {
   assert.equal(rated(dan, { rating: 'g' }), true)
@@ -110,7 +112,7 @@ test('cutout tags are named per site, a site left empty asks for none, and unnam
   )
   assert.deepEqual(
     SITES.map((site) => site.cutouts),
-    ['transparent_background', '~transparent ~vector', 'transparent_png'],
+    ['transparent_background', '~transparent ~vector', 'transparent_png', 'transparent_background'],
   )
 })
 
@@ -228,16 +230,19 @@ test('the url builders pass the tags through as given, rating included', () => {
   }
 })
 
-test('danbooru is searched on the main site, which carries every rating, and it counts tags', () => {
-  assert.equal(new URL(dan.postsUrl('x', 0)).host, 'danbooru.donmai.us')
+test('danbooru is searched on shima, the name of its own that networks blocking the main one let through', () => {
+  assert.equal(new URL(dan.postsUrl('x', 0)).host, 'shima.donmai.us')
   assert.equal(dan.tagBudget, 2)
-  assert.equal(SITES.filter((s) => Number.isFinite(s.tagBudget)).length, 1)
+  assert.deepEqual(
+    SITES.filter((s) => Number.isFinite(s.tagBudget)).map((s) => s.key),
+    ['danbooru', 'zerochan'],
+  )
 })
 
 test('every site names the tag that sorts by score', () => {
   assert.deepEqual(
     SITES.map((s) => s.best),
-    ['order:score', 'order:score', 'order:score'],
+    ['order:score', 'order:score', 'order:score', 'order:fav'],
   )
 })
 
@@ -323,6 +328,7 @@ test('parseCounts reads the number danbooru answers a count query with', () => {
 test('postRef turns a pasted post page, a site:id or a bare number into one post to jump to', () => {
   assert.deepEqual(postRef('https://yande.re/post/show/214705', dan), { site: yande, id: 214705 })
   assert.deepEqual(postRef('https://danbooru.donmai.us/posts/12223134', yande), { site: dan, id: 12223134 })
+  assert.deepEqual(postRef('https://zerochan.net/3248583', dan), { site: zero, id: 3248583 })
   assert.deepEqual(postRef('konachan:244200', dan), { site: kona, id: 244200 })
   assert.deepEqual(postRef('7159377', dan), { site: dan, id: 7159377 })
   assert.equal(postRef('hakurei_reimu', dan), undefined)
@@ -404,9 +410,30 @@ test('a moebooru post borrows the tags danbooru holds for the same file, headcou
   )
 })
 
+test('a file danbooru also holds is fetched from its cdn, and a list that named no file takes that one', () => {
+  const [moe] = parseMoebooru(JSON.stringify([listed({ id: 1, md5: 'aa', tags: 'x' })]))
+  const [zc] = parseZerochan(JSON.stringify({ items: [{ id: 5, width: 800, height: 1200, md5: 'bb', tags: [] }] }))
+  const lent = parseLent(
+    JSON.stringify([
+      { md5: 'aa', tag_string: 'x', file_url: 'https://cdn.donmai.us/original/aa/00/aa.png' },
+      { md5: 'bb', tag_string: 'y', file_url: 'https://cdn.donmai.us/original/bb/00/bb.jpg' },
+    ]),
+  )
+  lend(
+    [moe, zc].filter((p) => p !== undefined),
+    lent,
+  )
+  assert.deepEqual(moe?.mirror, {
+    file: 'https://cdn.donmai.us/original/aa/00/aa.png',
+    preview: 'https://cdn.donmai.us/360x360/aa/00/aa.jpg',
+  })
+  assert.equal(moe?.file, 'https://x/7.png', 'the post keeps its own file')
+  assert.deepEqual([zc?.file, zc?.ext], ['https://cdn.donmai.us/original/bb/00/bb.jpg', 'jpg'])
+})
+
 test('the files to borrow for go to danbooru as one md5 list', () => {
   const url = new URL(lentUrl(['aa', 'bb']))
-  assert.equal(url.host, 'danbooru.donmai.us')
+  assert.equal(url.host, 'shima.donmai.us')
   assert.equal(url.searchParams.get('tags'), 'md5:aa,bb')
 })
 
@@ -419,8 +446,91 @@ test('parseTagList reads a moebooru tag search as completions with their post co
   )
 })
 
-test('only danbooru rides the unblock proxy, the other sites and their file hosts go direct', () => {
-  assert.equal(untunneled(), 'konachan.net,.konachan.net,yande.re,.yande.re')
+test('zerochan names its tags in words, so they are read as tags, and nudity makes a post questionable', () => {
+  const [plain, nude] = parseZerochan(
+    JSON.stringify({
+      items: [
+        {
+          id: 3248583,
+          width: 2000,
+          height: 3805,
+          md5: 'cd77',
+          tag: 'Hatsune Miku',
+          tags: ['Hatsune Miku', 'Solo', 'Transparent Background'],
+        },
+        { id: 1, width: 900, height: 900, md5: 'ee', tag: 'Hatsune Miku', tags: ['Nude'] },
+      ],
+    }),
+  )
+  assert.deepEqual(plain?.tags, ['hatsune_miku', 'solo', 'transparent_background'])
+  assert.deepEqual([plain?.solo, plain?.file, plain?.ext], [true, '', ''], 'a list names no file')
+  assert.equal(plain?.preview, 'https://s1.zerochan.net/Hatsune.Miku.600.3248583.jpg')
+  assert.deepEqual([plain && rated(zero, plain), nude && rated(zero, nude)], [true, false])
+  const [detail] = parseZerochan(
+    JSON.stringify({
+      id: 3248583,
+      width: 2000,
+      height: 3805,
+      hash: 'cd77',
+      primary: 'Hatsune Miku',
+      full: 'https://static.zerochan.net/Hatsune.Miku.full.3248583.png',
+      tags: ['Solo'],
+    }),
+  )
+  assert.deepEqual(
+    [detail?.file, detail?.ext, detail?.md5],
+    ['https://static.zerochan.net/Hatsune.Miku.full.3248583.png', 'png', 'cd77'],
+  )
+  assert.deepEqual(parseZerochan('{ }'), [])
+})
+
+test('zerochan takes its words joined by plus in the path, extra tags after a comma, and sorts by favourites for score', () => {
+  const plain = new URL(zero.postsUrl('gotou_hitori', 0))
+  assert.equal(plain.pathname, '/gotou+hitori')
+  assert.deepEqual(
+    [plain.searchParams.get('p'), plain.searchParams.get('s'), plain.searchParams.get('l')],
+    ['1', 'id', '100'],
+  )
+  const best = new URL(zero.postsUrl('gotou_hitori transparent_background order:fav', 2))
+  assert.equal(best.pathname, '/gotou+hitori,transparent+background')
+  assert.deepEqual([best.searchParams.get('p'), best.searchParams.get('s')], ['3', 'fav'])
+  assert.equal(zero.rate(['safe']), '', 'zerochan has no rating to ask for')
+  assert.equal(parseZerochanCount('<description>Zerochan has 84,051 Hatsune Miku anime images'), 84051)
+})
+
+test('a zerochan file is looked for as jpg first, or png first when the post is a cutout', () => {
+  const [photo, cut] = parseZerochan(
+    JSON.stringify({
+      items: [
+        { id: 7, tag: 'Amane Suzuha', tags: [] },
+        { id: 8, tag: 'Amane Suzuha', tags: ['Transparent Background'] },
+      ],
+    }),
+  )
+  assert.deepEqual(photo && zero.guesses?.(photo), [
+    'https://static.zerochan.net/Amane.Suzuha.full.7.jpg',
+    'https://static.zerochan.net/Amane.Suzuha.full.7.png',
+  ])
+  assert.equal(cut && zero.guesses?.(cut)[0], 'https://static.zerochan.net/Amane.Suzuha.full.8.png')
+})
+
+test("a redirect keeps the query the target left off, and keeps the target's own", () => {
+  assert.equal(
+    redirected('https://www.zerochan.net/lucy?json=&l=100', 'https://www.zerochan.net/Lucyna+Kushinada'),
+    'https://www.zerochan.net/Lucyna+Kushinada?json=&l=100',
+  )
+  assert.equal(redirected('https://a.test/x?q=1', '/y?z=2'), 'https://a.test/y?z=2')
+})
+
+test('a tag zerochan does not know lists nothing instead of failing the search', async () => {
+  const real = globalThis.fetch
+  globalThis.fetch = (async () => new Response('{ }', { status: 404 })) as unknown as typeof fetch
+  try {
+    assert.deepEqual(await fetchPosts(zero, 'nobody_here', 0, new AbortController().signal), [])
+    await assert.rejects(fetchPosts(yande, 'x', 0, new AbortController().signal), /yande\.re answered 404/)
+  } finally {
+    globalThis.fetch = real
+  }
 })
 
 test('a request cut off by a connection reset is tried again', async () => {

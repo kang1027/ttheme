@@ -127,7 +127,7 @@ const CONFIG_SETTINGS = {
     default: 'all',
   },
   TTHEME_FIND_SOLO: {
-    doc: '# on keeps the danbooru posts tagged solo, the character alone; off lists every post (default on)',
+    doc: '# on keeps the posts tagged solo, the character alone, by danbooru or zerochan; off lists every post (default on)',
     default: 'on',
   },
   TTHEME_FIND_CUTOUTS: {
@@ -146,12 +146,8 @@ const CONFIG_SETTINGS = {
     doc: '# an opaque picture tried on in find: on cuts the character out with macOS Vision, off leaves it as it is (default on)',
     default: 'on',
   },
-  TTHEME_FIND_UNBLOCK: {
-    doc: '# when a network blocks a booru by name, 1 sends find through a local proxy that splits the TLS handshake — find offers to turn it on (default 0)',
-    default: '0',
-  },
   TTHEME_FIND_HOSTS: {
-    doc: '# send a find site somewhere else, as key=https://host pairs — e.g. "danbooru=https://safebooru.donmai.us" (default none)',
+    doc: '# send a find site somewhere else, as key=https://host pairs — e.g. "danbooru=https://danbooru.donmai.us" (default none)',
     default: '',
   },
 } as const

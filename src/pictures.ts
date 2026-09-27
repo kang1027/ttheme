@@ -34,7 +34,6 @@ import type { PaletteEntry } from './emit/manifest.ts'
 import { refreshProfiles } from './palettes.ts'
 import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
 import type { SharedPicture } from './theme.ts'
-import { unblocking } from './unblock.ts'
 import { blurOf } from './wiring.ts'
 
 const TIMEOUT = 90_000
@@ -56,10 +55,6 @@ export function missingPictures(configHome: string, entry: PaletteEntry): Shared
 export function since(entry: PaletteEntry, before: readonly SharedPicture[] | undefined): PaletteEntry {
   const seen = new Set((before ?? []).map((p) => imageKey(p)))
   return { ...entry, pictures: (entry.pictures ?? []).filter((p) => !seen.has(imageKey(p))) }
-}
-
-export function needsTunnel(pictures: SharedPicture[]): boolean {
-  return unblocking() && pictures.some((p) => SITES.find((s) => s.key === p.site)?.tunneled)
 }
 
 function colorsOf(entry: PaletteEntry): Colors {

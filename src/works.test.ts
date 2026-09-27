@@ -58,6 +58,13 @@ test('a post names itself, its file, and every file or post its source points at
     'post:yande:225908',
     'family:konachan:4',
   ])
+  assert.deepEqual(kinKeys(site('yande'), post({ id: 3, source: 'https://www.zerochan.net/3248583' })), [
+    'post:yande:3',
+    'post:zerochan:3248583',
+  ])
+  assert.deepEqual(kinKeys(site('yande'), post({ id: 3, source: 'https://s1.zerochan.net/600/05/11/3800555.jpg' })), [
+    'post:yande:3',
+  ])
 })
 
 test('a set is one uploader posting pictures of one size in a row', () => {

@@ -170,7 +170,7 @@ is what it is: [docs/terminals.md](docs/terminals.md).
 ## Background pictures
 
 A palette can wear a picture behind the text. ttheme ships none: `ttheme
-preview` → tab searches danbooru, konachan and yande.re for the character live
+preview` → tab searches danbooru, konachan, yande.re and zerochan for the character live
 (safe-rated by default), or takes a picture you paste or drop, cuts the
 character out on macOS, tints it to the palette and installs it on your machine
 only. Ghostty shows the focused tab's picture, iTerm2 one per tab, kitty one per

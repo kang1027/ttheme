@@ -8,6 +8,7 @@ signature = ["cursor", "foreground", "ansi4"]
 
 [meta.booru_sites]
 yande = "papyrus"
+zerochan = "papyrus"
 
 [colors]
 background = "#201512"

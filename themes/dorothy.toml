@@ -8,6 +8,7 @@ signature = ["cursor", "ansi4", "ansi5"]
 
 [meta.booru_sites]
 konachan = []
+zerochan = []
 
 [colors]
 background = "#201515"

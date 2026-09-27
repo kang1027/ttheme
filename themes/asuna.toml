@@ -9,6 +9,7 @@ signature = ["cursor", "ansi1", "foreground"]
 [meta.booru_sites]
 konachan = "yuuki_asuna"
 yande = "asuna_(sword_art_online)"
+zerochan = "yuuki_asuna"
 
 [colors]
 background = "#1f160d"

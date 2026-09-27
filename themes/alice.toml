@@ -6,6 +6,9 @@ ansi_source = "Cobalt Next Dark + Aincrad"
 booru = "alice_zuberg"
 signature = ["cursor", "selection", "ansi5"]
 
+[meta.booru_sites]
+zerochan = "alice_schuberg"
+
 [colors]
 background = "#1b170c"
 foreground = "#ede2c6"

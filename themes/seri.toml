@@ -8,6 +8,7 @@ signature = ["cursor", "ansi12", "ansi9"]
 
 [meta.booru_sites]
 konachan = []
+zerochan = "kikiyou_seri"
 
 [colors]
 background = "#1e160d"

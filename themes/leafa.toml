@@ -9,6 +9,7 @@ signature = ["cursor", "ansi11", "selection"]
 [meta.booru_sites]
 konachan = "leafa"
 yande = "leafa"
+zerochan = "lyfa_(alo)"
 
 [colors]
 background = "#141911"

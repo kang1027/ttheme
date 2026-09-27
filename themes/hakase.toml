@@ -9,6 +9,7 @@ signature = ["cursor", "selection", "ansi1"]
 [meta.booru_sites]
 konachan = "hakase_(nichijou)"
 yande = "hakase"
+zerochan = "shinonome_hakase"
 
 [colors]
 background = "#1f160d"

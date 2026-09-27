@@ -6,6 +6,9 @@ ansi_source = "TokyoNight"
 booru = "jill_stingray"
 signature = ["cursor", "ansi1", "ansi5"]
 
+[meta.booru_sites]
+zerochan = "julianne_stingray"
+
 [colors]
 background = "#15181e"
 foreground = "#dee2f2"

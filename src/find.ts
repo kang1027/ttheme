@@ -35,8 +35,11 @@ import {
   fetchPost,
   fetchPosts,
   fetchSuggestions,
+  fileOf,
   headOf,
+  LENDER,
   lend,
+  locate,
   mates,
   originHost,
   PAGE,
@@ -44,7 +47,9 @@ import {
   pausedUntil,
   postKey,
   postRef,
+  previewOf,
   RATINGS,
+  type Rendition,
   rated,
   ratingSet,
   rendition,
@@ -75,7 +80,6 @@ import {
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
 import { configHome, refreshProfiles } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
-import { relaunch, routable, unblocking } from './unblock.ts'
 import { blurOf, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
@@ -217,8 +221,8 @@ function area(post: Post): number {
   return post.width * post.height
 }
 
-function previewStem(post: Post): string {
-  return `${post.id}-${createHash('sha1').update(post.preview).digest('hex').slice(0, 8)}`
+function previewStem(id: number, url: string): string {
+  return `${id}-${createHash('sha1').update(url).digest('hex').slice(0, 8)}`
 }
 
 function incomplete(input: string): boolean {
@@ -293,7 +297,6 @@ class Finder {
   private probeWait?: (cell: { w: number; h: number } | null) => void
   private done?: (code: number) => void
   private dirty = false
-  unblock = false
   private readonly scratch = mkdtempSync(join(tmpdir(), 'ttheme-find-'))
 
   private readonly home: string
@@ -319,7 +322,6 @@ class Finder {
       rating: ratingSet(this.setting('TTHEME_FIND_RATING')),
       block: blockSet(this.setting('TTHEME_FIND_BLOCK')),
       sets: this.setting('TTHEME_FIND_SETS') === 'show' ? 'show' : 'fold',
-      unblocked: process.env.TTHEME_FIND_PROXY !== undefined,
       settings: SETTINGS.map((setting) => ({
         label: setting.label,
         choices: [...setting.choices],
@@ -385,7 +387,8 @@ class Finder {
   }
 
   private previewPath(pick: Pick): string {
-    return join(cacheDir(pick.site), 'thumb', `${previewStem(pick.post)}.${extension(pick.post.preview)}`)
+    const { url } = previewOf(pick.site, pick.post)
+    return join(cacheDir(pick.site), 'thumb', `${previewStem(pick.post.id, url)}.${extension(url)}`)
   }
 
   private tileOf(pick: Pick, variants: number): Tile {
@@ -593,7 +596,7 @@ class Finder {
       this.draw()
       return
     }
-    if (view.installing !== undefined || view.asking !== undefined || view.panel !== undefined || view.help) {
+    if (view.installing !== undefined || view.panel !== undefined || view.help) {
       return
     }
     if (text.trim() === '') {
@@ -652,7 +655,7 @@ class Finder {
       return
     }
     this.peeked = seen.stamp
-    if (!seen.picture || view.installing !== undefined || view.asking !== undefined) {
+    if (!seen.picture || view.installing !== undefined) {
       return
     }
     view.hint = `picture on the clipboard · ${PASTE_KEY} uses it`
@@ -826,10 +829,6 @@ class Finder {
       return
     }
     if (view.installing !== undefined) {
-      return
-    }
-    if (view.asking !== undefined) {
-      this.askKey(key)
       return
     }
     if (key === 'focus-in') {
@@ -1026,24 +1025,6 @@ class Finder {
     } catch (error) {
       this.view.error = error instanceof Error ? error.message : String(error)
       return false
-    }
-  }
-
-  private askKey(key: string): void {
-    const view = this.view
-    if (key === 'y') {
-      view.asking = undefined
-      if (this.store([['TTHEME_FIND_UNBLOCK', '1']])) {
-        this.unblock = true
-        this.finish(0)
-        return
-      }
-      this.draw()
-      return
-    }
-    if (key === 'n' || key === 'esc') {
-      view.asking = undefined
-      this.draw()
     }
   }
 
@@ -1401,15 +1382,8 @@ class Finder {
     this.board.error = reason(site?.name ?? this.tabName, error)
     this.board.searching = false
     this.view.error = this.board.error
-    this.offer(site, error)
     this.show()
     this.draw()
-  }
-
-  private offer(site: Site | undefined, error: unknown): void {
-    if (site && !this.view.unblocked && routable() && describe(error) === 'ECONNRESET') {
-      this.view.asking = site.name
-    }
   }
 
   private drop(board: Board, site: Site, error: unknown): void {
@@ -1419,7 +1393,6 @@ class Finder {
       }
     }
     board.note = [board.note, reason(site.name, error)].filter(Boolean).join(' · ')
-    this.offer(site, error)
   }
 
   private wants(): boolean {
@@ -1440,15 +1413,15 @@ class Finder {
     const key = `${site.key}|${tags}|${page}`
     let job = this.pages.get(key)
     if (!job) {
-      job = fetchPosts(site, tags, page, this.signal).then((posts) => this.borrow(posts))
+      job = fetchPosts(site, tags, page, this.signal).then((posts) => this.borrow(site, posts))
       this.pages.set(key, job)
       job.catch(() => this.pages.delete(key))
     }
     return job
   }
 
-  private async borrow(posts: Post[]): Promise<Post[]> {
-    const asking = posts.filter((post) => post.solo === undefined && post.md5 !== '')
+  private async borrow(site: Site, posts: Post[]): Promise<Post[]> {
+    const asking = site === LENDER ? [] : posts.filter((post) => post.md5 !== '')
     if (asking.length > 0) {
       try {
         lend(
@@ -1627,7 +1600,8 @@ class Finder {
     if (!job) {
       job = (async () => {
         const path = this.previewPath(pick)
-        await this.cached(pick.site, path, pick.post.preview)
+        const from = previewOf(pick.site, pick.post)
+        await this.cached(from.site, path, from.url)
         const look = await this.renders.run({ job: 'match', from: path, colors: this.entry.signature })
         this.looked.set(key, look)
         this.matched.set(pick.post, look.match)
@@ -1708,7 +1682,9 @@ class Finder {
     if (this.view.solo && post.solo === false) {
       return false
     }
-    return this.view.preset === 'all' ? ['png', 'jpg', 'jpeg'].includes(version.ext) : post.ext === 'png'
+    return this.view.preset === 'all'
+      ? ['png', 'jpg', 'jpeg', ''].includes(version.ext)
+      : ['png', ''].includes(post.ext)
   }
 
   private async vet(pick: Pick): Promise<boolean> {
@@ -1736,7 +1712,9 @@ class Finder {
       return cached
     }
     try {
-      const alpha = (await headOf(site, post.file, this.signal))?.alpha === true
+      const found = await locate(site, post, this.signal)
+      const from = fileOf(site, post)
+      const alpha = (found === undefined ? await headOf(from.site, from.url, this.signal) : found)?.alpha === true
       known[post.id] = alpha
       this.unsaved.add(site.key)
       return alpha
@@ -1884,10 +1862,11 @@ class Finder {
     const { site, post } = pick
     const w = TILE.cols * this.cell.w
     const h = TILE.rows * this.cell.h
-    const path = join(cacheDir(site), 'tile', `${previewStem(post)}-${w}x${h}.png`)
+    const from = previewOf(site, post)
+    const path = join(cacheDir(site), 'tile', `${previewStem(post.id, from.url)}-${w}x${h}.png`)
     if (!existsSync(path)) {
       const thumb = this.previewPath(pick)
-      await this.cached(site, thumb, post.preview)
+      await this.cached(from.site, thumb, from.url)
       await this.renders.run({ job: 'thumb', from: thumb, to: path, width: w, height: h })
     }
     this.thumbPath.set(postKey(site, post.id), path)
@@ -1915,8 +1894,7 @@ class Finder {
   private async load(tile: Tile): Promise<void> {
     const view = this.view
     const pick = this.posts.get(tile.key)
-    const version = pick && rendition(pick.post)
-    if (!pick || !version) {
+    if (!pick || !rendition(pick.post)) {
       return
     }
     const { site } = pick
@@ -1924,12 +1902,15 @@ class Finder {
     const control = new AbortController()
     this.fetch = control
     try {
+      await locate(site, pick.post, control.signal)
+      const version = rendition(pick.post) as Rendition
       const path = this.origPath(site, tile.id, version.ext)
       if (!existsSync(path)) {
         view.fetching = { id: tile.key, got: 0, size: 0 }
         this.draw()
       }
-      const size = await this.cached(site, path, version.file, (got, total) => {
+      const from = fileOf(site, pick.post, version)
+      const size = await this.cached(from.site, path, from.url, (got, total) => {
         if (view.fetching?.id === tile.key) {
           view.fetching = { id: tile.key, got, size: total }
           this.draw()
@@ -2043,20 +2024,22 @@ class Finder {
       }
       const tile = view.tiles[index]
       const pick = tile && this.posts.get(tile.key)
-      const version = pick && rendition(pick.post)
-      if (!pick || !version) {
+      if (!pick || !rendition(pick.post)) {
         continue
       }
       const { site, post } = pick
-      const path = this.origPath(site, post.id, version.ext)
       this.prefetching++
-      void this.cached(site, path, version.file)
-        .then(() =>
-          this.render(
+      void locate(site, post, this.signal)
+        .then(async () => {
+          const version = rendition(post) as Rendition
+          const path = this.origPath(site, post.id, version.ext)
+          const from = fileOf(site, post, version)
+          await this.cached(from.site, path, from.url)
+          return this.render(
             { site, id: post.id, key: tile.key, path, ext: version.ext, size: 0, using: 'plain', failed: false },
             'plain',
-          ),
-        )
+          )
+        })
         .catch(() => {})
         .finally(() => {
           this.prefetching--
@@ -2215,9 +2198,6 @@ class Finder {
 }
 
 export async function runFind(name: string): Promise<number> {
-  if (unblocking()) {
-    return relaunch()
-  }
   const home = configHome()
   const catalog = readAvailable(home)
   const entry = find(catalog.palettes, name)
@@ -2226,10 +2206,9 @@ export async function runFind(name: string): Promise<number> {
   }
   const finder = new Finder(home, catalog, entry, entry.booru ?? '')
   const code = await finder.run()
-  const next = finder.unblock ? await relaunch() : code
-  if (finder.saved && next !== 0) {
+  if (finder.saved && code !== 0) {
     process.stderr.write(`${finder.saved}\n`)
     return 0
   }
-  return next
+  return code
 }

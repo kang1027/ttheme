@@ -9,6 +9,7 @@ signature = ["cursor", "ansi9", "ansi3"]
 [meta.booru_sites]
 konachan = "natsuki_(ddlc)"
 yande = "natsuki_(doki_doki_literature_club!)"
+zerochan = "natsuki_(doki_doki_literature_club!)"
 
 [colors]
 background = "#1f1518"

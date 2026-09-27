@@ -6,6 +6,9 @@ ansi_source = "Emerald Synth"
 booru = "rebecca_(cyberpunk)"
 signature = ["ansi1", "ansi2", "cursor"]
 
+[meta.booru_sites]
+zerochan = "rebecca_(cyberpunk:_edgerunners)"
+
 [colors]
 background = "#201516"
 foreground = "#fbdbde"

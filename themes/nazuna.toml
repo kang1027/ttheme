@@ -9,6 +9,7 @@ signature = ["cursor", "ansi1", "ansi13"]
 [meta.booru_sites]
 konachan = "nanakusa_nazuna"
 yande = "nanakusa_nazuna"
+zerochan = "nanakusa_nazuna"
 
 [colors]
 background = "#1e151a"

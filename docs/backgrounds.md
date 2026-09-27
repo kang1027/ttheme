@@ -43,22 +43,28 @@ the size of the window, as the sizes above 100% are.
 ## Finding one
 
 A palette with no background yet can find one: on it in `preview`, tab opens
-**find**, which searches a booru for the palette's character tag
-(`meta.booru`) and lays the results out as a grid of thumbnails. It starts on
-danbooru; tab moves to konachan, then yande.re, then back — they share one tag
-vocabulary, so the same tag works on each. danbooru and yande.re carry every
-rating and `TTHEME_FIND_RATING` picks which come through; konachan is
-`konachan.net`, the mirror that carries safe posts only, since `konachan.com`
-answers with a Cloudflare challenge. When a site's connection is cut off — the
-way a network that blocks boorus by name drops danbooru — find asks whether to
-turn on the unblock proxy (`TTHEME_FIND_UNBLOCK`); `y` saves the setting and
-opens find again through it, `n` leaves it off. The
+**find**, which searches for the palette's character tag (`meta.booru`) and lays
+the results out as a grid of thumbnails. It opens on **all**, every site's posts
+ranked together; tab moves to danbooru, konachan, yande.re and zerochan alone,
+then back. The boorus share one tag vocabulary, and zerochan names characters in
+words (`Gotou Hitori`), which find asks for with underscores (`gotou_hitori`);
+where a site calls the character something else, the palette names it there in
+`[meta.booru_sites]`. danbooru and yande.re carry every rating and
+`TTHEME_FIND_RATING` picks which come through; konachan is `konachan.net`, the
+mirror that carries safe posts only, since `konachan.com` answers with a
+Cloudflare challenge; zerochan keeps no rating, so its posts count as safe unless
+they carry a nudity tag. danbooru is asked at `shima.donmai.us`, a name of its
+own that networks blocking `danbooru.donmai.us` by hostname let through. A
+konachan, yande.re or zerochan post that danbooru holds too — the same file,
+known by md5 from the tags each page borrows — is downloaded from danbooru's
+servers, which answer faster than yande.re's and zerochan's, and stays that
+site's post. The
 sites sit in a strip of tabs under the query, the one you are on lit in its own
 color, and it comes again as a badge at the start of the line above a picture
 you try on, next to the site the artwork itself came from when the post records
 one (`pixiv.net`, `deviantart.com`). The grid starts
 with every post of the character; `c` narrows it to **cutouts** — posts carrying
-the site's transparency tags (`transparent_background` on danbooru,
+the site's transparency tags (`transparent_background` on danbooru and zerochan,
 `transparent` or `vector` on konachan, `transparent_png` on yande.re) whose PNG header says they have
 an alpha channel; yande.re's `transparent_png` already means exactly that, so
 its posts skip the header check, which its slow file server would drag out —
@@ -70,8 +76,9 @@ few of those tags, so `TTHEME_FIND_CUTOUTS` names the ones to look for, site by
 site.
 
 Under each thumbnail is its post id and size, and under that whoever made it:
-the artist, which every site names through its tag types at no extra
-request, and the uploader as `@name` where a post has no artist tag. A score follows as
+the artist, which every booru names through its tag types at no extra
+request, and the uploader as `@name` where a post has no artist tag; zerochan's
+list names neither. A score follows as
 `★22` on the sites that keep one. When the same hand uploads the same picture at
 the same size over and over, find folds that run into one tile marked `×9`,
 wherever the order puts its pictures, and folds in the same way a picture
@@ -134,7 +141,8 @@ marks the picture `cut out`, and `x` switches between the cut-out and the pictur
 as it is. When Vision finds no character, or would leave almost nothing or
 remove almost nothing, the picture stays opaque; elsewhere it always does. A post over 25 megapixels is
 fetched as the site's own smaller copy instead — up to 3500 px on yande.re and
-konachan, 850 px on danbooru — and its size carries `↓`; those
+konachan, 850 px on danbooru; zerochan names none, so its larger posts are left
+out — and its size carries `↓`; those
 copies are JPEGs, so a cutout tried on that way comes out opaque. `←`/`→` try
 the neighbours, which find fetches ahead of you two at a time, and enter installs
 and returns to the grid with the tile marked `✓`, the tab, search and scroll as

@@ -6,6 +6,9 @@ ansi_source = "Rose Pine Dawn + Magica"
 booru = "kyuubee"
 signature = ["cursor", "foreground", "ansi3"]
 
+[meta.booru_sites]
+zerochan = "kyubee"
+
 [colors]
 background = "#fff8f7"
 foreground = "#1f1c39"

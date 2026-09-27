@@ -57,7 +57,6 @@ export interface FindView {
   rating: Rating[]
   block: Block[]
   sets: Sets
-  unblocked: boolean
   settings: Row[]
   panel?: number
   colors: { cursor: Hex; selection: Hex; ansi: Hex[] }
@@ -78,7 +77,6 @@ export interface FindView {
   editing?: string
   suggest?: { value: string; count: number; palette?: string }[]
   pick?: number
-  asking?: string
   saved?: string
   note?: string
   hint?: string
@@ -450,16 +448,7 @@ function tabs(line: Line, cols: number, view: FindView): void {
     return i ? [[' ', ''], tab] : [tab]
   })
   const fits = strip.reduce((n, [text]) => n + width(text), 0) <= cols
-  const end = line.run(0, fits ? strip : [badge(view)])
-  if (view.asking !== undefined) {
-    line.run(end, [
-      [`  ${view.asking} was cut off — this network may block it. turn on the unblock proxy?  `, YELLOW],
-      ['y', B],
-      [' turn on  ', D],
-      ['n', B],
-      [' not now', D],
-    ])
-  }
+  line.run(0, fits ? strip : [badge(view)])
 }
 
 function query(line: Line, cols: number, view: FindView, accent: string): void {
@@ -488,7 +477,6 @@ function query(line: Line, cols: number, view: FindView, accent: string): void {
     view.order,
     ...(view.rating.join('+') === 'safe' ? [] : [view.rating.join('+')]),
     ...(allowed.length > 0 ? [`allows ${allowed.join('+')}`] : []),
-    ...(view.unblocked ? ['unblock'] : []),
   ]
   line.put(c, `  ${state.join('  ')}`, D)
   if (view.total > 0 || !view.searching) {
@@ -620,19 +608,16 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
   foot(line, cols, accent, {
     badge: 'FIND',
     lead,
-    keys:
-      view.asking !== undefined
-        ? []
-        : [
-            ['←↑↓→', 'move'],
-            ['enter', 'try on'],
-            ['tab', 'site'],
-            ['ctrl+v', 'picture'],
-            ['s', 'settings'],
-            ['/', 'search'],
-            ['?', 'keys'],
-          ],
-    right: view.asking !== undefined ? undefined : ['esc', 'back'],
+    keys: [
+      ['←↑↓→', 'move'],
+      ['enter', 'try on'],
+      ['tab', 'site'],
+      ['ctrl+v', 'picture'],
+      ['s', 'settings'],
+      ['/', 'search'],
+      ['?', 'keys'],
+    ],
+    right: ['esc', 'back'],
   })
 }
 

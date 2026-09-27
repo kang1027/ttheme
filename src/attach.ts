@@ -221,7 +221,6 @@ export const LOCAL: Site = {
   best: '',
   tagBudget: 0,
   vouched: true,
-  tunneled: false,
   ansi: 7,
   ratings: { safe: new Set(), questionable: new Set(), explicit: new Set() },
   rate: () => '',

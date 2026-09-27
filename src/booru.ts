@@ -29,6 +29,9 @@ const SUGGESTED = 8
 const CONNECT = 3_000
 const MAX_WAIT = 60_000
 const TRIES = 3
+const HOPS = 3
+const ZEROCHAN_FILES = 'https://static.zerochan.net'
+const ZEROCHAN_SAMPLES = 'https://s1.zerochan.net'
 export const AGENT = `ttheme/${pkg.version} (+${pkg.homepage})`
 
 const HELD = ['orig', 'tile', 'thumb', 'cut']
@@ -59,6 +62,7 @@ export interface Post extends Rendition {
   solo: boolean | undefined
   family: number
   smaller: Rendition[]
+  mirror?: { file: string; preview: string }
 }
 
 export interface Site {
@@ -70,8 +74,8 @@ export interface Site {
   best: string
   tagBudget: number
   vouched: boolean
-  tunneled: boolean
   ansi: number
+  missing?: number
   ratings: Record<Rating, Set<string>>
   rate(levels: readonly Rating[]): string
   postsUrl(tags: string, page: number): string
@@ -80,6 +84,7 @@ export interface Site {
   pageUrl(id: number): string
   parse(text: string): Post[]
   count(text: string): number
+  guesses?(post: Post): string[]
 }
 
 function listing(dir: string): string[] {
@@ -208,6 +213,56 @@ export function parseDanbooru(text: string): Post[] {
   })
 }
 
+function zerochanTags(raw: unknown): string[] {
+  return (Array.isArray(raw) ? raw : []).map((tag) => String(tag).toLowerCase().replace(/\s+/g, '_'))
+}
+
+function sampleName(tag: unknown): string {
+  return (
+    String(tag ?? '')
+      .replace(/[^0-9a-z]+/gi, '.')
+      .replace(/^\.+|\.+$/g, '') || 'zerochan'
+  )
+}
+
+export function parseZerochan(text: string): Post[] {
+  const body = text.trim()
+  const raw = (body ? JSON.parse(body) : {}) as Record<string, unknown>
+  const items = Array.isArray(raw.items) ? (raw.items as Record<string, unknown>[]) : raw.id ? [raw] : []
+  return items.flatMap((item): Post[] => {
+    const id = Number(item.id)
+    if (!id) {
+      return []
+    }
+    const tags = zerochanTags(item.tags)
+    const file = absolute(String(item.full ?? ''))
+    return [
+      {
+        id,
+        width: Number(item.width) || 0,
+        height: Number(item.height) || 0,
+        file,
+        ext: extension(file),
+        preview: `${ZEROCHAN_SAMPLES}/${sampleName(item.tag ?? item.primary)}.600.${id}.jpg`,
+        owner: '',
+        artist: '',
+        score: 0,
+        rating: tags.some((tag) => EXPOSED.nudity.has(tag)) ? 'q' : 'g',
+        md5: String(item.md5 ?? item.hash ?? ''),
+        source: String(item.source ?? ''),
+        tags,
+        solo: tags.includes('solo'),
+        family: 0,
+        smaller: [],
+      },
+    ]
+  })
+}
+
+export function parseZerochanCount(text: string): number {
+  return Number(/Zerochan has ([\d,]+) /.exec(text)?.[1]?.replace(/,/g, '') ?? 0)
+}
+
 export interface Suggestion {
   value: string
   count: number
@@ -242,7 +297,6 @@ interface Spec {
   origin: string
   cutouts: string[]
   vouched: boolean
-  tunneled: boolean
   ansi: number
 }
 
@@ -369,8 +423,46 @@ function danbooru(raw: Spec): Site {
   }
 }
 
-function siteNamed(name: string): Site | undefined {
-  return SITES.find((site) => site.key === name || site.name === name || new URL(site.origin).host === name)
+function zerochanPath(tags: string): string {
+  return tags
+    .split(/\s+/)
+    .filter((tag) => tag && !tag.startsWith('order:'))
+    .map((tag) => tag.split('_').map(encodeURIComponent).join('+'))
+    .join(',')
+}
+
+function zerochan(raw: Spec): Site {
+  const spec = based(raw)
+  return {
+    ...spec,
+    cutouts: spec.cutouts[0] ?? '',
+    ratings: tiers(['g'], ['q'], ['e']),
+    rate: () => '',
+    best: 'order:fav',
+    tagBudget: 3,
+    missing: 404,
+    postsUrl: (tags, page) =>
+      `${spec.origin}/${zerochanPath(tags)}?${new URLSearchParams({
+        json: '',
+        l: String(PAGE),
+        p: String(page + 1),
+        s: tags.split(/\s+/).includes('order:fav') ? 'fav' : 'id',
+      })}`,
+    countUrl: (tags) => `${spec.origin}/${zerochanPath(tags)}?${new URLSearchParams({ xml: '', l: '1' })}`,
+    postUrl: (id) => `${spec.origin}/${id}?json=`,
+    pageUrl: (id) => `${spec.origin}/${id}`,
+    parse: parseZerochan,
+    count: parseZerochanCount,
+    guesses: (post) =>
+      (post.tags.includes('transparent_background') ? ['png', 'jpg'] : ['jpg', 'png']).map((ext) =>
+        post.preview.replace(ZEROCHAN_SAMPLES, ZEROCHAN_FILES).replace(/\.600\.(\d+)\.jpg$/, `.full.$1.${ext}`),
+      ),
+  }
+}
+
+function siteNamed(host: string): Site | undefined {
+  const domain = originHost(`https://${host}`)
+  return SITES.find((site) => originHost(site.origin) === domain)
 }
 
 export function tagsOf(query: string): number {
@@ -402,10 +494,9 @@ export const SITES: Site[] = [
   danbooru({
     key: 'danbooru',
     name: 'danbooru',
-    origin: 'https://danbooru.donmai.us',
+    origin: 'https://shima.donmai.us',
     cutouts: ['transparent_background'],
     vouched: false,
-    tunneled: true,
     ansi: 2,
   }),
   moebooru({
@@ -414,7 +505,6 @@ export const SITES: Site[] = [
     origin: 'https://konachan.net',
     cutouts: ['transparent', 'vector'],
     vouched: false,
-    tunneled: false,
     ansi: 6,
   }),
   moebooru({
@@ -423,10 +513,19 @@ export const SITES: Site[] = [
     origin: 'https://yande.re',
     cutouts: ['transparent_png'],
     vouched: true,
-    tunneled: false,
     ansi: 5,
   }),
+  zerochan({
+    key: 'zerochan',
+    name: 'zerochan',
+    origin: 'https://www.zerochan.net',
+    cutouts: ['transparent_background'],
+    vouched: false,
+    ansi: 3,
+  }),
 ]
+
+export const LENDER = SITES.find((site) => site.key === 'danbooru') as Site
 
 export const KEY_SPAN = 2 ** 27
 
@@ -445,11 +544,17 @@ export function originHost(source: string): string {
   return host.split('.').slice(-2).join('.')
 }
 
-export function untunneled(): string {
-  return SITES.filter((site) => !site.tunneled)
-    .map((site) => originHost(site.origin))
-    .flatMap((domain) => [domain, `.${domain}`])
-    .join(',')
+export interface Copy {
+  site: Site
+  url: string
+}
+
+export function fileOf(site: Site, post: Post, version: Rendition = post): Copy {
+  return post.mirror && version === post ? { site: LENDER, url: post.mirror.file } : { site, url: version.file }
+}
+
+export function previewOf(site: Site, post: Post): Copy {
+  return post.mirror ? { site: LENDER, url: post.mirror.preview } : { site, url: post.preview }
 }
 
 export function exposed(post: Pick<Post, 'tags'>, blocks: readonly Block[] = BLOCKS): string[] {
@@ -539,6 +644,14 @@ function challenged(response: Response): boolean {
   )
 }
 
+export function redirected(from: string, to: string): string {
+  const next = new URL(to, from)
+  if (!next.search) {
+    next.search = new URL(from).search
+  }
+  return next.href
+}
+
 async function get(
   site: Site,
   url: string,
@@ -546,15 +659,17 @@ async function get(
   headers: Record<string, string> = {},
   timeout = TIMEOUT,
 ) {
-  for (let tries = 1; ; tries++) {
+  let at = url
+  for (let tries = 1, hops = 0; ; tries++) {
     const wait = pausedUntil(site) - Date.now()
     if (wait > 0) {
       await sleep(wait, undefined, { signal })
     }
     let response: Response
     try {
-      response = await fetch(url, {
+      response = await fetch(at, {
         headers: { 'User-Agent': AGENT, Referer: `${site.origin}/`, ...headers },
+        redirect: 'manual',
         signal: timeout ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : signal,
       })
     } catch (error) {
@@ -562,6 +677,14 @@ async function get(
         continue
       }
       throw error
+    }
+    const to = response.headers.get('location')
+    if (to && response.status >= 300 && response.status < 400 && hops < HOPS) {
+      await response.body?.cancel()
+      at = redirected(at, to)
+      hops++
+      tries--
+      continue
     }
     if (response.status === 429 && tries < TRIES) {
       await response.body?.cancel()
@@ -574,89 +697,147 @@ async function get(
     }
     if (!response.ok) {
       await response.body?.cancel()
-      throw new Error(
-        challenged(response)
-          ? `${site.name} is behind a Cloudflare challenge`
-          : `${site.name} answered ${response.status}`,
+      throw Object.assign(
+        new Error(
+          challenged(response)
+            ? `${site.name} is behind a Cloudflare challenge`
+            : `${site.name} answered ${response.status}`,
+        ),
+        { status: response.status },
       )
     }
     return response
   }
 }
 
+async function listed(site: Site, url: string, signal: AbortSignal): Promise<string> {
+  try {
+    return await (await get(site, url, signal)).text()
+  } catch (error) {
+    if (site.missing !== undefined && (error as { status?: number }).status === site.missing) {
+      return ''
+    }
+    throw error
+  }
+}
+
 export async function fetchPosts(site: Site, tags: string, page: number, signal: AbortSignal): Promise<Post[]> {
-  return site.parse(await (await get(site, site.postsUrl(tags, page), signal)).text())
+  return site.parse(await listed(site, site.postsUrl(tags, page), signal))
 }
 
 export async function fetchCount(site: Site, tags: string, signal: AbortSignal): Promise<number> {
-  return site.count(await (await get(site, site.countUrl(tags), signal)).text())
+  return site.count(await listed(site, site.countUrl(tags), signal))
 }
 
 export async function fetchPost(site: Site, id: number, signal: AbortSignal): Promise<Post | undefined> {
-  const [found] = site.parse(await (await get(site, site.postUrl(id), signal)).text())
+  const [found] = site.parse(await listed(site, site.postUrl(id), signal))
   return found
 }
 
-export function lentUrl(md5s: readonly string[]): string {
-  const site = SITES.find((s) => s.key === 'danbooru') as Site
-  const params = new URLSearchParams({ limit: String(2 * PAGE), only: 'md5,tag_string', tags: `md5:${md5s.join(',')}` })
-  return `${site.origin}/posts.json?${params}`
+export interface Lent {
+  tags: string[]
+  file: string
 }
 
-export function parseLent(text: string): Map<string, string[]> {
+export function lentUrl(md5s: readonly string[]): string {
+  const params = new URLSearchParams({
+    limit: String(2 * PAGE),
+    only: 'md5,tag_string,file_url',
+    tags: `md5:${md5s.join(',')}`,
+  })
+  return `${LENDER.origin}/posts.json?${params}`
+}
+
+export function parseLent(text: string): Map<string, Lent> {
   return new Map(
-    records(text).flatMap((p) => {
+    records(text).flatMap((p): [string, Lent][] => {
       const md5 = String(p.md5 ?? '')
       return md5
         ? [
             [
               md5,
-              String(p.tag_string ?? '')
-                .split(/\s+/)
-                .filter(Boolean),
-            ] as [string, string[]],
+              {
+                tags: String(p.tag_string ?? '')
+                  .split(/\s+/)
+                  .filter(Boolean),
+                file: absolute(String(p.file_url ?? '')),
+              },
+            ],
           ]
         : []
     }),
   )
 }
 
-export function lend(posts: readonly Post[], lent: ReadonlyMap<string, string[]>): void {
+export function lend(posts: readonly Post[], lent: ReadonlyMap<string, Lent>): void {
   for (const post of posts) {
-    const tags = lent.get(post.md5)
-    if (tags) {
-      post.tags = [...new Set([...post.tags, ...tags])]
-      post.solo = tags.includes('solo')
+    const found = lent.get(post.md5)
+    if (!found) {
+      continue
+    }
+    post.tags = [...new Set([...post.tags, ...found.tags])]
+    post.solo = found.tags.includes('solo')
+    if (found.file.includes('/original/')) {
+      post.mirror = {
+        file: found.file,
+        preview: found.file.replace('/original/', '/360x360/').replace(/\.[a-z0-9]+$/i, '.jpg'),
+      }
+      if (!post.file) {
+        post.file = found.file
+        post.ext = extension(found.file)
+      }
     }
   }
 }
 
-export async function fetchLent(md5s: readonly string[], signal: AbortSignal): Promise<Map<string, string[]>> {
-  const site = SITES.find((s) => s.key === 'danbooru') as Site
-  const lent = new Map<string, string[]>()
-  if (pausedUntil(site) > Date.now()) {
+export async function fetchLent(md5s: readonly string[], signal: AbortSignal): Promise<Map<string, Lent>> {
+  const lent = new Map<string, Lent>()
+  if (pausedUntil(LENDER) > Date.now()) {
     return lent
   }
   for (let at = 0; at < md5s.length; at += PAGE) {
-    const text = await (await get(site, lentUrl(md5s.slice(at, at + PAGE)), signal, {}, LEND_TIMEOUT)).text()
-    for (const [md5, tags] of parseLent(text)) {
-      lent.set(md5, tags)
+    const text = await (await get(LENDER, lentUrl(md5s.slice(at, at + PAGE)), signal, {}, LEND_TIMEOUT)).text()
+    for (const [md5, found] of parseLent(text)) {
+      lent.set(md5, found)
     }
   }
   return lent
 }
 
+export async function locate(
+  site: Site,
+  post: Post,
+  signal: AbortSignal,
+): Promise<ReturnType<typeof pngHead> | undefined> {
+  if (post.file || !site.guesses) {
+    return undefined
+  }
+  for (const url of site.guesses(post)) {
+    try {
+      const response = await get(site, url, signal, { Range: `bytes=0-${HEAD}` })
+      const head = pngHead(new Uint8Array(await response.arrayBuffer()))
+      post.file = url
+      post.ext = extension(url)
+      return head
+    } catch (error) {
+      if (signal.aborted || (error as { status?: number }).status !== 404) {
+        throw error
+      }
+    }
+  }
+  throw new Error(`${site.name} keeps no png or jpg of ${post.id}`)
+}
+
 export async function fetchSuggestions(prefix: string, signal: AbortSignal): Promise<Suggestion[]> {
-  const danbooru = SITES.find((s) => s.key === 'danbooru') as Site
-  if (pausedUntil(danbooru) <= Date.now()) {
+  if (pausedUntil(LENDER) <= Date.now()) {
     try {
       const params = new URLSearchParams({
         'search[query]': prefix,
         'search[type]': 'tag_query',
         limit: String(SUGGESTED),
       })
-      const url = `${danbooru.origin}/autocomplete.json?${params}`
-      return parseSuggestions(await (await get(danbooru, url, signal, {}, SUGGEST_TIMEOUT)).text())
+      const url = `${LENDER.origin}/autocomplete.json?${params}`
+      return parseSuggestions(await (await get(LENDER, url, signal, {}, SUGGEST_TIMEOUT)).text())
     } catch (error) {
       if (signal.aborted) {
         throw error

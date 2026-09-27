@@ -8,7 +8,6 @@ import { Cancelled, runInit } from './init.ts'
 import { runAdd, runBrowse, runDefault, runList, runOff, runOn, runRemove, runUpdate } from './market.ts'
 import { runMarket } from './markets.ts'
 import { runRedraw } from './redraw.ts'
-import { relaunch, routable, unblocking } from './unblock.ts'
 import { runUninstall } from './uninstall.ts'
 import { helpText, usageOf, VERB_SPECS, type VerbSpec } from './verbs.ts'
 
@@ -25,23 +24,18 @@ export interface Verb extends VerbSpec {
   run?(args: string[], flags: Flags): unknown
 }
 
-const tunneled =
-  <A extends unknown[]>(run: (...args: A) => unknown) =>
-  (...args: A) =>
-    unblocking() && routable() ? relaunch() : run(...args)
-
 const RUNS: Record<string, Verb['run']> = {
   default: ([name]) => runDefault(name as string),
   on: () => runOn(),
   off: () => runOff(),
-  browse: tunneled(() => runBrowse()),
+  browse: () => runBrowse(),
   list: ([query], { json }) => runList(query, json),
-  add: tunneled((names: string[]) => runAdd(names)),
+  add: (names) => runAdd(names),
   remove: (names) => runRemove(names),
-  update: tunneled(() => runUpdate()),
-  market: tunneled(([action, arg]: string[]) => runMarket(action, arg)),
-  new: tunneled(([name]: string[], { from, in: into }: Flags) => runNew(name as string, from, into)),
-  edit: tunneled(([name]: string[]) => runEdit(name as string)),
+  update: () => runUpdate(),
+  market: ([action, arg]) => runMarket(action, arg),
+  new: ([name], { from, in: into }) => runNew(name as string, from, into),
+  edit: ([name]) => runEdit(name as string),
   check: ([name], { fix }) => runCheck(name as string, fix),
   share: ([name]) => runShare(name as string),
   init: (_, { yes }) => runInit({ yes }),
