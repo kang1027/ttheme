@@ -1665,7 +1665,7 @@ __tt_pv_flush() {
 __tt_pv_draw() {
   local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" nflt="" REPLY
   local -i lw sw split sc se=$(( pw - 2 )) h k i N=${#rval} mt=${#TTHEME_ORDER} wiped=0
-  local -a pk
+  local -a held
   bgstrip=""
   if [[ -n $flt ]]; then
     __tt_pv_norm "$flt"
@@ -1795,12 +1795,12 @@ __tt_pv_draw() {
   else
     if [[ -n $tune ]]; then
       (( bgoff[$tpick] )) && state=off
-      pk=(${=bgpics[$tune]})
+      held=(${=bgpics[$tune]})
       src=""
-      if (( ${#pk} > 1 )); then
-        k=${pk[(Ie)${${tpick#$tune}#:}]}
-        (( k )) || k=${pk[(Ie)${bgact[$tune]}]}
-        src=" · $k/${#pk}"
+      if (( ${#held} > 1 )); then
+        k=${held[(Ie)${${tpick#$tune}#:}]}
+        (( k )) || k=${held[(Ie)${bgact[$tune]}]}
+        src=" · $k/${#held}"
       fi
       __tt_pv_bg_title $(( lw - ${#tune} - 6 )) "$src"
       __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$REPLY" $state

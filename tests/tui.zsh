@@ -38,6 +38,7 @@ typeset -ga SCENARIOS=(
   'preview-market  market preview  Down Right Down Right Down'
   'menu-market     market menu'
   'pins-map        pinned pins'
+  'pin-scope       pinned pin      Right Down Enter Left'
 )
 
 fixture_home() {
@@ -70,6 +71,7 @@ command_for() {
     preview) print -r -- "source $home/ttheme/ttheme.zsh; ttheme preview" ;;
     menu) print -r -- "source $home/ttheme/ttheme.zsh; ttheme" ;;
     pins) print -r -- "source $home/ttheme/ttheme.zsh; cd ~/work/api/v2; ttheme pins" ;;
+    pin) print -r -- "source $home/ttheme/ttheme.zsh; cd ~/work; ttheme pin" ;;
     *) print -u2 "unknown target $target"; return 1 ;;
   esac
 }
