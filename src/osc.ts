@@ -34,13 +34,29 @@ export function parseOscColors(text: string): Map<string, string> {
   return colors
 }
 
-export function restoreOsc(saved: ReadonlyMap<string, string>, codes: readonly string[] = [...saved.keys()]): string {
+function hexOf(value: string): string {
+  const parts = value
+    .slice(value.indexOf(':') + 1)
+    .split('/')
+    .slice(0, 3)
+  return `#${parts.map((part) => part.slice(0, 2).padStart(2, '0')).join('')}`
+}
+
+export function restoreOsc(
+  saved: ReadonlyMap<string, string>,
+  codes: readonly string[] = [...saved.keys()],
+  hex = false,
+): string {
   return codes
     .map((code) => {
       const value = saved.get(code)
-      return value ? `\x1b]${code};${value}\x1b\\` : resetOsc(code)
+      return value ? `\x1b]${code};${hex ? hexOf(value) : value}\x1b\\` : resetOsc(code)
     })
     .join('')
+}
+
+export function schemeOsc(scheme: string, cursor: string): string {
+  return `\x1b]50;ColorScheme=${scheme};UseCustomCursorColor=true;customCursorColor=${cursor}\x07`
 }
 
 export function colorQuery(codes: readonly string[] = SLOT_CODES): string {

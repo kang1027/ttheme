@@ -18,6 +18,7 @@ description: Drive ttheme for real inside the throwaway sandbox (`mise run sandb
 | keystrokes (preview, browse, prompts), command output, files the flow writes | shell |
 | colors the terminal really shows, Ghostty reloads, a new tab's look, a screenshot | Ghostty |
 | anything iTerm2: dynamic profiles, per-tab backgrounds, kitty graphics, escape-sequence permissions | iTerm2 |
+| anything Konsole: color schemes, the default profile over D-Bus (Linux) | Konsole |
 
 A flow that needs both — "keep from preview, then does only this Ghostty reload?" — is two runs: drive the keys in shell mode and check what it wrote, then call the same functions in Ghostty mode and read the reload count.
 
@@ -132,6 +133,10 @@ Measured on kitty 0.49.0 and Alacritty 0.17.0, 2026-09-24:
 - kitty reloads `kitty.conf` and every file it includes by itself (`auto_reload_config`), and the reload resets every OSC color; the ttheme watcher puts them back. Alacritty keeps OSC colors through its own reload.
 - kitty answers `CSI 16t` and `ENOPARENT` for a relative placement; Alacritty has no graphics and no `CSI 16t`.
 
+## Konsole: Linux only, on a private display
+
+The window scripts are macOS's (`screencapture`, `lsappinfo`). On Linux, `mise run sandbox --konsole --behind` starts a separate Konsole on its own Xvfb display (`TTHEME_KONSOLE_SCREEN`, `:77`) and its own D-Bus session (`dbus-run-session`), so `ttheme default` reaches only that Konsole over D-Bus and nothing touches the user's `konsolerc` or `~/.local/share/konsole`; it needs `konsole`, `dbus-run-session`, `Xvfb` and `xdotool`. `mise run compat konsole` drives it the same way and screenshots its window with `xdotool search --pid` and ImageMagick's `import`. Measured on Konsole 23.08.5, 2026-09-28: a profile or scheme written after Konsole started is found by `setDefaultProfile` only when Konsole already lists it (`profileList`), so a first `init` needs a restart; an OSC 50 `ColorScheme=` repaints the tab with the scheme's 16 colors at once.
+
 ## Rules of the road
 
 - Go through the scripts, never `mise run sandbox` bare: bare is the user's mode and opens a window in front of them. `shell.zsh` passes `--here`, `ghostty.zsh` and `iterm.zsh` pass `--behind`.
@@ -139,5 +144,5 @@ Measured on kitty 0.49.0 and Alacritty 0.17.0, 2026-09-24:
 - A leftover instance: `pkill -f -- "--config-file=${TMPDIR%/}/ttheme-sandbox/"` for Ghostty; `pkill -f -- '^[^ ]*/iTerm2 -suite ttheme-sandbox( |$)'`, then `pkill -f -- "^$HOME/Library/Application Support/ttheme-sandbox/iTermServer"` for iTerm2. Those patterns only match the sandbox, never the user's terminals — keep the `^` anchors, or the pattern also matches the shell that runs it.
 - `pgrep ghostty` from Claude's shell misses the user's Ghostty (BSD pgrep skips its own ancestors) — that does not mean it is not running.
 - Ghostty's full log: `/usr/bin/log show --info --last 2m --predicate 'process == "ghostty"'` — `log` alone is a zsh builtin.
-- To test Ghostty and iTerm2 wired together, add `ghostty` to `installed.json`'s terminals inside an iTerm2 run and resync (`ttheme default <name>`), never the reverse: a Ghostty-mode shell has the user's real `HOME`, so syncing with `iterm2` wired there overwrites the user's own `DynamicProfiles/ttheme.json`. Append a logging `__tt_reload` to `$ZDOTDIR/.zshrc` first (and define it in the run's shell), because from iTerm2 a Ghostty reload falls back to `pkill -USR2 -x ghostty` and would reach the user's Ghostty; `sb_drive` children read `.zshrc`, so they log too.
+- To test Ghostty and iTerm2 wired together, add `ghostty` to `installed.json`'s terminals inside an iTerm2 run and resync (`ttheme default <name>`), never the reverse: a Ghostty-mode shell has the user's real `HOME`, so syncing with `iterm2` wired there overwrites the user's own `DynamicProfiles/ttheme.json`. Append a logging `__tt_reload_ghostty` to `$ZDOTDIR/.zshrc` first (and define it in the run's shell) — it is the one function that signals Ghostty, behind both `__tt_reload` and `__tt_pictured` — because from iTerm2 a Ghostty reload falls back to `pkill -USR2 -x ghostty` and would reach the user's Ghostty; `sb_drive` children read `.zshrc`, so they log too.
 - Report what was measured (colors, screens, reload counts, log lines) apart from what was inferred.

@@ -1,7 +1,7 @@
 import { availableParallelism, homedir } from 'node:os'
 import { applyRedraw, backgroundsDir, type Picture, readStore } from './backdrop.ts'
 import { readAvailable } from './catalog.ts'
-import { configHome, readInstalled, refreshProfiles } from './palettes.ts'
+import { aligns as alignsFor, configHome, readInstalled, refreshPictures } from './palettes.ts'
 import { Pool } from './render.ts'
 import { blurOf } from './wiring.ts'
 
@@ -25,7 +25,7 @@ export async function redrawPictures(home: string, say: (line: string) => void, 
   say(
     `Drawing ${due.length} background picture${due.length === 1 ? '' : 's'} again${blurring ? ` · blur ${blurring}px` : ''}`,
   )
-  const aligns = !readInstalled(home).terminals.includes('iterm2')
+  const aligns = alignsFor(readInstalled(home).terminals)
   const pool = new Pool(Math.min(WORKERS, availableParallelism() - 1))
   const results = await pool.map(
     due.map(({ name, key, hue }) => ({
@@ -52,7 +52,7 @@ export async function redrawPictures(home: string, say: (line: string) => void, 
     drawn.push({ name, picture: result })
   })
   applyRedraw(home, drawn)
-  refreshProfiles(home, user)
+  refreshPictures(home, user)
   return drawn.length
 }
 

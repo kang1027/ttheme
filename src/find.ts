@@ -105,7 +105,7 @@ import {
   transmit,
 } from './find-screen.ts'
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
-import { configHome, readInstalled, refreshProfiles } from './palettes.ts'
+import { aligns as alignsFor, configHome, readInstalled, refreshPictures } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
 import { SCENES } from './scenes.ts'
 import { CLEAR, cropsInBands } from './terminal.ts'
@@ -2817,11 +2817,11 @@ class Finder {
         width: this.cols * this.cell.w,
         height: this.rows * this.cell.h,
         blur: this.blurring,
-        ...(tune ? { tune, aligns: !readInstalled(this.home).terminals.includes('iterm2'), user: homedir() } : {}),
+        ...(tune ? { tune, aligns: alignsFor(readInstalled(this.home).terminals), user: homedir() } : {}),
       })
       this.keep<string>(current.site, 'owners.json')[current.id] = post?.owner ?? ''
       this.unsaved.add(`${current.site.key}/owners.json`)
-      refreshProfiles(this.home)
+      refreshPictures(this.home)
       const { size, at, opacity } = view.tune
       const framing = tune
         ? ` · ${size === 'fill' ? 'fill' : `${size}%`} · ${POSITIONS[at - 1]} · ${opacity.toFixed(2)}`

@@ -1,6 +1,6 @@
 # Install
 
-**Ghostty, kitty, Alacritty, WezTerm, iTerm2, Windows Terminal or Warp** — one command, no clone:
+**Ghostty, kitty, Alacritty, WezTerm, iTerm2, Windows Terminal, Warp or Konsole** — one command, no clone:
 
 ```sh
 npx @kecan0406/ttheme@latest init
@@ -63,6 +63,13 @@ outside the markers is left alone, and what goes in is colors only.
   the default palette as the one `theme` key of `[appearance.themes]` in
   `~/.warp/settings.toml` — Warp applies it within a few seconds, and
   `ttheme off` puts back the theme you had.
+- **Konsole** gets a color scheme and a `ttheme · <palette>` profile per
+  palette in `~/.local/share/konsole`, each profile on top of your own default
+  profile (its parent), so your font and keys carry over, and the default
+  palette's profile as `DefaultProfile` in `~/.config/konsolerc`. Konsole reads
+  its profiles when it starts, so quit and reopen it once after init; from then
+  on `ttheme default` moves every running Konsole to the new default. `ttheme
+  off` gives your own profile back.
 
 ## Uninstall
 
@@ -75,8 +82,9 @@ leaves its config, Warp gets its theme back and iTerm2 its own default profile,
 and the `ttheme-*` theme files, `~/.config/ttheme` (installed pictures
 included), the cache and the iTerm2 and Windows Terminal files are deleted. A
 config you did not touch since ttheme first edited it comes back byte for byte
-and its backup goes; one you edited since keeps `<file>.ttheme.bak`. Open shells
-drop the layer at their next prompt.
+and its backup goes; one you edited since keeps `<file>.ttheme.bak`. Konsole
+gets its own default profile back too, and loses every `ttheme-*` scheme and
+profile. Open shells drop the layer at their next prompt.
 
 ## By hand
 
@@ -113,6 +121,10 @@ curl -L $REL/ttheme-windows-terminal.tar.gz | tar xz
 # warp
 curl -L $REL/ttheme-warp.tar.gz | tar xz
 cp warp/themes/ttheme-miku.yaml ~/.warp/themes/
+
+# konsole — then pick ttheme-miku under Edit Current Profile › Appearance
+curl -L $REL/ttheme-konsole.tar.gz | tar xz
+cp konsole/ttheme-miku.colorscheme ~/.local/share/konsole/
 ```
 
 Each Ghostty theme file also carries the dock-icon colors, derived from the

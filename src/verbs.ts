@@ -1,6 +1,5 @@
 import pkg from '../package.json' with { type: 'json' }
-
-export const TERMINALS = ['ghostty', 'kitty', 'alacritty', 'wezterm', 'iterm2', 'windows-terminal', 'warp'] as const
+import { WIRED } from './terminals/types.ts'
 
 export interface Flag {
   type: 'boolean' | 'string'
@@ -191,7 +190,7 @@ export const VERB_SPECS: VerbSpec[] = [
         type: 'string',
         multiple: true,
         value: '<terminal>',
-        choices: TERMINALS,
+        choices: WIRED,
         about: 'Rebuild just this terminal — repeat it for more',
       },
     },

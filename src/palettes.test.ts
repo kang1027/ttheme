@@ -8,19 +8,18 @@ import { type Manifest, type PaletteEntry, toTheme } from './emit/manifest.ts'
 import {
   forget,
   type Installed,
-  type ItermDefaults,
-  itermProfilesPath,
-  pointItermDefault,
+  pointDefaults,
   readInstalled,
   resolve,
   startupPalette,
   sync,
-  warpSettings,
-  warpThemes,
-  withItermBase,
+  withBases,
   writeInstalled,
-  wtFragmentPath,
 } from './palettes.ts'
+import { itermProfilesPath } from './terminals/iterm2.ts'
+import type { Host } from './terminals/types.ts'
+import { warpSettings, warpThemes } from './terminals/warp.ts'
+import { wtFragmentPath } from './terminals/windows-terminal.ts'
 
 function entry(name: string, order: number, partial: Partial<PaletteEntry> = {}): PaletteEntry {
   return {
@@ -340,39 +339,47 @@ test('forget removes only the named palettes', () => {
   assert.ok(!existsSync(join(home, 'ghostty', 'themes', 'ttheme-geto')))
 })
 
-function prefsAt(initial: string | undefined): { prefs: ItermDefaults; writes: string[] } {
+function defaultsAt(initial: string | undefined): { host: Host; writes: string[] } {
   let value = initial
   const writes: string[] = []
   return {
-    prefs: {
-      read: () => value,
-      write: (guid) => {
-        value = guid
-        writes.push(guid)
+    host: {
+      platform: 'darwin',
+      env: {},
+      run: (command, args) => {
+        if (command === 'defaults' && args[0] === 'read') {
+          return value
+        }
+        if (command === 'defaults' && args[0] === 'write') {
+          value = args[4]
+          writes.push(args[4] ?? '')
+          return ''
+        }
+        return undefined
       },
-      running: () => false,
     },
     writes,
   }
 }
 
 test('iTerm2 takes ttheme · default as its default profile and gives the one it replaced back while off', () => {
-  const { prefs, writes } = prefsAt('USER')
-  const state = withItermBase({ terminals: ['iterm2'], palettes: ['gojo'] }, prefs)
+  const { host, writes } = defaultsAt('USER')
+  const state = withBases('/nowhere', { terminals: ['iterm2'], palettes: ['gojo'] }, host)
   assert.equal(state.itermBase, 'USER')
-  assert.equal(pointItermDefault(state, prefs), true)
-  assert.equal(pointItermDefault(state, prefs), false)
-  assert.equal(withItermBase(state, prefs).itermBase, 'USER')
-  assert.equal(pointItermDefault({ ...state, off: true }, prefs), true)
+  assert.ok(pointDefaults('/nowhere', state, true, host).has('iterm2'))
+  assert.ok(!pointDefaults('/nowhere', state, true, host).has('iterm2'))
+  assert.equal(withBases('/nowhere', state, host).itermBase, 'USER')
+  assert.ok(pointDefaults('/nowhere', { ...state, off: true }, false, host).has('iterm2'))
   assert.deepEqual(writes, ['ttheme-default', 'USER'])
 })
 
-test('iTerm2 keeps its default profile when nothing is worn or it is not wired', () => {
-  const { prefs, writes } = prefsAt('USER')
-  assert.equal(pointItermDefault({ terminals: ['iterm2'], palettes: [] }, prefs), false)
-  assert.equal(pointItermDefault({ terminals: ['ghostty'], palettes: ['gojo'] }, prefs), false)
+test('iTerm2 keeps its default profile when nothing is worn, it is not wired, or the user picked one ttheme did not take', () => {
+  const { host, writes } = defaultsAt('USER')
+  assert.equal(pointDefaults('/nowhere', { terminals: ['iterm2'], palettes: [] }, false, host).size, 0)
+  assert.equal(pointDefaults('/nowhere', { terminals: ['ghostty'], palettes: ['gojo'] }, true, host).size, 0)
+  assert.equal(pointDefaults('/nowhere', { terminals: ['iterm2'], palettes: ['gojo'] }, false, host).size, 0)
   assert.equal(
-    withItermBase({ terminals: ['iterm2'], palettes: ['gojo'] }, prefsAt('ttheme-gojo').prefs).itermBase,
+    withBases('/nowhere', { terminals: ['iterm2'], palettes: ['gojo'] }, defaultsAt('ttheme-gojo').host).itermBase,
     undefined,
   )
   assert.deepEqual(writes, [])
@@ -404,6 +411,7 @@ test('installed.json keeps every field it holds through a write and a read', () 
     startup: 'gojo',
     off: true,
     itermBase: 'A1B2C3',
+    konsoleBase: 'Mine.profile',
     wtHome: '/mnt/c/Users/kec/AppData/Local',
     wtProfile: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}',
     markets: ['official', 'alice/pastel#v1'],

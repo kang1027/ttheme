@@ -11,7 +11,7 @@
     "shell",
     "!shell/check.zsh"
   ],
-  "description": "Character terminal palettes for Ghostty, kitty, Alacritty, WezTerm, iTerm2, Windows Terminal and Warp",
+  "description": "Character terminal palettes for Ghostty, kitty, Alacritty, WezTerm, iTerm2, Windows Terminal, Warp and Konsole",
   "license": "MIT",
   "author": "kecan0406",
   "repository": {
@@ -27,7 +27,8 @@
     "kitty",
     "alacritty",
     "wezterm",
-    "iterm2"
+    "iterm2",
+    "konsole"
   ],
   "devDependencies": {
     "@biomejs/biome": "^2.3.0",

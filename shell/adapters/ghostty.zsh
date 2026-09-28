@@ -1,5 +1,7 @@
 source $TTHEME_HOME/adapters/_bg.zsh
 
+__tt_follows_focus() { return 0 }
+
 __tt_keepable() { return 0 }
 
 __tt_bg_shown() { __tt_ghostty_shown }

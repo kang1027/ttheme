@@ -32,8 +32,9 @@ jobs:
       - name: package
         run: |
           mkdir -p release
-          for term in ghostty kitty alacritty wezterm iterm2 windows-terminal warp; do
-            tar -czf "release/ttheme-$term.tar.gz" -C dist "$term"
+          for dir in dist/*/; do
+            term=$(basename "$dir")
+            [ "$term" = shell ] || tar -czf "release/ttheme-$term.tar.gz" -C dist "$term"
           done
           tar -czf release/ttheme-all.tar.gz dist shell README.md
 

@@ -43,6 +43,10 @@ const ENVS: Record<string, string>[] = [
   { GHOSTTY_RESOURCES_DIR: '/x', KITTY_WINDOW_ID: '1' },
   { KITTY_WINDOW_ID: '1', WEZTERM_PANE: '0' },
   { ITERM_SESSION_ID: 'w0', TERM_PROGRAM: 'tmux', TERM: 'foot' },
+  { KONSOLE_VERSION: '230805' },
+  { KONSOLE_VERSION: '230805', WT_SESSION: 'a-b' },
+  { KONSOLE_VERSION: '230805', ITERM_SESSION_ID: 'w0' },
+  { ALACRITTY_WINDOW_ID: '2', KONSOLE_VERSION: '230805' },
 ]
 
 test('detectTerminal answers what the shell layer detects, for every terminal and their overlaps', () => {
@@ -84,8 +88,58 @@ test('the shell adapters open find and repaint in part exactly where TRAITS says
   )
   assert.deepEqual(
     adapters.filter((a) => /^__tt_pv_paint\(\)/m.test(code(a))).sort(),
-    having((t) => TRAITS[t].repaint !== undefined),
+    having((t) => TRAITS[t].repaint !== undefined && !TRAITS[t].schemes),
   )
+  assert.deepEqual(
+    adapters.filter((a) => code(a).includes(String.raw`$'\e]50;'$REPLY`)).sort(),
+    having((t) => TRAITS[t].schemes === true),
+  )
+})
+
+test('the shared layer names a terminal only to detect it, and an adapter names only itself', () => {
+  const terminals = Object.keys(TRAITS).filter((t) => t !== 'unknown')
+  const named = (text: string) => terminals.filter((t) => new RegExp(String.raw`(?<![\w-])${t}(?![\w-])`).test(text))
+  const layer = read('shell', 'ttheme.zsh')
+  const from = layer.indexOf('if [[ $TERM_PROGRAM == WarpTerminal ]]')
+  const to = layer.indexOf('typeset -g TTHEME_ADAPTER=unknown')
+  assert.deepEqual(named(layer.slice(0, from) + layer.slice(to)), [])
+  for (const shared of ['_osc.zsh', '_bg.zsh']) {
+    assert.deepEqual(named(read('shell', 'adapters', shared)), [], shared)
+  }
+  for (const file of readdirSync(join(root, 'shell', 'adapters')).filter((f) => !f.startsWith('_'))) {
+    const self = file.replace(/\.zsh$/, '')
+    assert.deepEqual(
+      named(read('shell', 'adapters', file)).filter((t) => t !== self),
+      [],
+      file,
+    )
+  }
+})
+
+test('Konsole is restored in #rrggbb, the only spelling its OSC 10 and 11 read', () => {
+  const live = livePaint({ KONSOLE_VERSION: '230805' }, true)
+  assert.ok(live)
+  assert.deepEqual(live.slots, [0, 1])
+  assert.equal(
+    live.restore(
+      new Map([
+        ['11', 'rgb:2323/2626/2727'],
+        ['10', 'rgb:fcfc/fcfc/fcfc'],
+      ]),
+    ),
+    '\x1b]11;#232627\x1b\\\x1b]10;#fcfcfc\x1b\\',
+  )
+})
+
+test('a palette is worn whole by its color scheme in a wired Konsole, and not at all in an unwired one', () => {
+  const live = livePaint({ KONSOLE_VERSION: '230805' }, true)
+  assert.ok(live)
+  assert.equal(
+    live.wear(miku, ['konsole']),
+    '\x1b]50;ColorScheme=ttheme-miku;UseCustomCursorColor=true;customCursorColor=#39c5bb\x07',
+  )
+  assert.equal(live.wear(miku, ['ghostty']), undefined)
+  assert.ok(livePaint({ GHOSTTY_RESOURCES_DIR: '/x' }, true)?.wear(miku, [])?.includes('\x1b]4;15;'))
 })
 
 test('a live repaint goes nowhere the shell layer keeps its colors off', () => {

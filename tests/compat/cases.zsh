@@ -90,6 +90,7 @@ __cc_seen() {
 __cc_roundtrip() {
   local id=$1 slot=$2 want=$3
   printf '\e]%s;%s\e\\' $slot $want
+  sleep 0.1
   if __cc_color $slot && __cc_near $want $REPLY; then
     __cc_report $id pass "set $want, read $REPLY"
   else
@@ -122,6 +123,7 @@ __cc_kitty() {
 
 __cc_cases() {
   local start REPLY spec other bgcw=0 bgch=0 bgrel=0 bgmx=0 bgmy=0
+  local -i r
   printf '\e]0;%s\a' ${CC_TITLE:-ttheme-compat}
 
   if [[ $TTHEME_ADAPTER == $CC_ADAPTER ]]; then
@@ -150,6 +152,7 @@ __cc_cases() {
   __cc_roundtrip osc-ansi '4;1' '#b85c5c'
 
   printf '\e]104\e\\\e]110\e\\\e]111\e\\\e]112\e\\\e]117\e\\'
+  sleep 0.1
   if [[ -z $start ]]; then
     __cc_report osc-reset skip "no starting color to return to"
   elif __cc_color 11 && __cc_near $start $REPLY; then
@@ -166,6 +169,7 @@ __cc_cases() {
   other=${${TTHEME_ORDER:#$REPLY}[1]}
   if (( $+functions[ttheme] )) && [[ -n $other ]]; then
     ttheme use $other
+    sleep 0.1
     spec=${${=TTHEME_PALETTE[$other]}[1]}
     local ansi=${${=TTHEME_PALETTE[$other]}[6]} got=""
     REPLY=""
@@ -177,15 +181,22 @@ __cc_cases() {
       __cc_report wear fail "ttheme use $other left the tab on ${REPLY:-its own colors} and ansi 1 ${got:-unread}, wanted $spec and $ansi"
     fi
     __cc_painted wear-painted $spec $start
+    printf '\e[H\e[2J\e[41m'
+    for (( r = 1; r <= LINES; r++ )); do printf '\e[%d;1H%*s' $r $COLUMNS ''; done
+    printf '\e[0m'
+    __cc_seen wear-ansi $ansi $spec
+    printf '\e[H\e[2J'
   else
     __cc_report wear fail "no ttheme command or no palette"
     __cc_report wear-painted skip "nothing worn"
+    __cc_report wear-ansi skip "nothing worn"
   fi
 
   if (( ! $+functions[__tt_osc_reset] )) || [[ -z $start ]]; then
     __cc_report restore skip "no layer or no starting color"
   else
     __tt_osc_reset
+    sleep 0.1
     if __cc_color 11 && __cc_near $start $REPLY; then
       __cc_report restore pass "back to $REPLY"
     else

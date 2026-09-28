@@ -20,6 +20,7 @@ typeset -gA IDENTITY=(
   iterm2 'ITERM_SESSION_ID=w0t0p0:x TERM_PROGRAM=iTerm.app'
   alacritty 'ALACRITTY_WINDOW_ID=1'
   windows-terminal 'WT_SESSION=x'
+  konsole 'KONSOLE_VERSION=230805'
   terminal-app 'TERM_PROGRAM=Apple_Terminal'
 )
 trap 'zpty -d sh 2>/dev/null; rm -rf $WORK' EXIT
@@ -34,6 +35,7 @@ home() {
   [[ -n $tab ]] || return 0
   mkdir -p $h/.config/ttheme
   cp -R $src/ttheme.zsh $src/adapters $ROOT/dist/shell/palettes.zsh $h/.config/ttheme/
+  print -rl -- 'typeset -ga TTHEME_TERMINALS=(konsole)' "typeset -g TTHEME_KONSOLE_BASE='ColorScheme=Breeze;UseCustomCursorColor=false'" >> $h/.config/ttheme/palettes.zsh
   print -r -- ": \${TTHEME_TAB_PALETTE:=$tab}" > $h/.config/ttheme/config.zsh
   print -r -- 'source $XDG_CONFIG_HOME/ttheme/ttheme.zsh' >> $h/.zshrc
 }
@@ -356,10 +358,12 @@ traced() {
   reply=($counts)
 }
 
+focused() { grep -qxF '__tt_follows_focus() { return 0 }' $ROOT/shell/adapters/$1.zsh }
+
 forks() {
   local -a upd head terms journeys base counts row out
   local -A want got
-  local term journey line cell expect mark
+  local term journey line cell expect mark focus
   local -i i more=0 less=0
   zparseopts -D -E -F -- -update=upd || { usage; return 1 }
   head=(${=${(f)"$(<$FORKS)"}[1]})
@@ -374,7 +378,9 @@ forks() {
   traced fork-base ghostty off || return 1
   base=($reply)
   for term in $terms; do
-    traced fork $term off ${${(M)term:#(ghostty|kitty|windows-terminal)}:+1} || return 1
+    focus=""
+    focused $term && focus=1
+    traced fork $term off $focus || return 1
     counts=($reply)
     got[start.$term]=$(( counts[1] - base[1] ))
     got[command.$term]=$(( counts[2] - base[2] ))

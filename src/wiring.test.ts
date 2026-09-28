@@ -4,20 +4,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
+import { alacrittyColors, upsertAlacrittyImport } from './terminals/alacritty.ts'
+import { ghosttyBlock } from './terminals/ghostty.ts'
+import { kittyBlock } from './terminals/kitty.ts'
+import { removeLuaBlock, upsertLuaBlock } from './terminals/wezterm.ts'
 import {
-  alacrittyColors,
   blurOf,
   configFile,
   configTemplate,
-  ghosttyBlock,
-  kittyBlock,
   removeBlock,
-  removeLuaBlock,
   SETTING_NAMES,
   settingDefault,
-  upsertAlacrittyImport,
   upsertBlock,
-  upsertLuaBlock,
   withSetting,
   zshrcBlock,
 } from './wiring.ts'

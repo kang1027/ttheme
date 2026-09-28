@@ -76,14 +76,17 @@ scenes, and find's try-on opens on the one preview showed. The list and the samp
 columns) and the gap between them takes the rest; the tuning panel takes the
 sample's place while open, and so does the key list once the sample is 48
 columns wide.
-Under Ghostty or iTerm2 with `TTHEME_TAB_PALETTE=off` (the default), enter asks **this tab** or
-**default**: default records the palette as your default palette (so a later
-`add` or `remove` keeps it), rewrites `theme =` in the `# ttheme begin` block of
-your Ghostty config and sends `SIGUSR2` to the Ghostty that owns the tab, and
-rewrites iTerm2's `ttheme · default` profile, which iTerm2 reloads by itself — so new tabs, and open tabs you have not
-painted by hand, take the palette without a restart. Painting is per surface
-otherwise: a new tab starts from the configured theme, not from what the last
-tab was painted.
+With `TTHEME_TAB_PALETTE=off` (the default), in a terminal init wired — and
+always in Ghostty and iTerm2 — enter asks **this tab** or **default**: default
+records the palette as your default palette (so a later `add` or `remove` keeps
+it) and hands it to every terminal you wired, whichever one you are in. It
+rewrites `theme =` in the `# ttheme begin` block of your Ghostty config and sends
+`SIGUSR2` to the Ghostty that owns the tab, rewrites iTerm2's `ttheme · default`
+profile, which iTerm2 reloads by itself, and makes the palette's
+`ttheme · <palette>` profile Konsole's default, which every running Konsole
+takes over D-Bus — so new tabs, and open tabs you have not painted by hand, take
+the palette without a restart. Painting is per surface otherwise: a new tab
+starts from the configured theme, not from what the last tab was painted.
 
 ## Directory pins
 

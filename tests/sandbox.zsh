@@ -16,9 +16,11 @@ typeset -g KITTY_GUI="kitty --config $SANDBOX/"
 typeset -g ALACRITTY_APP=${TTHEME_ALACRITTY_APP:-/Applications/Alacritty.app}
 typeset -g ALACRITTY_GUI="alacritty --config-file $SANDBOX/"
 typeset -g WARP_LAUNCH=$HOME/.warp/launch_configurations/ttheme-sandbox.yaml
+typeset -g KONSOLE_GUI="konsole --separate --workdir $SANDBOX"
+typeset -g KONSOLE_SCREEN=${TTHEME_KONSOLE_SCREEN:-:77}
 typeset -ga FOREIGN=(GHOSTTY_RESOURCES_DIR GHOSTTY_BIN_DIR GHOSTTY_SHELL_FEATURES TERM_PROGRAM TERM_PROGRAM_VERSION
   COLORTERM TERMINFO KITTY_WINDOW_ID ITERM_SESSION_ID ITERM_PROFILE WEZTERM_PANE WEZTERM_EXECUTABLE WEZTERM_UNIX_SOCKET
-  WT_SESSION WT_PROFILE_ID ALACRITTY_WINDOW_ID)
+  WT_SESSION WT_PROFILE_ID ALACRITTY_WINDOW_ID KONSOLE_VERSION KONSOLE_DBUS_SERVICE KONSOLE_DBUS_SESSION KONSOLE_DBUS_WINDOW)
 
 quit_iterm() {
   local i
@@ -35,6 +37,8 @@ fresh() {
   pkill -f -- $WEZTERM_GUI 2>/dev/null || :
   pkill -f -- $KITTY_GUI 2>/dev/null || :
   pkill -f -- $ALACRITTY_GUI 2>/dev/null || :
+  pkill -f -- $KONSOLE_GUI 2>/dev/null || :
+  pkill -f -- "Xvfb $KONSOLE_SCREEN " 2>/dev/null || :
   quit_iterm
   defaults delete $SUITE 2>/dev/null || :
   rm -rf -- $SANDBOX $SUITE_DIR
@@ -43,8 +47,8 @@ fresh() {
 }
 
 isolate() {
-  unset ${(M)${(k)parameters}:#TTHEME_*} XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME ZDOTDIR
-  export HOME=$SANDBOX TTHEME_ITERM_SUITE=$SUITE
+  unset ${(M)${(k)parameters}:#TTHEME_*} XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME ZDOTDIR
+  export HOME=$SANDBOX TTHEME_ITERM_SUITE=$SUITE DBUS_SESSION_BUS_ADDRESS=disabled:
 }
 
 wire() {
@@ -124,6 +128,22 @@ open_alacritty() {
     --working-directory $SANDBOX -e /bin/zsh -il > /dev/null 2>&1 &!
 }
 
+open_konsole() {
+  local behind=$1 i
+  local -a env=(${FOREIGN/#/-u})
+  (( $+commands[konsole] && $+commands[dbus-run-session] )) || return 1
+  if [[ -n $behind ]]; then
+    (( $+commands[Xvfb] && $+commands[xdotool] )) || return 1
+    Xvfb $KONSOLE_SCREEN -screen 0 1400x900x24 -nolisten tcp > /dev/null 2>&1 &!
+    for i in {1..50}; do
+      DISPLAY=$KONSOLE_SCREEN xdotool getdisplaygeometry > /dev/null 2>&1 && break
+      sleep 0.1
+    done
+    env+=(-u WAYLAND_DISPLAY DISPLAY=$KONSOLE_SCREEN QT_QPA_PLATFORM=xcb)
+  fi
+  env $env dbus-run-session -- ${=KONSOLE_GUI} -e zsh -il > /dev/null 2>&1 &!
+}
+
 open_warp() {
   local behind=$1 REPLY
   [[ -d /Applications/Warp.app ]] || return 1
@@ -152,13 +172,13 @@ hand_back() {
   osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSRunningApplication.runningApplicationWithProcessIdentifier($front).activateWithOptions(0)" > /dev/null
 }
 
-usage() { print -u2 "usage: sandbox [--here | --behind] [--iterm [--legacy] [--trust] | --wezterm | --kitty | --alacritty | --warp | --terminal-app] [--zshenv FILE] [--empty | palette…]" }
+usage() { print -u2 "usage: sandbox [--here | --behind] [--iterm [--legacy] [--trust] | --wezterm | --kitty | --alacritty | --warp | --terminal-app | --konsole] [--zshenv FILE] [--empty | palette…]" }
 
 main() {
-  local -a here behind iterm wezterm kitty alacritty warp tapp legacy trust empty zshenv
+  local -a here behind iterm wezterm kitty alacritty warp tapp konsole legacy trust empty zshenv
   zparseopts -D -E -F -- -here=here -behind=behind -iterm=iterm -wezterm=wezterm -kitty=kitty -alacritty=alacritty -warp=warp -terminal-app=tapp \
-    -legacy=legacy -trust=trust -empty=empty -zshenv:=zshenv || { usage; return 1 }
-  local -i other=$(( $#iterm + $#wezterm + $#kitty + $#alacritty + $#warp + $#tapp ))
+    -konsole=konsole -legacy=legacy -trust=trust -empty=empty -zshenv:=zshenv || { usage; return 1 }
+  local -i other=$(( $#iterm + $#wezterm + $#kitty + $#alacritty + $#warp + $#tapp + $#konsole ))
   (( other > 1 || $#here && ($#behind || other) || ($#legacy || $#trust) && ! $#iterm || $#empty && $# )) && { usage; return 1 }
   local -a palettes=($@)
   local label=${(j: :)palettes}
@@ -179,7 +199,7 @@ main() {
   fi
   export XDG_CONFIG_HOME=$SANDBOX/.config XDG_STATE_HOME=$SANDBOX/.local/state XDG_CACHE_HOME=$SANDBOX/.cache ZDOTDIR=$SANDBOX
   local front=""
-  [[ $(lsappinfo info -only pid "$(lsappinfo front)") =~ 'pid"?[[:space:]]*=[[:space:]]*([0-9]+)' ]] && front=$match[1]
+  (( $+commands[lsappinfo] )) && [[ $(lsappinfo info -only pid "$(lsappinfo front)") =~ 'pid"?[[:space:]]*=[[:space:]]*([0-9]+)' ]] && front=$match[1]
   if (( $#iterm )); then
     ( unset GHOSTTY_RESOURCES_DIR TERM_PROGRAM KITTY_WINDOW_ID; ITERM_SESSION_ID=w0 wire $label $palettes )
     open_iterm $#legacy $#trust "${behind:+1}" || { print -u2 "no iTerm2 to open"; return 1 }
@@ -212,6 +232,12 @@ main() {
     ( unset $FOREIGN; TERM_PROGRAM=WarpTerminal wire $label $palettes )
     open_warp "${behind:+1}" || { print -u2 "no Warp to open"; return 1 }
     print -r -- "opened a Warp tab on it through ${WARP_LAUNCH/#$REAL_HOME/~} — exit leaves; files stay until the next run"
+    return
+  fi
+  if (( $#konsole )); then
+    ( unset $FOREIGN; KONSOLE_VERSION=1 wire $label $palettes )
+    open_konsole "${behind:+1}" || { print -u2 "no Konsole to open — --konsole needs konsole and dbus-run-session, and --behind Xvfb and xdotool"; return 1 }
+    print -r -- "opened a separate Konsole on it${behind:+ on the private display $KONSOLE_SCREEN}, on a D-Bus session of its own — closing it quits only that one; files stay until the next run"
     return
   fi
   if (( $#tapp )); then

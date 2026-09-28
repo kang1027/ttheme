@@ -1,25 +1,26 @@
-case	ghostty	iterm2	wezterm	kitty	alacritty	warp	terminal-app
-detect	pass	pass	pass	pass	pass	pass	pass
-layer	pass	pass	pass	pass	pass	fail	pass
-osc-query	pass	pass	pass	pass	pass	pass	pass
-osc-bg	pass	pass	pass	pass	pass	pass	pass
-osc-fg	pass	pass	pass	pass	pass	pass	pass
-osc-cursor	pass	pass	pass	pass	pass	pass	pass
-osc-selection	fail	pass	pass	pass	fail	fail	pass
-osc-ansi	pass	pass	pass	pass	pass	fail	pass
-osc-reset	pass	pass	pass	pass	pass	pass	fail
-painted	pass	pass	pass	?	pass	fail	pass
-wear	pass	pass	pass	pass	pass	fail	pass
-wear-painted	pass	pass	pass	?	pass	fail	pass
-restore	pass	pass	pass	pass	pass	pass	pass
-layer-query	pass	pass	pass	?	?	?	pass
-layer-cells	pass	pass	pass	?	?	?	skip
-layer-base	skip	skip	skip	?	?	?	pass
-cell-size	pass	pass	pass	pass	fail	fail	fail
-kitty-graphics	pass	pass	pass	pass	fail	pass	fail
-kitty-under-bg	pass	pass	fail	?	?	?	?
-kitty-el	pass	pass	fail	?	?	?	?
-kitty-crop	pass	fail	pass	?	?	?	?
-sync-output	pass	pass	pass	pass	pass	pass	fail
-sync-query	pass	pass	fail	?	?	?	?
-focus-report	pass	pass	fail	pass	pass	fail	fail
+case	ghostty	iterm2	wezterm	kitty	alacritty	warp	terminal-app	konsole
+detect	pass	pass	pass	pass	pass	pass	pass	pass
+layer	pass	pass	pass	pass	pass	fail	pass	pass
+osc-query	pass	pass	pass	pass	pass	pass	pass	pass
+osc-bg	pass	pass	pass	pass	pass	pass	pass	pass
+osc-fg	pass	pass	pass	pass	pass	pass	pass	pass
+osc-cursor	pass	pass	pass	pass	pass	pass	pass	fail
+osc-selection	fail	pass	pass	pass	fail	fail	pass	fail
+osc-ansi	pass	pass	pass	pass	pass	fail	pass	pass
+osc-reset	pass	pass	pass	pass	pass	pass	fail	fail
+painted	pass	pass	pass	?	pass	fail	pass	pass
+wear	pass	pass	pass	pass	pass	fail	pass	fail
+wear-painted	pass	pass	pass	?	pass	fail	pass	pass
+wear-ansi	?	?	?	?	?	?	?	pass
+restore	pass	pass	pass	pass	pass	pass	pass	pass
+layer-query	pass	pass	pass	?	?	?	pass	pass
+layer-cells	pass	pass	pass	?	?	?	skip	skip
+layer-base	skip	skip	skip	?	?	?	pass	skip
+cell-size	pass	pass	pass	pass	fail	fail	fail	pass
+kitty-graphics	pass	pass	pass	pass	fail	pass	fail	pass
+kitty-under-bg	pass	pass	fail	?	?	?	?	pass
+kitty-el	pass	pass	fail	?	?	?	?	pass
+kitty-crop	pass	fail	pass	?	?	?	?	pass
+sync-output	pass	pass	pass	pass	pass	pass	fail	fail
+sync-query	pass	pass	fail	?	?	?	?	pass
+focus-report	pass	pass	fail	pass	pass	fail	fail	fail

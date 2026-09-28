@@ -1,27 +1,14 @@
 typeset -ga TTHEME_BG_POSITIONS=(top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right)
 
-__tt_ghostty_shown() {
-  local f=${TTHEME_CONFIG:h}/backgrounds/shown.conf
-  REPLY=""
-  [[ -r $f ]] || return 1
-  REPLY=${${"$(<$f)"}##*\?}
-  REPLY=${REPLY%.conf}
-  REPLY=${${REPLY/--/@}/--//}
-}
-
 __tt_bg_saved() {
-  local REPLY
-  (( ${TTHEME_TERMINALS[(Ie)iterm2]} )) && __tt_cli image $1 tuned
+  __tt_pictured "$@"
   __tt_bg_refresh "$@"
-  __tt_ghostty_shown && (( ${@[(Ie)$REPLY]} )) && __tt_reload
   return 0
 }
 
 __tt_bg_refresh() { : }
 
 __tt_bg_lasting() { : }
-
-__tt_bg_aligns() { (( ! ${TTHEME_TERMINALS[(Ie)iterm2]} )) }
 
 __tt_bg_frame() {
   local -i iw=$1 ih=$2 W=$3 H=$4 s=$5 ax=$(( ($6 - 1) % 3 )) ay=$(( ($6 - 1) / 3 )) f=${8:--1} wide dw dh ox oy
