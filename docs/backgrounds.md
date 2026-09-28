@@ -248,8 +248,10 @@ neither break up nor alias, and stays smooth when a small picture is enlarged.
 A picture can also keep its own colors. `TTHEME_BG_COLORS=original` (in `ttheme
 config`, or alt-c in `preview`) draws every picture installed from then on that
 way, and the `Colors` row of the tuning panel switches one picture at a time,
-whatever the setting is — `←`/`→` on it draw that picture again from its
-original, in the palette's tone or in its own colors, which takes a moment. The
+whatever the setting is — `←`/`→` on it, or `c` from any field, draw that picture
+again from its original, in the palette's tone or in its own colors, which takes
+a moment and is kept at once: esc undoes the tuning, not the colors, and `c`
+again switches back. The
 files are then ordinary RGBA PNGs: the picture's colors and its own alpha (the
 cut-out's, or none), bigger than a tone picture's indexed file, and the terminal
 lays them over its background at the picture's opacity, exactly as it does a
@@ -287,7 +289,8 @@ it has no file. Only PNG images preview.
 
 On a palette with a background, tab opens a panel that tunes it in place:
 `↑`/`↓` pick size, position, opacity or colors, and `←`/`→` change it (with
-shift, ten steps at a time; on colors, see [Original colors](#original-colors)). Size walks 1% at a time, shown large in the middle of the
+shift, ten steps at a time; `c` switches the colors from any field — see
+[Original colors](#original-colors)). Size walks 1% at a time, shown large in the middle of the
 screen as it changes: 100% is the whole image fitted into the window
 (`contain`), below that it shrinks to 20%, above it the image grows around the
 face until it covers the window, and the top step is **fill** (`cover`). Fill
