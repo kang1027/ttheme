@@ -75,12 +75,16 @@ __tt_bg_load() {
     bgimages[$name]=${bgimages[$pal]:-1}
   elif [[ -r $dir/$file.conf ]]; then
     lines=("${(@f)$(<$dir/$file.conf)}")
+    for line in ${(k)bgcolors[(I)${(b)pal}:*]}; do
+      unset "bgcolors[$line]"
+    done
   fi
   for line in $lines; do
     case $line in
       'config-file = ?'*.tune.conf) bgtunef[$name]=${line#config-file = \?} ;;
       'config-file = ?'*.off.conf) bgofff[$name]=${line#config-file = \?} ;;
       '# image '*/<->) bgimages[$name]=${line##*/} bgact[$pal]=${${line#\# image }%% *} ;;
+      '# colors '*) pd=(${=line#\# colors }); [[ -n $key ]] || bgcolors[$pal:$pd[1]]=$pd[2] ;;
       '# picture '*)
         pd=(${=line#\# picture })
         bgpic[$pal:$pd[1]]=${(j: :)pd[2,-1]}
@@ -129,6 +133,12 @@ __tt_bg_load() {
   else
     bgsrc[$name]=$REPLY bgfill[$name]=$REPLY
   fi
+}
+
+__tt_bg_coloring() {
+  local key=${1##*:}
+  [[ $1 == *:* ]] || key=${bgact[$1]}
+  REPLY=${bgcolors[${1%:*}:$key]:-tone}
 }
 
 __tt_bg_image() {
@@ -472,6 +482,9 @@ __tt_pv_bg_reset() {
   for img in ${(k)bgsrc[(I)${(b)1}(|:*)]}; do
     unset "bgsrc[$img]"
   done
+  for img in ${(k)bgcolors[(I)${(b)1}:*]}; do
+    unset "bgcolors[$img]"
+  done
   unset "bgview[$1]" "bgswap[$1]"
 }
 
@@ -532,15 +545,48 @@ __tt_pv_bg_drop() {
   __tt_pv_tune_open $name
 }
 
+__tt_pv_bg_recolor() {
+  local name=$tune was=$tpick key=${tpick##*:} want err REPLY
+  local -i rc
+  [[ $tpick == *:* ]] || key=${bgact[$name]}
+  __tt_bg_coloring $tpick
+  want=original
+  [[ $REPLY == original ]] && want=tone
+  __tt_pv_tune_keep
+  __tt_pv_bg_commit $name
+  msg="Drawing in its own colors"
+  [[ $want == tone ]] && msg="Drawing in the palette's tone"
+  msgt=300
+  printf '\e[?2026h'
+  __tt_pv_draw
+  __tt_pv_bg_close
+  err=$(__tt_cli image $name $want $key 2>&1)
+  rc=$?
+  err=${${err//$'\n'/ }## #}
+  resized=1 bgname="" bgshown="" bgdim=()
+  __tt_pv_bg_reset $name
+  __tt_bg_load $name
+  bgload[$name]="" bgedit[$name]=1
+  msg=${err:-"Background · $name"} msgt=$(( rc ? 300 : 200 ))
+  [[ -r ${TTHEME_CONFIG:h}/backgrounds/${${name/@/--}/\//--}.conf ]] || return 0
+  __tt_pv_tune_open $name
+  if [[ $was != "$tpick" ]]; then
+    tpick=$was
+    __tt_bg_load $tpick
+    tsnaps[$tpick]="${bgsize[$tpick]} ${bgpos[$tpick]} ${bgop[$tpick]} ${bgoff[$tpick]}"
+  fi
+  tf=4
+}
+
 __tt_pv_bg_panel() {
-  local name=$1 z=$'\e[0m' b=$'\e[1m' d=$'\e[2m' c=$ac val sty mark REPLY
-  local -a labs=(Size Position Opacity) at=(0 3 6) def=(${=bgdef[$1]})
+  local name=$1 z=$'\e[0m' b=$'\e[1m' d=$'\e[2m' c=$ac val sty mark choice REPLY
+  local -a labs=(Size Position Opacity Colors) at=(0 3 6 7) def=(${=bgdef[$1]})
   local -i r0=$2 col=$3 end=$4 off=${bgoff[$1]} T=$(( $4 - $3 - 21 )) lo=100 hi=100 k i r knob pos=${bgpos[$1]} o tuned
   (( color )) || z= b= d= c=
   (( T < 8 )) && T=8
   (( $+commands[sips] )) && lo=20
   __tt_pv_bg_fs $name && (( REPLY > hi )) && hi=$REPLY
-  for k in 1 2 3; do
+  for k in 1 2 3 4; do
     r=$(( r0 + at[k] ))
     sty=$d
     (( tf == k && ! off )) && sty=$b
@@ -551,6 +597,23 @@ __tt_pv_bg_panel() {
       out+="  "
     fi
     out+=$sty$labs[k]$z
+    if (( k == 4 )); then
+      __tt_bg_coloring $name
+      val=$REPLY
+      out+=$'\e['$r';'$(( col + 12 ))'H'
+      for choice in tone original; do
+        if (( ! color )); then
+          if [[ $choice == $val ]]; then out+="[$choice] "; else out+=" $choice  "; fi
+        elif [[ $choice != $val ]]; then
+          out+=$d" $choice "$z" "
+        elif (( tf == k && ! off )); then
+          out+=$'\e[7;1m'$c" $choice "$z" "
+        else
+          out+=$sty" $choice "$z" "
+        fi
+      done
+      continue
+    fi
     if (( k == 2 )); then
       for (( i = 1; i <= 9; i++ )); do
         out+=$'\e['$(( r0 + 2 + (i - 1) / 3 ))';'$(( col + 12 + (i - 1) % 3 * 3 ))'H'
@@ -598,7 +661,7 @@ __tt_pv_bg_panel() {
       out+=$'\e['$r';'$end'H'$mark"↺"$z
     fi
   done
-  (( split )) && bgstrip="$(( r0 + 8 )) $col $end"
+  (( split )) && bgstrip="$(( r0 + 9 )) $col $end"
 }
 
 __tt_pv_bg_strip() {

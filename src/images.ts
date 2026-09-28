@@ -1,8 +1,9 @@
 import { dropImage, showImage } from './backdrop.ts'
 import { find, readAvailable } from './catalog.ts'
 import { configHome, refreshPictures } from './palettes.ts'
+import { redrawColoring } from './redraw.ts'
 
-export function runImage(name: string, action: string, key?: string): number {
+export async function runImage(name: string, action: string, key?: string): Promise<number> {
   const home = configHome()
   find(readAvailable(home).palettes, name)
   if (action === 'show') {
@@ -20,9 +21,14 @@ export function runImage(name: string, action: string, key?: string): number {
     process.stderr.write(`Background · ${name} removed ${gone} · ${left} left\n`)
     return 0
   }
+  if (action === 'tone' || action === 'original') {
+    const drawn = await redrawColoring(home, name, action, key)
+    process.stderr.write(`Background · ${name} ${drawn.key} ${action === 'tone' ? 'tinted' : 'in its own colors'}\n`)
+    return 0
+  }
   if (action === 'tuned') {
     refreshPictures(home)
     return 0
   }
-  throw new Error(`unknown image action ${action} — show, drop or tuned`)
+  throw new Error(`unknown image action ${action} — show, drop, tone, original or tuned`)
 }

@@ -186,8 +186,8 @@ you wired. Why each cell is what it is: [docs/terminals.md](docs/terminals.md).
 A palette can wear a picture behind the text. ttheme ships none: `ttheme
 preview` → tab searches danbooru, konachan, yande.re and zerochan for the character live
 (safe-rated by default), or takes a picture you paste or drop, cuts the
-character out on macOS, tints it to the palette and installs it on your machine
-only. Ghostty shows the focused tab's picture, iTerm2 one per tab, kitty one per
+character out on macOS, tints it to the palette — or keeps its own colors — and
+installs it on your machine only. Ghostty shows the focused tab's picture, iTerm2 one per tab, kitty one per
 window. See [docs/backgrounds.md](docs/backgrounds.md).
 
 ## Contributing

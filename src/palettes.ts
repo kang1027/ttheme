@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { backgroundsDir, freshenConfs, readStore, retint } from './backdrop.ts'
+import { backgroundsDir, freshenConfs, paintFor, readStore, retint } from './backdrop.ts'
 import { available, nearest, readAvailable, writeKept } from './catalog.ts'
 import { editUserFile, writeAtomic } from './edits.ts'
 import { owned } from './emit/index.ts'
@@ -157,7 +157,7 @@ function layer(at: Now): Record<string, string> {
 export function sync(configHome: string, catalog: Manifest, state: Installed, home = homedir()): string[] {
   readStore(backgroundsDir(configHome))
   const entries = resolve(available(configHome, catalog), state.palettes)
-  retint(configHome, new Map(entries.map((entry) => [entry.name, entry.backdrop])))
+  retint(configHome, new Map(entries.map((entry) => [entry.name, paintFor(entry)])))
   freshenConfs(configHome)
   writeKept(configHome, entries)
   const ctx = context(configHome, entries, state, home)

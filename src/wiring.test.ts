@@ -10,6 +10,7 @@ import { kittyBlock } from './terminals/kitty.ts'
 import { removeLuaBlock, upsertLuaBlock } from './terminals/wezterm.ts'
 import {
   blurOf,
+  coloringFor,
   configFile,
   configTemplate,
   removeBlock,
@@ -80,6 +81,9 @@ test('configFile seeds the template with every default spelled out on a commente
       '',
       '# soften the background pictures behind the text: a blur radius in screen pixels, 0 keeps them sharp — changing it draws every picture again (default 0)',
       '# : ${TTHEME_BG_BLUR:=0}',
+      '',
+      '# the colors new background pictures are drawn in: tone tints a picture in one color of its palette, original keeps its own — preview switches each picture later (default tone)',
+      '# : ${TTHEME_BG_COLORS:=tone}',
       '',
       '# the ratings find lists, any of safe, questionable and explicit, each booru read in its own rating vocabulary (default safe)',
       '# : ${TTHEME_FIND_RATING:=safe}',
@@ -251,6 +255,20 @@ test('the blur comes from config.zsh itself, commented out meaning the default a
   assert.equal(at(': ${TTHEME_BG_BLUR:="3"}\n'), 3)
   assert.equal(at(': ${TTHEME_BG_BLUR:=40}\n'), 8)
   assert.equal(at(': ${TTHEME_BG_BLUR:=soft}\n'), 0)
+})
+
+test('new pictures are drawn in the colors config.zsh names, tone unless it says original', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ttheme-colors-'))
+  const at = (text: string) => {
+    mkdirSync(join(home, 'ttheme'), { recursive: true })
+    writeFileSync(join(home, 'ttheme', 'config.zsh'), text)
+    return coloringFor(home)
+  }
+  assert.equal(coloringFor(join(home, 'nowhere')), 'tone')
+  assert.equal(at(configFile('')), 'tone')
+  assert.equal(at(withSetting(configFile(''), 'TTHEME_BG_COLORS', 'original')), 'original')
+  assert.equal(at(': ${TTHEME_BG_COLORS:="original"}\n'), 'original')
+  assert.equal(at(': ${TTHEME_BG_COLORS:=sepia}\n'), 'tone')
 })
 
 test('the shell layer falls back to the same default config.zsh documents for every setting it reads', () => {

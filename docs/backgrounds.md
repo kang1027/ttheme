@@ -172,8 +172,8 @@ since the clipboard is on your own machine.
 
 Enter tries the picture on: ttheme downloads the original and paints the whole
 window with it the way the installed background will look — tinted with the
-palette, cropped with headroom above the face, at the opacity the contrast gate
-allows — over one of preview's five sample scenes (⇧←→ switch them), with the
+palette (or in its own colors, with `TTHEME_BG_COLORS=original`), cropped with
+headroom above the face, at the opacity the contrast gate allows — over one of preview's five sample scenes (⇧←→ switch them), with the
 share of transparent pixels next to its size (`opaque` when there are none).
 Under that line the post's page, the source the artwork came from and its artist
 always show, a `—` where the post names none; a source that is a pixiv image
@@ -243,6 +243,33 @@ Mitchell filter that averages every source pixel when it shrinks, so fine lines
 neither break up nor alias, and stays smooth when a small picture is enlarged.
 `TTHEME_BG_BLUR` softens every picture by that many screen pixels.
 
+## Original colors
+
+A picture can also keep its own colors. `TTHEME_BG_COLORS=original` (in `ttheme
+config`, or alt-c in `preview`) draws every picture installed from then on that
+way, and the `Colors` row of the tuning panel switches one picture at a time,
+whatever the setting is — `←`/`→` on it draw that picture again from its
+original, in the palette's tone or in its own colors, which takes a moment. The
+files are then ordinary RGBA PNGs: the picture's colors and its own alpha (the
+cut-out's, or none), bigger than a tone picture's indexed file, and the terminal
+lays them over its background at the picture's opacity, exactly as it does a
+tone. Nothing is lifted, so the picture is as bright as the artist made it.
+
+That brightness is what sets the default opacity. A tone is one known color, so
+the contrast gate could work its opacity out once for the palette; a picture in
+its own colors is as bright as its brightest pixels, so ttheme takes the color
+of the brightest 1% of the picture (`peak` in `images.json`) and gives it the
+highest opacity at which the palette's text still passes the gate on it, and
+never brighter than a tone picture may be. A picture with white in it opens at
+about half a tone's opacity, a dark one stronger, and either is faint: raise
+the opacity in the tuning panel as far as the text allows — the panel does not
+stop you at the gate. Switching a picture between tone and original keeps its
+size and position and puts its opacity back to the new default. When the
+palette's text colors change, the default follows without drawing the picture
+again. The terminals take these files as they take a tone's, since each only lays
+a file over its background at an opacity; Ghostty, iTerm2, kitty and WezTerm are
+the ones that show pictures at all.
+
 When a palette's colors change (`edit`, `update`, a new catalog), the next sync
 paints its pictures in the new tone and default opacity under new names, carrying
 their tuning — an opacity you set yourself stays yours. Changing
@@ -259,8 +286,8 @@ it draws that palette's `background-image` where Ghostty would place it, faded b
 it has no file. Only PNG images preview.
 
 On a palette with a background, tab opens a panel that tunes it in place:
-`↑`/`↓` pick size, position or opacity, and `←`/`→` change it (with shift, ten
-steps at a time). Size walks 1% at a time, shown large in the middle of the
+`↑`/`↓` pick size, position, opacity or colors, and `←`/`→` change it (with
+shift, ten steps at a time; on colors, see [Original colors](#original-colors)). Size walks 1% at a time, shown large in the middle of the
 screen as it changes: 100% is the whole image fitted into the window
 (`contain`), below that it shrinks to 20%, above it the image grows around the
 face until it covers the window, and the top step is **fill** (`cover`). Fill
@@ -270,8 +297,8 @@ the sizes above 100% zoom around — and the image itself otherwise. Position
 steps through the nine `background-image-position` anchors, or `1`–`9` jump to
 one in reading order; opacity moves by 0.01. A field that is not at its
 default carries `↺` at the panel's right edge, lit on the field the cursor is on:
-`=` puts that one field back, `+` all three (and shows the picture again if it
-was off). Space turns the palette's background off and on, enter keeps the
+`=` puts that one field back, `+` all three of size, position and opacity (and
+shows the picture again if it was off). Space turns the palette's background off and on, enter keeps the
 change and esc puts back what the panel opened with. `f` in the panel opens
 find again to add a picture.
 

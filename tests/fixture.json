@@ -78,7 +78,12 @@
         0.017,
         10.456,
         3.977
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#cdcdff",
+        "opacity": 0.2
+      }
     },
     {
       "name": "konata",
@@ -125,7 +130,12 @@
         0.017,
         10.504,
         3.971
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#5f95ca",
+        "opacity": 0.2
+      }
     },
     {
       "name": "kagami",
@@ -171,7 +181,12 @@
         0.017,
         10.5,
         3.982
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#9b86c8",
+        "opacity": 0.2
+      }
     },
     {
       "name": "tsukasa",
@@ -217,7 +232,12 @@
         0.017,
         10.426,
         3.949
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#c8a6da",
+        "opacity": 0.2
+      }
     },
     {
       "name": "bocchi",
@@ -264,7 +284,12 @@
         0.017,
         10.484,
         3.975
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#feabc0",
+        "opacity": 0.2
+      }
     },
     {
       "name": "kita",
@@ -310,7 +335,12 @@
         0.018,
         10.509,
         3.976
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#ee6555",
+        "opacity": 0.2
+      }
     },
     {
       "name": "ryo",
@@ -356,7 +386,12 @@
         0.017,
         10.491,
         3.953
-      ]
+      ],
+      "backdrop": {
+        "slot": "cursor",
+        "color": "#d6d233",
+        "opacity": 0.2
+      }
     }
   ]
 }
