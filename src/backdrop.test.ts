@@ -10,22 +10,30 @@ import {
   backdropTone,
   backgroundsDir,
   type Colors,
+  coloringOf,
   dropImage,
   fillFrame,
   fillSize,
   frameAt,
+  inked,
   installBackdrop,
   liftOf,
+  originalOpacity,
+  type Paint,
   type Picture,
+  peakOf,
   rackOf,
   readBackdrop,
   readStore,
   retint,
   showImage,
   toneFor,
+  tryOn,
   tuneOf,
   writeTune,
 } from './backdrop.ts'
+import { luminance, mix } from './color.ts'
+import { checkReadability } from './contrast.ts'
 import { redrawOne } from './pictures.ts'
 import { decodePng, encodeMask, encodePng, type Rgba, retone } from './png.ts'
 
@@ -53,6 +61,8 @@ const KAGAMI: Colors = {
     '#f4eafd',
   ],
 }
+
+const PAINT: Paint = { hue: { color: '#9b86c8', opacity: 0.2 }, colors: KAGAMI }
 
 test('kagami at 0.2 is the brightness every other palette is matched to', () => {
   assert.equal(toneFor(KAGAMI, 'cursor').opacity, 0.2)
@@ -466,8 +476,10 @@ test('a palette that changes its tone paints its pictures again, under new names
   const dir = backgroundsDir(configHome)
   const before = installFigure(configHome, 5)
   writeTune(dir, before, { size: 60, position: 'center' }, true, configHome)
-  assert.deepEqual(retint(configHome, new Map([['kagami', { color: '#9b86c8', opacity: 0.2 }]])), [])
-  assert.deepEqual(retint(configHome, new Map([['kagami', { color: '#5fa8d3', opacity: 0.15 }]])), ['kagami'])
+  assert.deepEqual(retint(configHome, new Map([['kagami', PAINT]])), [])
+  assert.deepEqual(retint(configHome, new Map([['kagami', { ...PAINT, hue: { color: '#5fa8d3', opacity: 0.15 } }]])), [
+    'kagami',
+  ])
   const after = rackOf(configHome, 'kagami')[0] as Picture
   assert.notEqual(after.stem, before.stem)
   assert.deepEqual([after.tone, after.opacity], ['#5fa8d3', 0.15])
@@ -500,15 +512,7 @@ test('a picture drawn before its tone was kept is drawn again from its original,
     `background-image = ${join(dir, legacy.fill)}\nbackground-image-fit = cover\nbackground-image-position = bottom-left\nbackground-image-opacity = 0.3\n`,
   )
   writeFileSync(join(dir, `${legacy.stem}.off.conf`), 'background-image =\n')
-  const picture = await redrawOne(
-    configHome,
-    'kagami',
-    legacy.key,
-    { color: '#9b86c8', opacity: 0.2 },
-    2,
-    true,
-    configHome,
-  )
+  const picture = await redrawOne(configHome, 'kagami', legacy.key, PAINT, 2, true, configHome)
   assert.ok(picture)
   applyRedraw(configHome, [{ name: 'kagami', picture }])
   const after = rackOf(configHome, 'kagami')[0] as Picture
@@ -519,5 +523,181 @@ test('a picture drawn before its tone was kept is drawn again from its original,
   assert.deepEqual(
     readdirSync(dir).filter((file) => file.startsWith(legacy.stem)),
     [],
+  )
+})
+
+function colorful(): Rgba {
+  const data = new Uint8Array(16 * 16 * 4)
+  for (let y = 2; y < 14; y++) {
+    for (let x = 4; x < 12; x++) {
+      data.set(y === 2 ? [255, 255, 255, 255] : [200, 60, 40, 255], (y * 16 + x) * 4)
+    }
+  }
+  return { width: 16, height: 16, data }
+}
+
+function installColorful(configHome: string, id: number): Picture {
+  const image = colorful()
+  installBackdrop(
+    configHome,
+    KAGAMI,
+    PAINT.hue,
+    image,
+    { site: 'safebooru', id, ext: 'png', bytes: encodePng(image) },
+    { width: 40, height: 20 },
+    0,
+    'original',
+  )
+  return rackOf(configHome, 'kagami')[0] as Picture
+}
+
+test('the peak of a picture is the color of its brightest 1% of visible pixels, and a clear pixel does not count', () => {
+  const image = colorful()
+  const box = { x: 4, y: 2, w: 8, h: 12 }
+  assert.equal(peakOf(image, box), '#ffffff')
+  const dark = { ...image, data: image.data.map((v, i) => (i % 4 === 3 ? v : Math.min(v, 90))) }
+  assert.equal(peakOf(dark, box), '#5a5a5a')
+  const clear = { ...image, data: image.data.slice() }
+  for (let x = 4; x < 12; x++) {
+    clear.data[(2 * 16 + x) * 4 + 3] = 0
+  }
+  assert.equal(peakOf(clear, { x: 0, y: 0, w: 16, h: 16 }), '#c83c28')
+})
+
+test('original colors are as faint as their brightest pixel needs, and the text still passes the gate on it', () => {
+  const white = originalOpacity(KAGAMI, '#ffffff')
+  const dark = originalOpacity(KAGAMI, '#5a5a5a')
+  assert.ok(white < toneFor(KAGAMI, 'cursor').opacity, 'white is the worst pixel a picture can hold')
+  assert.ok(dark > white, 'a dark picture may be drawn stronger')
+  for (const [peak, opacity] of [
+    ['#ffffff', white],
+    ['#5a5a5a', dark],
+  ] as const) {
+    const under = mix(KAGAMI.background, peak, opacity)
+    assert.deepEqual(
+      checkReadability({ ...KAGAMI, background: under, waive: [] }),
+      [],
+      `${peak} at ${opacity} keeps the palette readable`,
+    )
+    assert.ok(luminance(under) <= luminance(mix('#19161e', '#9b86c8', 0.2)) + 1e-9)
+  }
+})
+
+test('a picture drawn in its own colors keeps them, with the picture own alpha, and opens at the gate-safe opacity', () => {
+  const configHome = mkdtempSync(join(tmpdir(), 'ttheme-colors-'))
+  const dir = backgroundsDir(configHome)
+  const picture = installColorful(configHome, 21)
+  assert.deepEqual([picture.coloring, picture.tone, picture.peak], ['original', undefined, '#ffffff'])
+  assert.equal(picture.opacity, originalOpacity(KAGAMI, '#ffffff'))
+  assert.equal(coloringOf(picture), 'original')
+  const figureFile = decodePng(new Uint8Array(readFileSync(join(dir, `${picture.stem}.png`))))
+  assert.deepEqual([figureFile.width, figureFile.height], [8, 12])
+  assert.deepEqual([...figureFile.data.subarray(0, 4)], [255, 255, 255, 255])
+  assert.deepEqual([...figureFile.data.subarray(8 * 4, 8 * 4 + 4)], [200, 60, 40, 255])
+  const conf = readFileSync(join(dir, 'kagami.conf'), 'utf8')
+  assert.ok(conf.includes(`# colors ${picture.key} original`))
+  assert.ok(conf.includes(`background-image-opacity = ${picture.opacity}`))
+  assert.equal(readBackdrop(dir, 'kagami', configHome)?.opacity, picture.opacity)
+})
+
+test('a tone picture has no colors line, and a tuned size of an original-color picture keeps its colors', () => {
+  const configHome = mkdtempSync(join(tmpdir(), 'ttheme-colors-tune-'))
+  const dir = backgroundsDir(configHome)
+  installFigure(configHome, 3)
+  assert.ok(!readFileSync(join(dir, 'kagami.conf'), 'utf8').includes('# colors'))
+  const own = installColorful(configHome, 22)
+  writeTune(dir, own, { size: 60, position: 'center' }, true, configHome)
+  const tuned = decodePng(new Uint8Array(readFileSync(join(dir, `${own.stem}@60-center.png`))))
+  const pixels = [
+    ...new Set(
+      Array.from({ length: tuned.width * tuned.height }, (_, i) => tuned.data.subarray(i * 4, i * 4 + 4).join(',')),
+    ),
+  ]
+  assert.ok(pixels.includes('200,60,40,255'), 'the placed picture keeps its red')
+  assert.ok(pixels.includes('0,0,0,0'), 'the rest of the canvas is clear')
+})
+
+test('a palette whose text colors change moves an original-color picture to its new opacity without drawing it again', () => {
+  const configHome = mkdtempSync(join(tmpdir(), 'ttheme-colors-retint-'))
+  const dir = backgroundsDir(configHome)
+  const before = installColorful(configHome, 23)
+  writeTune(dir, before, { size: 60, position: 'center', opacity: before.opacity }, true, configHome)
+  assert.deepEqual(retint(configHome, new Map([['kagami', PAINT]])), [])
+  const dimmer = { ...PAINT, colors: { ...KAGAMI, foreground: '#b9b1c2' } }
+  assert.deepEqual(retint(configHome, new Map([['kagami', dimmer]])), ['kagami'])
+  const after = rackOf(configHome, 'kagami')[0] as Picture
+  assert.equal(after.stem, before.stem)
+  assert.equal(after.opacity, originalOpacity(dimmer.colors, '#ffffff'))
+  assert.ok(after.opacity < before.opacity)
+  assert.equal(readBackdrop(dir, 'kagami', configHome)?.opacity, after.opacity)
+})
+
+test('drawing a picture in its other colors keeps its tuning, drops its opacity and takes the old files away', async () => {
+  const configHome = mkdtempSync(join(tmpdir(), 'ttheme-colors-switch-'))
+  const dir = backgroundsDir(configHome)
+  const before = installFigure(configHome, 7)
+  writeTune(dir, before, { size: 60, position: 'center', opacity: 0.3 }, true, configHome)
+  const original = await redrawOne(configHome, 'kagami', before.key, PAINT, 0, true, configHome, 'original')
+  assert.ok(original)
+  applyRedraw(configHome, [{ name: 'kagami', picture: original }])
+  const own = rackOf(configHome, 'kagami')[0] as Picture
+  assert.deepEqual([own.coloring, own.tone, own.peak !== undefined], ['original', undefined, true])
+  assert.equal(own.opacity, originalOpacity(KAGAMI, own.peak as string))
+  assert.deepEqual(tuneOf(dir, own), { size: 60, position: 'center' })
+  assert.ok(existsSync(join(dir, `${own.stem}@60-center.png`)))
+  assert.deepEqual(
+    readdirSync(dir).filter((file) => file.startsWith(before.stem)),
+    [],
+  )
+  const back = await redrawOne(configHome, 'kagami', own.key, PAINT, 0, true, configHome, 'tone')
+  assert.ok(back)
+  applyRedraw(configHome, [{ name: 'kagami', picture: back }])
+  const tinted = rackOf(configHome, 'kagami')[0] as Picture
+  assert.deepEqual([tinted.coloring, tinted.tone, tinted.peak, tinted.opacity], ['tone', '#9b86c8', undefined, 0.2])
+  assert.ok(!readFileSync(join(dir, 'kagami.conf'), 'utf8').includes('# colors'))
+})
+
+test('trying a picture on in its own colors lays it over the background at the default opacity, straight alpha', () => {
+  const held = inked(colorful())
+  const tone = tryOn(held, KAGAMI, PAINT.hue, 40, 20, 0)
+  const own = tryOn(held, KAGAMI, PAINT.hue, 40, 20, 0, undefined, 'original')
+  assert.equal(tone.opacity, 0.2)
+  assert.equal(own.opacity, originalOpacity(KAGAMI, '#ffffff'))
+  assert.notDeepEqual([...own.image.data], [...tone.image.data])
+  const stronger = tryOn(held, KAGAMI, PAINT.hue, 40, 20, 0, { opacity: 0.5 }, 'original')
+  assert.equal(stronger.opacity, own.opacity, 'the default stays the default while a framing overrides it')
+  const [r, g, b] = [0x19, 0x16, 0x1e]
+  const wanted = [
+    Math.round((r as number) + (200 - (r as number)) * 0.5),
+    Math.round((g as number) + (60 - (g as number)) * 0.5),
+    Math.round((b as number) + (40 - (b as number)) * 0.5),
+  ]
+  const pixels = Array.from({ length: 40 * 20 }, (_, i) => stronger.image.data.subarray(i * 4, i * 4 + 3).join())
+  assert.ok(pixels.includes(wanted.join()), `some pixel is red at half strength, ${wanted}`)
+})
+
+test('blurring a picture in its own colors softens its edge without dimming the colors at it', () => {
+  const configHome = mkdtempSync(join(tmpdir(), 'ttheme-colors-blur-'))
+  const dir = backgroundsDir(configHome)
+  const image = colorful()
+  installBackdrop(
+    configHome,
+    KAGAMI,
+    PAINT.hue,
+    image,
+    { site: 'safebooru', id: 24, ext: 'png', bytes: encodePng(image) },
+    { width: 40, height: 20 },
+    1.5,
+    'original',
+  )
+  const picture = rackOf(configHome, 'kagami')[0] as Picture
+  const fill = decodePng(new Uint8Array(readFileSync(join(dir, picture.fill))))
+  const soft = Array.from({ length: fill.width * fill.height }, (_, i) => fill.data.subarray(i * 4, i * 4 + 4)).filter(
+    (px) => (px[3] as number) > 0 && (px[3] as number) < 255,
+  )
+  assert.ok(soft.length > 0, 'the edge has partial alpha')
+  assert.ok(
+    soft.every((px) => (px[0] as number) >= 195),
+    'a partial pixel keeps its red instead of fading toward black',
   )
 })

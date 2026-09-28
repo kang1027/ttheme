@@ -5,16 +5,18 @@ import { LINK, linked } from './ansi.ts'
 import {
   backdropTone,
   backgroundsDir,
-  type Colors,
-  type Hue,
+  type Coloring,
+  colorsOf,
   imageKey,
   installBackdrop,
+  type Paint,
   type Picture,
   rackOf,
   readStore,
   redrawn,
   showImage,
   tuneOf,
+  undrawn,
   writeTune,
 } from './backdrop.ts'
 import {
@@ -48,7 +50,7 @@ import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
 import { linkable } from './terminal.ts'
 import type { Wired } from './terminals/types.ts'
 import type { SharedPicture } from './theme.ts'
-import { blurOf } from './wiring.ts'
+import { blurOf, coloringFor } from './wiring.ts'
 
 const TIMEOUT = 90_000
 
@@ -69,18 +71,6 @@ export function missingPictures(configHome: string, entry: PaletteEntry): Shared
 export function since(entry: PaletteEntry, before: readonly SharedPicture[] | undefined): PaletteEntry {
   const seen = new Set((before ?? []).map((p) => imageKey(p)))
   return { ...entry, pictures: (entry.pictures ?? []).filter((p) => !seen.has(imageKey(p))) }
-}
-
-function colorsOf(entry: PaletteEntry): Colors {
-  return {
-    name: entry.name,
-    background: entry.background,
-    foreground: entry.foreground,
-    cursor: entry.cursor,
-    selection: entry.selection,
-    ansi: entry.ansi,
-    ...(entry.waived ? { waived: entry.waived } : {}),
-  }
 }
 
 async function install(
@@ -172,6 +162,7 @@ async function install(
     },
     { width: 0, height: 0 },
     blurOf(configHome),
+    coloringFor(configHome),
   )
   const picture = rackOf(configHome, entry.name).find((p) => p.key === imageKey(shared))
   if (picture) {
@@ -264,10 +255,11 @@ export async function redrawOne(
   configHome: string,
   name: string,
   key: string,
-  hue: Hue,
+  paint: Paint,
   blurring: number,
   aligns: boolean,
   home: string,
+  coloring?: Coloring,
 ): Promise<Picture | null> {
   const dir = backgroundsDir(configHome)
   const picture = readStore(dir).palettes[name]?.pictures.find((held) => held.key === key)
@@ -280,14 +272,14 @@ export async function redrawOne(
     if (!cutAlpha(image, decodePng(new Uint8Array(readFileSync(join(dir, picture.cut)))), 0)) {
       return null
     }
-    return redrawn(configHome, name, picture, image, hue, blurring, aligns, home, false)
+    return redrawn(configHome, name, picture, image, paint, blurring, aligns, home, false, coloring)
   }
-  if (picture.tone === undefined && transparency(image) === 0 && wasCut(dir, picture)) {
+  if (undrawn(picture) && transparency(image) === 0 && wasCut(dir, picture)) {
     const cut = await cutOut(key, source)
     if (!cut || !cutAlpha(image, cut, 3)) {
       return null
     }
-    return redrawn(configHome, name, picture, image, hue, blurring, aligns, home, true)
+    return redrawn(configHome, name, picture, image, paint, blurring, aligns, home, true, coloring)
   }
-  return redrawn(configHome, name, picture, image, hue, blurring, aligns, home, false)
+  return redrawn(configHome, name, picture, image, paint, blurring, aligns, home, false, coloring)
 }

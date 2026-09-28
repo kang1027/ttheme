@@ -95,6 +95,8 @@ __tt_pins_load
 
 : ${TTHEME_BG_BLUR:=0}
 
+: ${TTHEME_BG_COLORS:=tone}
+
 typeset -g TTHEME_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/ttheme
 
 () {
@@ -1673,6 +1675,8 @@ __tt_pv_foot() {
     badge='IMAGE EDIT' kk=(↑↓ ←→ '=' +) kl=(field step reset "reset all")
     if (( tf == 2 )); then
       kl[2]=move kk+=(1-9) kl+=(place)
+    elif (( tf == 4 )); then
+      kl[2]=switch kk=(${kk:#'='}) kl=("${(@)kl[1,2]}" "reset all")
     else
       kk+=(⇧←→) kl+=(×10)
     fi
@@ -1890,9 +1894,13 @@ __tt_pv_tune() {
   local name
   case $key in
     $'\x03') return 1 ;;
-    up) tf=$(( tf > 1 ? tf - 1 : 3 )) ;;
-    down) tf=$(( tf < 3 ? tf + 1 : 1 )) ;;
+    up) tf=$(( tf > 1 ? tf - 1 : 4 )) ;;
+    down) tf=$(( tf < 4 ? tf + 1 : 1 )) ;;
     left|right|sleft|sright)
+      if (( tf == 4 )); then
+        (( bgoff[$tpick] )) || __tt_pv_bg_recolor
+        return 0
+      fi
       [[ $key == *left ]] && n=-1
       [[ $key == s* ]] && (( tf != 2 )) && n=$(( n * 10 ))
       __tt_pv_bg_adjust ${fields[tf]} $n
@@ -1902,7 +1910,7 @@ __tt_pv_tune() {
       __tt_pv_bg_adjust at $key
       ;;
     ' ') __tt_pv_bg_adjust on ;;
-    '=') __tt_pv_bg_adjust def $tf ;;
+    '=') (( tf == 4 )) || __tt_pv_bg_adjust def $tf ;;
     '+') __tt_pv_bg_adjust def ;;
     ',') __tt_pv_bg_pick -1 ;;
     '.') __tt_pv_bg_pick 1 ;;
@@ -2312,11 +2320,11 @@ __tt_pv_draw() {
         src=" · $k/${#held}"
       fi
       __tt_pv_bg_title $(( lw - ${#tune} - 6 )) "$src"
-      __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$REPLY" $state
-      __tt_pv_bg_panel $tpick $(( ph - 8 )) 1 $lw
+      __tt_pv_head $(( ph - 10 )) 1 $lw $tune "$REPLY" $state
+      __tt_pv_bg_panel $tpick $(( ph - 9 )) 1 $lw
     elif (( conf )); then
-      __tt_pv_head $(( ph - 7 )) 1 $lw Config
-      __tt_pv_conf_panel $(( ph - 6 )) 1 $lw
+      __tt_pv_head $(( ph - 8 )) 1 $lw Config
+      __tt_pv_conf_panel $(( ph - 7 )) 1 $lw
     fi
     (( help )) && __tt_pv_help
   fi
@@ -2611,11 +2619,11 @@ __tt_preview() {
   local -i scene=0
   local -a bgorder=()
   local -A bgfrom=() bgurl=() bgby=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
-  local -A bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() pvseek=()
+  local -A bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() pvseek=() bgcolors=()
   local conf=0 cf=1
   local -a plabel=(" This tab " " Default ") pkeys=() reach=() csnap=()
-  local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR) clabel=("New tabs" Announce "Search fx" Sort Blur)
-  local -a cchoice=("off seq" "1 0" "typewriter decode glitch" "abc series" "0 1 2 3 4") cshow=("off seq" "on off" "typewriter decode glitch" "abc series" "off 1px 2px 3px 4px")
+  local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR TTHEME_BG_COLORS) clabel=("New tabs" Announce "Search fx" Sort Blur Colors)
+  local -a cchoice=("off seq" "1 0" "typewriter decode glitch" "abc series" "0 1 2 3 4" "tone original") cshow=("off seq" "on off" "typewriter decode glitch" "abc series" "off 1px 2px 3px 4px" "tone original")
   local -A cnote=(
     TTHEME_TAB_PALETTE:seq "New tabs rotate through palettes" TTHEME_TAB_PALETTE:off "New tabs keep the terminal theme"
     TTHEME_ANNOUNCE:1 "Shows the palette notice" TTHEME_ANNOUNCE:0 "Silences the palette notice"
@@ -2624,6 +2632,8 @@ __tt_preview() {
     TTHEME_BG_BLUR:0 "Pictures stay sharp" TTHEME_BG_BLUR:1 "Pictures soften a little behind the text"
     TTHEME_BG_BLUR:2 "Pictures soften behind the text" TTHEME_BG_BLUR:3 "Pictures blur behind the text"
     TTHEME_BG_BLUR:4 "Pictures blur well behind the text"
+    TTHEME_BG_COLORS:tone "New pictures are tinted in one color of the palette"
+    TTHEME_BG_COLORS:original "New pictures keep their own colors"
   )
   [[ $mode == pin ]] && __tt_pin_scopes "$pdir"
   [[ $mode == init ]] && pkdef=2

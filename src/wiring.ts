@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Coloring } from './backdrop.ts'
 
 export const BLOCK_BEGIN = '# ttheme begin'
 export const BLOCK_END = '# ttheme end'
@@ -55,6 +56,10 @@ const CONFIG_SETTINGS = {
   TTHEME_BG_BLUR: {
     doc: '# soften the background pictures behind the text: a blur radius in screen pixels, 0 keeps them sharp — changing it draws every picture again (default 0)',
     default: '0',
+  },
+  TTHEME_BG_COLORS: {
+    doc: '# the colors new background pictures are drawn in: tone tints a picture in one color of its palette, original keeps its own — preview switches each picture later (default tone)',
+    default: 'tone',
   },
   TTHEME_FIND_RATING: {
     doc: '# the ratings find lists, any of safe, questionable and explicit, each booru read in its own rating vocabulary (default safe)',
@@ -151,6 +156,15 @@ export function blurOf(configHome: string): number {
   const raw = /^: \$\{TTHEME_BG_BLUR:=([^}\n]*)\}/m.exec(text)?.[1] ?? CONFIG_SETTINGS.TTHEME_BG_BLUR.default
   const value = Number(raw.replace(/^(["'])(.*)\1$/, '$2'))
   return Number.isFinite(value) ? Math.min(BLUR_MOST, Math.max(0, value)) : 0
+}
+
+export function coloringFor(configHome: string): Coloring {
+  let text = ''
+  try {
+    text = readFileSync(join(configHome, 'ttheme', 'config.zsh'), 'utf8')
+  } catch {}
+  const raw = /^: \$\{TTHEME_BG_COLORS:=([^}\n]*)\}/m.exec(text)?.[1] ?? CONFIG_SETTINGS.TTHEME_BG_COLORS.default
+  return raw.replace(/^(["'])(.*)\1$/, '$2') === 'original' ? 'original' : 'tone'
 }
 
 export function configTemplate(): string {

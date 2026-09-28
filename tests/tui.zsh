@@ -34,6 +34,8 @@ typeset -ga SCENARIOS=(
   'preview-folded  few    preview'
   'preview-open    few    preview  Down Right'
   'preview-keys    few    preview  ?'
+  'preview-config  few    preview  M-c'
+  'preview-colors  few    preview  M-c Down Down Down Down Down Right'
   'browse-market   market browse   Down Down Right Down Right Down'
   'preview-market  market preview  Down Right Down Right Down'
   'menu-market     market menu'

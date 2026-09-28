@@ -33,7 +33,7 @@ REPLY=; __tt_bg_place 2045 1994 100 40 8 16 60 9 contain
 [[ $REPLY == "52 17 49 24 5 0 2039 1994" ]] || { print -u2 "__tt_bg_place broke on a sized corner: $REPLY"; exit 1 }
 REPLY=; __tt_bg_frame 2056 2560 1600 1000 199 5 contain 62
 [[ $REPLY == "1598 1990 1 -733" ]] || { print -u2 "__tt_bg_frame broke on a zoom around the face: $REPLY"; exit 1 }
-typeset -A bgfrom=() bgurl=() bgby=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgdim=() bgtunef=() bgofff=() bgimages=() bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() bgedit=()
+typeset -A bgfrom=() bgurl=() bgby=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgdim=() bgtunef=() bgofff=() bgimages=() bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() bgedit=() bgcolors=()
 bgd=$XDG_CONFIG_HOME/ttheme/backgrounds
 mkdir -p $bgd && : > $bgd/kagami@fill-42.png && : > $bgd/kagami@60-bottom-right.png && : > $bgd/kagami@130-bottom-right-1600x1000.png
 base=("# by akoiro,potate" "# from safebooru 416805 https://safebooru.org/index.php?page=post&s=view&id=416805" "background-image = kagami@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2")
@@ -147,6 +147,54 @@ bgop[$tpick]=0.4
 __tt_pv_tune_keep
 [[ $bgswap[kagami] == safebooru_1 && $bgview[kagami] == kagami:safebooru_1 && -n $bgedit[kagami:safebooru_1] && -z $tune ]] ||
   { print -u2 "enter in the tuning panel did not keep the picture it moved to: swap=${(kv)bgswap} view=${(kv)bgview} edit=${(k)bgedit}"; exit 1 }
+print -l "# image safebooru_2 2/3" "# picture safebooru_2 kagami.1a2b3c4d kagami.1a2b3c4d@fill-42.png 0.2 -" \
+  "# picture safebooru_3 kagami.cccccccc kagami.cccccccc@fill-40.png 0.1 -" "# colors safebooru_3 original" \
+  "background-image = kagami.1a2b3c4d@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2" \
+  "config-file = ?kagami.1a2b3c4d.tune.conf" "config-file = ?kagami.1a2b3c4d.off.conf" > $bgd/kagami.conf
+bgsrc=() bgcolors=(); __tt_bg_load kagami
+REPLY=; __tt_bg_coloring kagami; first=$REPLY
+REPLY=; __tt_bg_coloring kagami:safebooru_3
+[[ $first == tone && $REPLY == original ]] ||
+  { print -u2 "the conf's colors line did not reach its picture: active=$first other=$REPLY (${(kv)bgcolors})"; exit 1 }
+bgcw=8 tune=kagami tpick=kagami:safebooru_3 tf=4 color=0 out= off=0 msgt=0 help=0 pick= conf=0 flt=
+__tt_pv_bg_panel kagami:safebooru_3 4 1 60
+[[ $out == *Colors* && $out == *"[original]"* && $out == *" tone "* ]] ||
+  { print -u2 "the tuning panel did not show the picture's colors: $out"; exit 1 }
+out=; __tt_pv_foot 200
+[[ $out == *switch* && $out != *"= reset"* && $out == *"+ reset all"* ]] ||
+  { print -u2 "the Colors row's hints kept the field reset: $out"; exit 1 }
+print -l "# image safebooru_2 2/3" "# picture safebooru_2 kagami.1a2b3c4d kagami.1a2b3c4d@fill-42.png 0.2 -" \
+  "# picture safebooru_3 kagami.cccccccc kagami.cccccccc@fill-40.png 0.1 -" \
+  "background-image = kagami.1a2b3c4d@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2" \
+  "config-file = ?kagami.1a2b3c4d.tune.conf" "config-file = ?kagami.1a2b3c4d.off.conf" > $bgd/kagami.conf
+bgsrc=(); __tt_bg_load kagami
+REPLY=; __tt_bg_coloring kagami:safebooru_3
+[[ $REPLY == tone && ${#bgcolors} == 0 ]] ||
+  { print -u2 "a picture drawn in tone again kept its colors mark: $REPLY (${(kv)bgcolors})"; exit 1 }
+tune= tpick= bgcw=0 out=
+(
+  __tt_pv_draw() { : }
+  __tt_pv_bg_close() { : }
+  __tt_cli() {
+    print -r -- "$*" > $bgd/cli.log
+    print -l "# image safebooru_2 1/1" "# picture safebooru_2 kagami.5e5e5e5e kagami.5e5e5e5e@fill-42.png 0.1 -" "# colors safebooru_2 original" \
+      "background-image = kagami.5e5e5e5e@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.1" \
+      "config-file = ?kagami.5e5e5e5e.tune.conf" "config-file = ?kagami.5e5e5e5e.off.conf" > $bgd/kagami.conf
+    print "Background · kagami safebooru_2 in its own colors"
+  }
+  print -l "# image safebooru_2 1/1" "# picture safebooru_2 kagami.1a2b3c4d kagami.1a2b3c4d@fill-42.png 0.2 -" \
+    "background-image = kagami.1a2b3c4d@fill-42.png" "background-image-fit = cover" "background-image-opacity = 0.2" \
+    "config-file = ?kagami.1a2b3c4d.tune.conf" "config-file = ?kagami.1a2b3c4d.off.conf" > $bgd/kagami.conf
+  bgsrc=() bgcolors=() bgedit=() bgview=() bgswap=() tsnaps=()
+  bgcw=8 color=0 msgt=0 help=0 pick= conf=0 flt=
+  __tt_pv_tune_open kagami
+  tf=4
+  __tt_pv_bg_recolor > /dev/null
+  REPLY=; __tt_bg_coloring $tpick
+  [[ "$(<$bgd/cli.log)" == "image kagami original safebooru_2" && $REPLY == original && $tf == 4 && $tune == kagami && $bgsrc[kagami] == *5e5e5e5e* ]] ||
+    { print -u2 "the Colors row did not draw the picture again through the CLI: $(<$bgd/cli.log) coloring=$REPLY tf=$tf tune=$tune src=$bgsrc[kagami]"; exit 1 }
+) || exit 1
+tune= tpick= bgcw=0 out=
 proj=$XDG_CONFIG_HOME/proj
 mkdir -p $proj/sub/deep $proj-sibling
 ln -s $proj/sub $XDG_CONFIG_HOME/link

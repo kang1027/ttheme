@@ -3,13 +3,14 @@ import { dirname } from 'node:path'
 import { isMainThread, parentPort, Worker } from 'node:worker_threads'
 import {
   backgroundsDir,
+  type Coloring,
   type Colors,
   type Framing,
-  type Hue,
   type Inked,
   imageKey,
   inked,
   installBackdrop,
+  type Paint,
   type Picture,
   rackOf,
   type Tone,
@@ -56,7 +57,8 @@ interface Show {
   colors: Colors
   tone: Tone
   blur: number
-  tune?: Framing
+  coloring: Coloring
+  tune?: Partial<Framing>
 }
 
 interface Backdrop {
@@ -70,6 +72,7 @@ interface Backdrop {
   width: number
   height: number
   blur: number
+  coloring: Coloring
   tune?: Tune
   aligns?: boolean
   user?: string
@@ -78,6 +81,7 @@ interface Backdrop {
 export interface Shown {
   clear: number
   fill: number
+  opacity: number
 }
 
 interface Redraw {
@@ -86,7 +90,7 @@ interface Redraw {
   user: string
   name: string
   key: string
-  hue: Hue
+  paint: Paint
   blur: number
   aligns: boolean
 }
@@ -119,17 +123,26 @@ let held: { from: string; clear: number; inked: Inked } | undefined
 
 async function work(task: Task): Promise<number | Look | Picture | Shown | null> {
   if (task.job === 'redraw') {
-    return redrawOne(task.home, task.name, task.key, task.hue, task.blur, task.aligns, task.user)
+    return redrawOne(task.home, task.name, task.key, task.paint, task.blur, task.aligns, task.user)
   }
   if (task.job === 'show') {
     if (held?.from !== task.from) {
       const image = decodeImage(new Uint8Array(readFileSync(task.from)), MAX_PIXELS)
       held = { from: task.from, clear: transparency(image), inked: inked(image) }
     }
-    const { image, fill } = tryOn(held.inked, task.colors, task.tone, task.width, task.height, task.blur, task.tune)
+    const { image, fill, opacity } = tryOn(
+      held.inked,
+      task.colors,
+      task.tone,
+      task.width,
+      task.height,
+      task.blur,
+      task.tune,
+      task.coloring,
+    )
     mkdirSync(dirname(task.to), { recursive: true })
     writeFileSync(task.to, encodePng(image))
-    return { clear: held.clear, fill }
+    return { clear: held.clear, fill, opacity }
   }
   const image = decodeImage(new Uint8Array(readFileSync(task.from)), MAX_PIXELS)
   if (task.job === 'backdrop') {
@@ -145,6 +158,7 @@ async function work(task: Task): Promise<number | Look | Picture | Shown | null>
       },
       task,
       task.blur,
+      task.coloring,
     )
     const picture = task.tune && rackOf(task.home, task.colors.name).find((p) => p.key === imageKey(task.origin))
     if (task.tune && picture) {

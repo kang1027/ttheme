@@ -23,7 +23,7 @@ import {
   sourceLabel,
   takeInbound,
 } from './attach.ts'
-import { backdropTone, fillSize, origins, type Tone, type Tune } from './backdrop.ts'
+import { backdropTone, type Coloring, fillSize, origins, type Tone, type Tune } from './backdrop.ts'
 import {
   BLOCKS,
   blockSet,
@@ -106,11 +106,11 @@ import {
 } from './find-screen.ts'
 import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
 import { aligns as alignsFor, configHome, readInstalled, refreshPictures } from './palettes.ts'
-import { type Look, Renderer } from './render.ts'
+import { type Look, Renderer, type Shown } from './render.ts'
 import { SCENES } from './scenes.ts'
 import { CLEAR, cropsInBands } from './terminal.ts'
 import { POSITIONS } from './theme.ts'
-import { blurOf, settingDefault, withSetting } from './wiring.ts'
+import { blurOf, coloringFor, settingDefault, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
 const SETTINGS: Setting[] = [
@@ -465,7 +465,7 @@ class Finder {
   private readonly crediting = new Map<number, Promise<void>>()
   private thumbQueue: Pick[] = []
   private thumbing = 0
-  private readonly clarity = new Map<string, { clear: number; fill: number }>()
+  private readonly clarity = new Map<string, Shown>()
   private readonly tunedFiles: string[] = []
   private presenting = false
   private again = false
@@ -509,6 +509,7 @@ class Finder {
   private readonly catalog: Manifest
   private readonly entry: PaletteEntry
   private readonly blurring: number
+  private readonly coloring: Coloring
   private readonly start: Start | undefined
 
   constructor(home: string, catalog: Manifest, entry: PaletteEntry, tag: string, start?: Start) {
@@ -518,6 +519,7 @@ class Finder {
     this.entry = entry
     this.tone = backdropTone(entry, entry.signatureSlots)
     this.blurring = blurOf(home)
+    this.coloring = coloringFor(home)
     const untuned: Tuning = { size: 'fill', at: TOP_RIGHT, opacity: this.tone.opacity }
     this.view = {
       palette: entry.name,
@@ -2689,14 +2691,18 @@ class Finder {
     }
   }
 
-  private async render(current: Current, using: 'plain' | 'cut'): Promise<{ clear: number; path: string }> {
+  private async render(
+    current: Current,
+    using: 'plain' | 'cut',
+  ): Promise<{ clear: number; path: string; opacity: number; touched: boolean }> {
     const W = this.cols * this.cell.w
     const H = this.rows * this.cell.h
     const width = Math.min(W, TRY_WIDTH)
     const height = Math.max(1, Math.round((H * width) / W))
     const tune = { ...this.view.tune }
     const tuned = !sameTuning(tune, this.view.untuned)
-    const mark = tuned ? `-${tune.size}-${tune.at}-${Math.round(tune.opacity * 100)}` : ''
+    const touched = tune.opacity !== this.view.untuned.opacity
+    const mark = tuned ? `-${tune.size}-${tune.at}${touched ? `-${Math.round(tune.opacity * 100)}` : ''}` : ''
     const path = join(
       this.scratch,
       `${current.site.key}-${current.id}${using === 'cut' ? 'c' : ''}-${width}x${height}${mark}.png`,
@@ -2705,7 +2711,7 @@ class Finder {
     const known = this.clarity.get(key)
     if (known && existsSync(path)) {
       current.fill = known.fill
-      return { clear: known.clear, path }
+      return { clear: known.clear, path, opacity: known.opacity, touched }
     }
     const made = await this.renders.run({
       job: 'show',
@@ -2716,14 +2722,15 @@ class Finder {
       colors: this.entry,
       tone: this.tone,
       blur: (this.blurring * width) / fillSize(W, H).width,
-      ...(tuned ? { tune } : {}),
+      coloring: this.coloring,
+      ...(tuned ? { tune: { size: tune.size, at: tune.at, ...(touched ? { opacity: tune.opacity } : {}) } } : {}),
     })
     this.clarity.set(key, made)
     current.fill = made.fill
     if (tuned) {
       this.keepTuned(path)
     }
-    return { clear: made.clear, path }
+    return { clear: made.clear, path, opacity: made.opacity, touched }
   }
 
   private keepTuned(path: string): void {
@@ -2743,9 +2750,14 @@ class Finder {
       return
     }
     const using = current.using
-    const { clear, path } = await this.render(current, using)
+    const asked = this.view.tune.opacity
+    const { clear, path, opacity, touched } = await this.render(current, using)
     if (this.current !== current || current.using !== using) {
       return
+    }
+    if (!touched && this.view.tune.opacity === asked) {
+      this.view.untuned.opacity = opacity
+      this.view.tune.opacity = opacity
     }
     if (this.view.tuning && current.fill) {
       this.view.tuning.fill = current.fill
@@ -2817,6 +2829,7 @@ class Finder {
         width: this.cols * this.cell.w,
         height: this.rows * this.cell.h,
         blur: this.blurring,
+        coloring: this.coloring,
         ...(tune ? { tune, aligns: alignsFor(readInstalled(this.home).terminals), user: homedir() } : {}),
       })
       this.keep<string>(current.site, 'owners.json')[current.id] = post?.owner ?? ''
