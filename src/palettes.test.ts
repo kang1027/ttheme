@@ -11,12 +11,14 @@ import {
   type ItermDefaults,
   itermProfilesPath,
   pointItermDefault,
+  readInstalled,
   resolve,
   startupPalette,
   sync,
   warpSettings,
   warpThemes,
   withItermBase,
+  writeInstalled,
   wtFragmentPath,
 } from './palettes.ts'
 
@@ -392,4 +394,22 @@ test("a market's palette gets theme files and a startup line with -- for the @ a
   assert.ok(existsSync(join(home, 'kitty', 'themes', 'ttheme-kec--dust--rei.conf')))
   assert.match(readFileSync(join(home, 'ghostty', 'config'), 'utf8'), /^theme = ttheme-kec--dust--rei$/m)
   assert.match(readFileSync(join(home, 'ttheme', 'palettes.zsh'), 'utf8'), /TTHEME_ORDER=\(kec@dust\/rei\)/)
+})
+
+test('installed.json keeps every field it holds through a write and a read', () => {
+  const home = fixture()
+  const state: Required<Installed> = {
+    terminals: ['ghostty', 'iterm2', 'windows-terminal'],
+    author: 'kec',
+    startup: 'gojo',
+    off: true,
+    itermBase: 'A1B2C3',
+    wtHome: '/mnt/c/Users/kec/AppData/Local',
+    wtProfile: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}',
+    markets: ['official', 'alice/pastel#v1'],
+    updates: { 'alice/pastel#v1': true, official: false },
+    palettes: ['gojo', 'alice@pastel/dusk'],
+  }
+  writeInstalled(home, state)
+  assert.deepEqual(readInstalled(home), state)
 })

@@ -83,7 +83,12 @@ open_iterm() {
   defaults write $SUITE PromptOnQuit -bool false
   defaults write $SUITE DisableAppNap -bool true
   defaults write $SUITE NoSyncVariablesToReport -string allow:id,allow:tab.id,allow:tab.window.id,allow:profileName,allow:user.ttheme_bg
-  (( legacy )) && defaults write $SUITE UseMetal -bool false
+  if (( legacy )); then
+    defaults write $SUITE UseMetal -bool false
+  else
+    defaults write $SUITE disableMetalWhenUnplugged -bool false
+    defaults write $SUITE disableMetalInLowPowerMode -bool false
+  fi
   if (( trust )); then
     defaults write $SUITE PreventEscapeSequenceFromChangingProfile -bool false
     local key

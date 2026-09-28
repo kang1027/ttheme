@@ -9,14 +9,6 @@ __tt_ghostty_shown() {
   REPLY=${${REPLY/--/@}/--//}
 }
 
-__tt_put() {
-  local f=$1
-  shift
-  print -rl -- "$@" > $f.$$ && mv -f -- $f.$$ $f && return 0
-  rm -f -- $f.$$
-  return 1
-}
-
 __tt_bg_saved() {
   local REPLY
   (( ${TTHEME_TERMINALS[(Ie)iterm2]} )) && __tt_cli image $1 tuned
@@ -26,6 +18,8 @@ __tt_bg_saved() {
 }
 
 __tt_bg_refresh() { : }
+
+__tt_bg_lasting() { : }
 
 __tt_bg_aligns() { (( ! ${TTHEME_TERMINALS[(Ie)iterm2]} )) }
 
@@ -668,7 +662,7 @@ __tt_pv_bg_strip() {
     __tt_bg_send $fill
     id=$REPLY
     want="$id $(( r0 + 2 )) $(( x + 1 )) $tc $tr"
-    [[ ${bgthumb[$slot]} == "$want" ]] && continue
+    __tt_bg_lasting && [[ ${bgthumb[$slot]} == "$want" ]] && continue
     if [[ -n ${bgthumb[$slot]} ]]; then
       printf -v cmd '\e_Ga=d,d=i,i=%d,p=%d,q=2\e\\' ${${=bgthumb[$slot]}[1]} $(( 700000 + slot ))
       buf+=$cmd

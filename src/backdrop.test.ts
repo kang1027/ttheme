@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -341,6 +342,40 @@ test('frameAt places a picture exactly as the shell layer does', () => {
   assert.equal(box([1000, 1500, 2560, 1550, 130, 3, false, 42]), '1343 2015 1217 -71')
   assert.equal(box([1600, 900, 2560, 1550, 150, 9, false, 30]), '3840 2160 -640 0')
   assert.equal(box([800, 1200, 800, 1200, 45, 5, false]), '360 540 220 330')
+  const layer = readFileSync(join(import.meta.dirname, '..', 'shell', 'adapters', '_bg.zsh'), 'utf8')
+  const from = layer.indexOf('__tt_bg_frame() {')
+  const frame = layer.slice(from, layer.indexOf('\n}\n', from) + 2)
+  const cases: [number, number, number, number, number, number, boolean, number][] = []
+  for (const [iw, ih] of [
+    [1000, 1500],
+    [1600, 900],
+    [2056, 2560],
+    [800, 1200],
+  ] as const) {
+    for (const [W, H] of [
+      [1000, 1500],
+      [2560, 1550],
+      [1600, 1000],
+      [800, 1200],
+    ] as const) {
+      for (const size of [45, 60, 100, 130, 150, 199]) {
+        for (const at of [1, 5, 9]) {
+          for (const focus of [-1, 42, 62]) {
+            cases.push([iw, ih, W, H, size, at, true, focus], [iw, ih, W, H, size, at, false, focus])
+          }
+        }
+      }
+    }
+  }
+  const shell = spawnSync(
+    'zsh',
+    ['-f', '-c', `${frame}\nwhile read -r a; do __tt_bg_frame \${=a}; print -r -- $REPLY; done`],
+    {
+      input: `${cases.map(([iw, ih, W, H, size, at, cover, focus]) => `${iw} ${ih} ${W} ${H} ${size} ${at} ${cover ? 'cover' : 'contain'} ${focus}`).join('\n')}\n`,
+      encoding: 'utf8',
+    },
+  )
+  assert.deepEqual(shell.stdout.trimEnd().split('\n'), cases.map(box))
 })
 
 test('a shared framing written for a picture reads back the same, and the default writes nothing', () => {

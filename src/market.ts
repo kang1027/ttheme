@@ -4,7 +4,7 @@ import { available, readCatalog, readKept, search } from './catalog.ts'
 import { adopt } from './craft.ts'
 import { listed, type Manifest } from './emit/manifest.ts'
 import { addSource, localLine } from './markets.ts'
-import { colorless, paletteOsc, queryTerminalColors, restoreOsc } from './osc.ts'
+import { colorless } from './osc.ts'
 import { CODE, readLocal } from './own.ts'
 import { PalettePrompt, type PickerScope, promptFx } from './palette-prompt.ts'
 import {
@@ -23,6 +23,7 @@ import { pending } from './pending.ts'
 import { bringPictures, since } from './pictures.ts'
 import { refreshLine, refreshMarket } from './refresh.ts'
 import { installedPath, isLocal, marketSources, OFFICIAL, shownSource } from './sources.ts'
+import { livePaint } from './terminal.ts'
 import { alphabetical, marketOf } from './theme.ts'
 import { type InitTerminal, TERMINAL_NAMES } from './wiring.ts'
 
@@ -272,8 +273,8 @@ export async function pickPalettes(
   required = false,
 ): Promise<string[] | undefined> {
   const entries = process.env.TTHEME_SORT === 'series' ? catalog.palettes : alphabetical(catalog.palettes)
-  const live = process.stdout.isTTY === true && !colorless()
-  const saved = live ? await queryTerminalColors() : new Map<string, string>()
+  const live = livePaint(process.env, process.stdout.isTTY === true)
+  const saved = live ? await live.saved() : new Map<string, string>()
   const prompt = new PalettePrompt({
     entries,
     scope,
@@ -281,10 +282,12 @@ export async function pickPalettes(
     required,
     color: !colorless(),
     fx: promptFx(process.env.TTHEME_FX),
-    onFocus: live ? (entry) => process.stdout.write(paletteOsc(entry)) : undefined,
+    onFocus: live ? (entry) => process.stdout.write(live.paint(entry)) : undefined,
   })
   const done = await prompt.prompt()
-  process.stdout.write(restoreOsc(saved))
+  if (live) {
+    process.stdout.write(live.restore(saved))
+  }
   if (p.isCancel(done)) {
     return undefined
   }

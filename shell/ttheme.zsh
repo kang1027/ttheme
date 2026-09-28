@@ -3,6 +3,7 @@ typeset -g TTHEME_HOME=${${(%):-%x}:A:h} TTHEME_PALETTES_AT=""
 zmodload -F zsh/stat b:zstat 2>/dev/null
 
 __tt_palettes_load() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   local -a at
   unset TTHEME_PALETTE TTHEME_GROUP TTHEME_CATALOG TTHEME_NATIVE TTHEME_SRC
   source $TTHEME_HOME/palettes.zsh || return 1
@@ -11,6 +12,7 @@ __tt_palettes_load() {
 }
 
 __tt_fresh() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   local -a at
   local was=$TTHEME_STARTUP
   if ! zstat -F %s.%N -A at +mtime -- $TTHEME_HOME/palettes.zsh 2>/dev/null; then
@@ -64,6 +66,7 @@ typeset -g TTHEME_PIN="" TTHEME_PIN_SPEC="" TTHEME_BASE_SPEC=""
 __tt_tilde() { REPLY=${1/#$HOME\//\~/} }
 
 __tt_pins_load() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   setopt localoptions extendedglob
   local raw="" line key name
   [[ -r $TTHEME_PINS_FILE ]] && raw="$(<$TTHEME_PINS_FILE)"
@@ -93,27 +96,30 @@ __tt_pins_load
 
 typeset -g TTHEME_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/ttheme
 
-if [[ $TERM_PROGRAM == WarpTerminal ]]; then
-  typeset -g TTHEME_ADAPTER=warp
-elif [[ -n $GHOSTTY_RESOURCES_DIR || $TERM_PROGRAM == ghostty ]]; then
-  typeset -g TTHEME_ADAPTER=ghostty
-elif [[ -n $KITTY_WINDOW_ID ]]; then
-  typeset -g TTHEME_ADAPTER=kitty
-elif [[ -n $WEZTERM_PANE ]]; then
-  typeset -g TTHEME_ADAPTER=wezterm
-elif [[ -n $ALACRITTY_WINDOW_ID ]]; then
-  typeset -g TTHEME_ADAPTER=alacritty
-elif [[ -n $ITERM_SESSION_ID || $TERM_PROGRAM == iTerm.app ]]; then
-  typeset -g TTHEME_ADAPTER=iterm2
-elif [[ $TERM_PROGRAM == Apple_Terminal ]]; then
-  typeset -g TTHEME_ADAPTER=terminal-app
-elif [[ -n $WT_SESSION && -z $TERM_PROGRAM ]]; then
-  typeset -g TTHEME_ADAPTER=windows-terminal
-elif [[ $TERM == foot* ]]; then
-  typeset -g TTHEME_ADAPTER=foot
-else
-  typeset -g TTHEME_ADAPTER=unknown
-fi
+() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  if [[ $TERM_PROGRAM == WarpTerminal ]]; then
+    typeset -g TTHEME_ADAPTER=warp
+  elif [[ -n $GHOSTTY_RESOURCES_DIR || $TERM_PROGRAM == ghostty ]]; then
+    typeset -g TTHEME_ADAPTER=ghostty
+  elif [[ -n $KITTY_WINDOW_ID ]]; then
+    typeset -g TTHEME_ADAPTER=kitty
+  elif [[ -n $WEZTERM_PANE ]]; then
+    typeset -g TTHEME_ADAPTER=wezterm
+  elif [[ -n $ALACRITTY_WINDOW_ID ]]; then
+    typeset -g TTHEME_ADAPTER=alacritty
+  elif [[ -n $ITERM_SESSION_ID || $TERM_PROGRAM == iTerm.app ]]; then
+    typeset -g TTHEME_ADAPTER=iterm2
+  elif [[ $TERM_PROGRAM == Apple_Terminal ]]; then
+    typeset -g TTHEME_ADAPTER=terminal-app
+  elif [[ -n $WT_SESSION && -z $TERM_PROGRAM ]]; then
+    typeset -g TTHEME_ADAPTER=windows-terminal
+  elif [[ $TERM == foot* ]]; then
+    typeset -g TTHEME_ADAPTER=foot
+  else
+    typeset -g TTHEME_ADAPTER=unknown
+  fi
+}
 
 typeset -g TTHEME_GHOSTTY_PID="" TTHEME_TMUX=0 TTHEME_MUXED=0
 
@@ -151,6 +157,18 @@ __tt_active() {
 typeset -g TTHEME_HEARD=""
 typeset -gi TTHEME_RECHECK=0 TTHEME_FOCUS=0
 
+__tt_put() {
+  local f=${1:A}
+  shift
+  if zmodload -F zsh/files b:zf_mv 2>/dev/null; then
+    print -rl -- "$@" >| $f.$$ && zf_mv -f -- $f.$$ $f && return 0
+  else
+    print -rl -- "$@" >| $f.$$ && command mv -f -- $f.$$ $f && return 0
+  fi
+  command rm -f -- $f.$$ 2>/dev/null
+  return 1
+}
+
 __tt_recall() {
   local f=$TTHEME_STATE_DIR/colors.$TTHEME_ADAPTER line
   REPLY=""
@@ -165,7 +183,7 @@ __tt_remember() {
   [[ -n $1 && -z $TTHEME_PAINTED ]] && (( ! TTHEME_TMUX )) || return 0
   [[ -r $f && "$(<$f)" == "$line" ]] && return 0
   [[ -d $TTHEME_STATE_DIR ]] || mkdir -p $TTHEME_STATE_DIR 2>/dev/null
-  print -r -- "$line" 2>/dev/null > $f
+  __tt_put $f "$line" 2>/dev/null
 }
 
 __tt_listen() {
@@ -304,6 +322,7 @@ __tt_dir_sync() {
 }
 
 __tt_chpwd() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   __tt_pins_load
   __tt_dir_sync
 }
@@ -316,11 +335,17 @@ __tt_sync() {
   __tt_shown "$REPLY" && __tt_reload
 }
 
-__tt_precmd() { __tt_sync }
+__tt_precmd() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  __tt_sync
+}
 
 __tt_focus_on() { printf '\e[?1004h' }
 
-__tt_preexec() { printf '\e[?1004l' }
+__tt_preexec() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  printf '\e[?1004l'
+}
 
 __tt_rewear() {
   local REPLY
@@ -332,6 +357,7 @@ __tt_rewear() {
 }
 
 __tt_focus() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   __tt_fresh
   if (( TTHEME_TMUX )); then
     __tt_rewear
@@ -340,17 +366,25 @@ __tt_focus() {
   fi
 }
 
-__tt_mux() { [[ ${${(z)3}[1]:t} == tmux ]] && TTHEME_MUXED=1 }
+__tt_mux() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  [[ ${${(z)3}[1]:t} == tmux ]] && TTHEME_MUXED=1
+}
 
 __tt_unmux() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   (( TTHEME_MUXED )) || return 0
   __tt_rewear force
   TTHEME_MUXED=0
 }
 
-__tt_blur() { : }
+__tt_blur() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  :
+}
 
 __tt_line_init() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   (( TTHEME_RECHECK )) && __tt_recheck
   __tt_typed
   (( TTHEME_FOCUS )) && __tt_focus_on
@@ -385,7 +419,7 @@ __tt_pins_write() {
     return 0
   fi
   mkdir -p ${TTHEME_PINS_FILE:h} || return 1
-  print -rl -- "${lines[@]}" > $TTHEME_PINS_FILE || return 1
+  __tt_put $TTHEME_PINS_FILE "${lines[@]}" || return 1
   TTHEME_PINS_RAW="$(<$TTHEME_PINS_FILE)"
 }
 
@@ -577,7 +611,7 @@ __tt_config() {
   local blur
   if [[ ! -e $TTHEME_CONFIG ]]; then
     mkdir -p ${TTHEME_CONFIG:h} || return 1
-    print -r -- "$TTHEME_CONFIG_TEMPLATE" > $TTHEME_CONFIG
+    __tt_put $TTHEME_CONFIG "$TTHEME_CONFIG_TEMPLATE"
   fi
   blur=${(M)${(@f)"$(<$TTHEME_CONFIG)"}:#': ${TTHEME_BG_BLUR:='*}
   ${=${VISUAL:-${EDITOR:-vi}}} $TTHEME_CONFIG || return
@@ -607,7 +641,7 @@ __tt_config_write() {
   local -i i
   if [[ ! -e $TTHEME_CONFIG ]]; then
     mkdir -p ${TTHEME_CONFIG:h} 2>/dev/null || return 1
-    print -r -- "$TTHEME_CONFIG_TEMPLATE" 2>/dev/null > $TTHEME_CONFIG || return 1
+    __tt_put $TTHEME_CONFIG "$TTHEME_CONFIG_TEMPLATE" 2>/dev/null || return 1
   fi
   [[ -r $TTHEME_CONFIG && -w $TTHEME_CONFIG ]] || return 1
   for line in "${(@f)$(<$TTHEME_CONFIG)}"; do
@@ -631,7 +665,7 @@ __tt_config_write() {
     __tt_config_line $name ${want[$name]}
     out+=("" "$doc" "$REPLY")
   done
-  print -rl -- "${out[@]}" 2>/dev/null > $TTHEME_CONFIG
+  __tt_put $TTHEME_CONFIG "${out[@]}" 2>/dev/null
 }
 
 __tt_resolve() {
@@ -979,7 +1013,7 @@ __tt_pv_row() {
 __tt_pv_bg_title() {
   local by=${bgby[$tpick]} ref=${bgfrom[$tpick]} url=${bgurl[$tpick]} mark="" sgr=""
   local -i room=$1
-  [[ -n $ref && $url == http(s|)://* && $TTHEME_ADAPTER == (ghostty|kitty|wezterm|alacritty|iterm2|windows-terminal|foot) ]] && mark="⧉ "
+  [[ -n $ref && $url == http(s|)://* ]] && (( ${TTHEME_LINKS[(Ie)$TTHEME_ADAPTER]} )) && mark="⧉ "
   REPLY=Background${by:+ · $by}${ref:+ · $mark$ref}$2
   (( ${#REPLY} > room )) && REPLY=Background${by:+ · $by}
   (( ${#REPLY} > room )) && REPLY=Background
@@ -1897,7 +1931,7 @@ __tt_pv_handle() {
 }
 
 __tt_preview() {
-  emulate -L zsh
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   local mode=$1
   if [[ ! -t 0 || ! -t 1 ]]; then
     print -u2 "ttheme ${mode:-preview}: needs a terminal"
@@ -1939,8 +1973,8 @@ __tt_preview() {
   {
     tty=$(stty -g 2>/dev/null && stty -echo -icanon min 1 time 0 2>/dev/null)
     TTHEME_RAW=$(( ${#tty} > 0 ))
-    printf '\e[?2026h\e[?1049h\e[?7l\e[?25l'
     __tt_pv_bg_open
+    printf '\e[?2026h\e[?1049h\e[?7l\e[?25l'
     while :; do
       printf '\e[?2026h'
       if (( tick )); then
@@ -2000,6 +2034,7 @@ __tt_preview() {
 }
 
 ttheme() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   if (( $# > 1 && ${${argv[2,-1]}[(I)(-h|--help)]} )); then
     __tt_verb_help $1
     return
@@ -2051,8 +2086,9 @@ ttheme() {
   esac
 }
 
-if (( $+functions[compdef] )); then
+if (( ${+functions[compdef]} )); then
   __tt_complete() {
+    emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
     local -a reply
     if (( CURRENT == 2 )); then
       compadd -- $TTHEME_VERBS help
@@ -2078,7 +2114,9 @@ if (( $+functions[compdef] )); then
   compdef __tt_complete ttheme
 fi
 
-if __tt_active; then
+() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  __tt_active || return 0
   [[ -n $TMUX ]] && __tt_tmux
   () {
     local REPLY
@@ -2111,9 +2149,10 @@ if __tt_active; then
     __tt_sync
   fi
   __tt_announce
-fi
+}
 
 () {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   local f
   for f in $TTHEME_HOME/ttheme.zsh $TTHEME_HOME/palettes.zsh $TTHEME_HOME/adapters/_osc.zsh $TTHEME_HOME/adapters/_bg.zsh $TTHEME_HOME/adapters/$TTHEME_ADAPTER.zsh; do
     [[ -r $f && ! $f.zwc -nt $f ]] || continue

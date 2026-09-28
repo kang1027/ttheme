@@ -1,24 +1,15 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import * as p from '@clack/prompts'
 import pkg from '../package.json' with { type: 'json' }
 import { build } from './build.ts'
 import { available, readCatalog, writeCatalog } from './catalog.ts'
-import { editUserFile } from './edits.ts'
+import { editUserFile, writeAtomic } from './edits.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
 import { pickPalettes } from './market.ts'
-import { colorless, paletteOsc } from './osc.ts'
+import { paletteOsc } from './osc.ts'
 import {
   alacrittyConfig,
   configHome as configDir,
@@ -39,10 +30,10 @@ import {
 } from './palettes.ts'
 import { redrawPictures } from './redraw.ts'
 import { marketsOf, OFFICIAL } from './sources.ts'
+import { detectTerminal, livePaint, TRAITS } from './terminal.ts'
 import { marketOf } from './theme.ts'
 import {
   configFile,
-  detectTerminal,
   INIT_TERMINALS,
   type InitTerminal,
   TERMINAL_NAMES,
@@ -173,16 +164,10 @@ export function keptStartup(state: Installed, palettes: string[]): string | unde
 export function planAgain(state: Installed, opts: InitOptions, paths: InitPaths): InitPlan {
   const plan = planInit(opts, paths)
   const startup = keptStartup(state, opts.palettes)
-  const { author, markets, updates } = state
+  const { terminals, palettes, off, wtHome, wtProfile, startup: was, ...kept } = state
   return {
     ...plan,
-    installed: {
-      ...plan.installed,
-      ...(author ? { author } : {}),
-      ...(startup ? { startup } : {}),
-      ...(markets ? { markets } : {}),
-      ...(updates ? { updates } : {}),
-    },
+    installed: { ...kept, ...plan.installed, ...(startup ? { startup } : {}) },
   }
 }
 
@@ -240,8 +225,7 @@ export function applyInit(plan: InitPlan, prefs: ItermDefaults = itermDefaults()
       chmodSync(c.to, 0o755)
     }
   }
-  mkdirSync(dirname(plan.settings.file), { recursive: true })
-  writeFileSync(plan.settings.file, plan.settings.content)
+  writeAtomic(plan.settings.file, plan.settings.content)
   const configHome = dirname(dirname(plan.settings.file))
   const base = keptBase(configHome)
   const installed = withItermBase(base ? { ...plan.installed, itermBase: base } : plan.installed, prefs)
@@ -344,9 +328,7 @@ function seriesOf(catalog: Manifest, names: string[]): string[] {
 
 function paintStartup(catalog: Manifest, installed: Installed): boolean {
   const startup = catalog.palettes.find((e) => e.name === worn(installed))
-  const live =
-    process.stdout.isTTY === true && !colorless() && !process.env.TMUX && detectTerminal(process.env) !== 'warp'
-  if (!startup || !live) {
+  if (!startup || !livePaint(process.env, process.stdout.isTTY === true)) {
     return false
   }
   process.stdout.write(paletteOsc(startup))
@@ -545,7 +527,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     throw new Cancelled()
   }
   const first = (existing && keptStartup(existing, palettes)) ?? palettes[0]
-  const choose = palettes.length > 1 && detectTerminal(process.env) !== 'warp'
+  const choose = palettes.length > 1 && TRAITS[detectTerminal(process.env)].paints
   const wear = accepted(
     await p.confirm({
       message: choose ? 'Pick a default palette in ttheme preview once installed?' : `Wear ${first} in every tab?`,

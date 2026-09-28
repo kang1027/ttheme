@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { LINK, linked } from './ansi.ts'
@@ -39,13 +39,15 @@ import {
   uncredited,
 } from './booru.ts'
 import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
+import { writeAtomic } from './edits.ts'
 import type { PaletteEntry } from './emit/manifest.ts'
 import { colorless } from './osc.ts'
 import { refreshProfiles } from './palettes.ts'
 import { pending, progress } from './pending.ts'
 import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
+import { linkable } from './terminal.ts'
 import type { SharedPicture } from './theme.ts'
-import { blurOf, linkable } from './wiring.ts'
+import { blurOf } from './wiring.ts'
 
 const TIMEOUT = 90_000
 
@@ -130,8 +132,7 @@ async function install(
     step('Downloading')
     const from = fileOf(site, post, version)
     bytes = await fetchBytes(from.site, from.url, signal, (got, size) => step('Downloading', progress(got, size)))
-    mkdirSync(dirname(orig), { recursive: true })
-    writeFileSync(orig, bytes)
+    writeAtomic(orig, bytes)
   }
   let image = decodeImage(bytes, MAX_PIXELS)
   let cut = false

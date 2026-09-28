@@ -5,7 +5,7 @@ import { available, catalogPath, parseCatalog, readCachedIndex, readCatalog, rea
 import { listed, type PaletteEntry } from './emit/manifest.ts'
 import { reload } from './market.ts'
 import { dropCache, findMarkets, idOf, keptNote, lastUpdate, withMarkets } from './markets.ts'
-import { colorless, paletteOsc, queryTerminalColors, restoreOsc } from './osc.ts'
+import { colorless } from './osc.ts'
 import { type MarketFile, marketFileProblem, marketFiles, readMarketDir, readOwnText } from './own.ts'
 import { promptFx } from './palette-prompt.ts'
 import { commit, configHome, forget, type Installed, readInstalled, worn, writeInstalled } from './palettes.ts'
@@ -38,6 +38,7 @@ import {
   repoOf,
   shownSource,
 } from './sources.ts'
+import { livePaint } from './terminal.ts'
 import { alphabetical, marketOf } from './theme.ts'
 
 function marketState(home: string, state: Installed, source: string, tries: Record<string, Tried>): Market {
@@ -270,8 +271,8 @@ export async function runBrowse(): Promise<void> {
   const kept = was.filter((e) => state.palettes.includes(e.name) && !names.has(e.name))
   const fetched = new Map<string, Fetched>()
   const lookups = new AbortController()
-  const live = process.stdout.isTTY === true && !colorless()
-  const saved = live ? await queryTerminalColors() : new Map<string, string>()
+  const live = livePaint(process.env, process.stdout.isTTY === true)
+  const saved = live ? await live.saved() : new Map<string, string>()
   const startup = worn(state)
   const panel = new BrowsePanel({
     markets,
@@ -284,10 +285,12 @@ export async function runBrowse(): Promise<void> {
     ...(process.env.TTHEME_SORT === 'series' ? {} : { order: alphabetical }),
     color: !colorless(),
     fx: promptFx(process.env.TTHEME_FX),
-    ...(live ? { onFocus: (entry: PaletteEntry) => process.stdout.write(paletteOsc(entry)) } : {}),
+    ...(live ? { onFocus: (entry: PaletteEntry) => process.stdout.write(live.paint(entry)) } : {}),
   })
   const done = await panel.prompt()
-  process.stdout.write(restoreOsc(saved))
+  if (live) {
+    process.stdout.write(live.restore(saved))
+  }
   lookups.abort()
   await panel.idle()
   const result = panel.result()

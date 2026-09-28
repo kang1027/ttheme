@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { PaletteEntry } from './emit/manifest.ts'
-import { answered, COLOR_QUERY, paletteOsc, parseOscColors, restoreOsc } from './osc.ts'
+import { answered, colorQuery, paletteOsc, parseOscColors, restoreOsc } from './osc.ts'
 
 const miku: PaletteEntry = {
   name: 'miku',
@@ -44,8 +44,9 @@ test('restoreOsc replays captured colors as set sequences', () => {
 })
 
 test('the color query ends at a DSR, so a terminal that leaves OSC 17 unanswered does not hold it to its deadline', () => {
-  assert.ok(COLOR_QUERY.endsWith('\x1b[5n'))
-  const codes = COLOR_QUERY.split('\x1b').flatMap((part) => part.match(/^\](\d+(?:;\d+)?);\?/)?.[1] ?? [])
+  const query = colorQuery()
+  assert.ok(query.endsWith('\x1b[5n'))
+  const codes = query.split('\x1b').flatMap((part) => part.match(/^\](\d+(?:;\d+)?);\?/)?.[1] ?? [])
   assert.equal(codes.length, 20)
   const ghostty = codes
     .filter((code) => code !== '17')

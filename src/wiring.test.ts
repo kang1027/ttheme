@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -9,11 +9,12 @@ import {
   blurOf,
   configFile,
   configTemplate,
-  detectTerminal,
   ghosttyBlock,
   kittyBlock,
   removeBlock,
   removeLuaBlock,
+  SETTING_NAMES,
+  settingDefault,
   upsertAlacrittyImport,
   upsertBlock,
   upsertLuaBlock,
@@ -39,22 +40,6 @@ test('upsertBlock replaces an existing block and preserves surrounding content',
 test('upsertBlock is idempotent', () => {
   const once = upsertBlock('user content\n', 'a = 1')
   assert.equal(upsertBlock(once, 'a = 1'), once)
-})
-
-test('detectTerminal mirrors the shell adapter detection', () => {
-  assert.equal(detectTerminal({ GHOSTTY_RESOURCES_DIR: '/x' }), 'ghostty')
-  assert.equal(detectTerminal({ TERM_PROGRAM: 'ghostty' }), 'ghostty')
-  assert.equal(detectTerminal({ KITTY_WINDOW_ID: '1' }), 'kitty')
-  assert.equal(detectTerminal({ WEZTERM_PANE: '0' }), 'wezterm')
-  assert.equal(detectTerminal({ ALACRITTY_WINDOW_ID: '2' }), 'alacritty')
-  assert.equal(detectTerminal({ ITERM_SESSION_ID: 'w0' }), 'iterm2')
-  assert.equal(detectTerminal({ TERM_PROGRAM: 'iTerm.app' }), 'iterm2')
-  assert.equal(detectTerminal({ TERM: 'foot-extra' }), 'foot')
-  assert.equal(detectTerminal({ TERM_PROGRAM: 'WarpTerminal', GHOSTTY_RESOURCES_DIR: '/x' }), 'warp')
-  assert.equal(detectTerminal({ WT_SESSION: 'a-b' }), 'windows-terminal')
-  assert.equal(detectTerminal({ TERM_PROGRAM: 'Apple_Terminal' }), 'terminal-app')
-  assert.equal(detectTerminal({ WT_SESSION: 'a-b', TERM_PROGRAM: 'vscode' }), 'unknown')
-  assert.equal(detectTerminal({}), 'unknown')
 })
 
 test('ghosttyBlock routes every new tab through the launcher', () => {
@@ -268,4 +253,14 @@ test('the blur comes from config.zsh itself, commented out meaning the default a
   assert.equal(at(': ${TTHEME_BG_BLUR:="3"}\n'), 3)
   assert.equal(at(': ${TTHEME_BG_BLUR:=40}\n'), 8)
   assert.equal(at(': ${TTHEME_BG_BLUR:=soft}\n'), 0)
+})
+
+test('the shell layer falls back to the same default config.zsh documents for every setting it reads', () => {
+  const layer = readFileSync(join(import.meta.dirname, '..', 'shell', 'ttheme.zsh'), 'utf8')
+  const defaults = [...layer.matchAll(/^: \$\{(TTHEME_\w+):=(.*)\}$/gm)]
+  assert.ok(defaults.length > 0)
+  for (const [, name = '', value] of defaults) {
+    assert.ok(SETTING_NAMES.includes(name), `${name} is not a config.zsh setting`)
+    assert.equal(value, settingDefault(name), name)
+  }
 })

@@ -163,6 +163,8 @@ typing() {
   BUF=""
   zpty -w -n sh $'ttheme preview\r'
   upto '[[ $BUF == *$'"'"'\e[?1049h'"'"'*$'"'"'\e[?2026l'"'"'* ]]' 5 $name || { fail "$name: preview never drew"; return 1 }
+  [[ ${BUF%%$'\e[?2026h'*} == *$'\e[16t'* ]] ||
+    { fail "$name: preview asked for its cell size inside a synchronized update, which WezTerm answers only once the update ends"; return 1 }
   zpty -w -n sh $'\e[C'
   repeat 40; do
     zpty -w -n sh $'\e[B'
@@ -202,6 +204,24 @@ hovering() {
   [[ $session != *$'\e]4;'* ]] || { fail "$name: a preview hover in iTerm2 paints the ANSI colors again — each OSC color is a profile change there that holds its parser, and twenty per hover made every arrow key lag"; return 1 }
 }
 
+hostile() {
+  local name=$1 REPLY
+  home $name off
+  print -rl -- 'autoload -Uz compinit && compinit -u -d $HOME/.zcompdump' "PROMPT='bench> '" \
+    'setopt no_clobber sh_word_split ksh_arrays no_unset warn_create_global glob_subst extended_glob' \
+    'source $XDG_CONFIG_HOME/ttheme/ttheme.zsh' > $WORK/$name/.zshrc
+  measure $name stderr 0
+  start $name
+  upto '[[ $BUF == *TYPED_42* ]] && prompts && (( REPLY >= 2 ))' 5 $name || { fail "$name: no prompt within 5s"; return 1 }
+  step $'ttheme use kita\r' $name
+  step $'cd /\r' $name
+  step $'ttheme next\r' $name
+  zpty -d sh
+  [[ $BUF == *$'\e]11;#'* ]] || { fail "$name: ttheme use painted nothing under the user's options"; return 1 }
+  [[ $BUF != *(parameter not set|file exists|bad pattern|bad output format|bad substitution|bad math|no matches found|created globally|command not found)* ]] ||
+    { fail "$name: the layer broke under options a user's .zshrc sets before it"; return 1 }
+}
+
 check() {
   local name
   home base
@@ -220,7 +240,8 @@ check() {
   done
   typing off
   hovering iterm2
-  print "latency check ok — typeahead and stderr survive the startup queries (base, off, seq, terminal-app), a second tab asks only after its prompt, preview never echoes keys, its idle hint redraws one row, and its hover in iTerm2 leaves the ANSI colors alone"
+  hostile options
+  print "latency check ok — typeahead and stderr survive the startup queries (base, off, seq, terminal-app), a second tab asks only after its prompt, preview never echoes keys, its idle hint redraws one row, its hover in iTerm2 leaves the ANSI colors alone, and a .zshrc's own options break none of it"
 }
 
 bench() {

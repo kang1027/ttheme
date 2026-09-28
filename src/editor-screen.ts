@@ -22,6 +22,7 @@ import {
 } from './palette-editor.ts'
 import type { Colors } from './seeds.ts'
 import { grow, SEED_FIELDS, type Seeds } from './seeds.ts'
+import { CLEAR } from './terminal.ts'
 
 export const MIN_COLS = 80
 export const MIN_ROWS = 24
@@ -277,9 +278,9 @@ const KEYS: [string, string][] = [
   ['Save', 'enter saves · esc cancels, asking first when something changed'],
 ]
 
-function keysPane(p: Paint, width: number): string[] {
+function keysPane(p: Paint, e: PaletteEditor, width: number): string[] {
   const lines = [`  ${p.bold('Keys')}`, '']
-  for (const [name, text] of KEYS) {
+  for (const [name, text] of KEYS.filter(([name]) => name !== 'Pictures' || e.options.find)) {
     wrapText(text, width - 16).forEach((line, i) => {
       lines.push(`  ${p.bold((i === 0 ? name : '').padEnd(11))}  ${line}`)
     })
@@ -386,6 +387,9 @@ function footer(p: Paint, e: PaletteEditor, width: number): string {
     ]
     right = 'esc cancel'
   }
+  if (!e.options.find) {
+    keys = keys.filter(([key]) => key !== 'p')
+  }
   if (e.notice) {
     lead = p.color ? `\x1b[33m${e.notice}\x1b[39m` : e.notice
     keys = []
@@ -423,7 +427,7 @@ export function renderEditor(e: PaletteEditor, cols: number, rows: number, color
   const height = rows - 4
   let body: string[]
   if (e.overlay === 'keys') {
-    body = keysPane(p, cols)
+    body = keysPane(p, e, cols)
   } else if (e.overlay === 'open') {
     body = openPane(p, e, cols, height)
   } else {
@@ -444,8 +448,7 @@ export function renderEditor(e: PaletteEditor, cols: number, rows: number, color
 }
 
 export interface Screen {
-  live: boolean
-  only?: number[]
+  only?: readonly number[]
   color: boolean
 }
 
@@ -463,7 +466,7 @@ export async function runEditor(options: EditorOptions, screen: Screen): Promise
     timer = undefined
     let out = ''
     editor.shown().forEach((hex, slot) => {
-      if (painted[slot] !== hex && (!screen.only || screen.only.includes(slot))) {
+      if (painted[slot] !== hex && screen.only?.includes(slot)) {
         out += slotOsc(slot, hex)
         painted[slot] = hex
       }
@@ -484,7 +487,7 @@ export async function runEditor(options: EditorOptions, screen: Screen): Promise
     if (out) {
       write(`\x1b[?2026h${out}\x1b[0m\x1b[?2026l`)
     }
-    if (screen.live) {
+    if (screen.only) {
       timer ??= setTimeout(paint, 33)
     }
   }
@@ -492,7 +495,7 @@ export async function runEditor(options: EditorOptions, screen: Screen): Promise
   let onResize: (() => void) | undefined
   let away = false
   const enter = () => {
-    write('\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[?2004h\x1b[2J')
+    write(`\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[?2004h${CLEAR}`)
     stdin.setRawMode(true)
     stdin.resume()
   }
@@ -532,7 +535,7 @@ export async function runEditor(options: EditorOptions, screen: Screen): Promise
         cols = stdout.columns || cols
         rows = stdout.rows || rows
         drawn = []
-        write('\x1b[2J')
+        write(CLEAR)
         draw()
       }
       onData = (chunk: Buffer) => {

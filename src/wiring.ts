@@ -51,43 +51,6 @@ export function userSets(content: string, key: string): boolean {
   return new RegExp(String.raw`^[ \t]*${key}(?:[ \t]*=|[ \t]+\S)`, 'm').test(outside)
 }
 
-export function detectTerminal(env: Record<string, string | undefined>): string {
-  if (env.TERM_PROGRAM === 'WarpTerminal') {
-    return 'warp'
-  }
-  if (env.GHOSTTY_RESOURCES_DIR || env.TERM_PROGRAM === 'ghostty') {
-    return 'ghostty'
-  }
-  if (env.KITTY_WINDOW_ID) {
-    return 'kitty'
-  }
-  if (env.WEZTERM_PANE) {
-    return 'wezterm'
-  }
-  if (env.ALACRITTY_WINDOW_ID) {
-    return 'alacritty'
-  }
-  if (env.ITERM_SESSION_ID || env.TERM_PROGRAM === 'iTerm.app') {
-    return 'iterm2'
-  }
-  if (env.TERM_PROGRAM === 'Apple_Terminal') {
-    return 'terminal-app'
-  }
-  if (env.WT_SESSION && !env.TERM_PROGRAM) {
-    return 'windows-terminal'
-  }
-  if (env.TERM?.startsWith('foot')) {
-    return 'foot'
-  }
-  return 'unknown'
-}
-
-const LINKABLE = new Set(['ghostty', 'kitty', 'wezterm', 'alacritty', 'iterm2', 'windows-terminal', 'foot'])
-
-export function linkable(env: Record<string, string | undefined>): boolean {
-  return LINKABLE.has(detectTerminal(env))
-}
-
 export function ghosttyBlock(tthemeDir: string, palette: string | undefined, user = ''): string {
   const lines: string[] = []
   if (!userSets(user, 'command')) {

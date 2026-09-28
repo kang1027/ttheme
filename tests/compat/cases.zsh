@@ -63,9 +63,13 @@ __cc_shot() {
 }
 
 __cc_painted() {
+  printf '\e[H\e[2J'
+  __cc_seen $@
+}
+
+__cc_seen() {
   local want=$2 from=$3 got
   local -i near far
-  printf '\e[H\e[2J'
   sleep 0.3
   if ! __cc_shot $1; then
     __cc_report $1 skip "no screenshot"
@@ -91,6 +95,29 @@ __cc_roundtrip() {
   else
     __cc_report $id fail "set $want, read ${REPLY:-no answer}"
   fi
+}
+
+__cc_fill() {
+  printf '\e_Ga=t,f=24,s=1,v=%d,i=%d,q=2;%s\e\\' $3 $1 $2
+  printf '\e[H\e_Ga=p,i=%d,p=%d%s,c=%d,r=%d,C=1,z=%d,q=2\e\\' $1 $1 "$5" $COLUMNS $LINES $4
+}
+
+__cc_kitty() {
+  local -i r
+  printf '\e[H\e[48;2;160;64;64m'
+  for (( r = 1; r <= LINES; r++ )); do printf '\e[%d;1H%*s' $r $COLUMNS ''; done
+  printf '\e[0m'
+  __cc_fill 41 QKBA 1 -1073741826
+  sleep 0.5
+  __cc_seen kitty-under-bg '#a04040' '#40a040'
+  printf '\e_Ga=d,d=A,q=2\e\\\e[H\e[2J'
+  __cc_fill 42 QKBA 1 -1
+  for (( r = 1; r <= LINES; r++ )); do printf '\e[%d;1H\e[K' $r; done
+  __cc_seen kitty-el '#40a040' $start
+  printf '\e_Ga=d,d=A,q=2\e\\\e[H\e[2J'
+  __cc_fill 43 oEBAQECg 2 -1 ,x=0,y=1,w=1,h=1
+  __cc_seen kitty-crop '#4040a0' '#a04040'
+  printf '\e_Ga=d,d=A,q=2\e\\\e[H\e[2J'
 }
 
 __cc_cases() {
@@ -200,8 +227,12 @@ __cc_cases() {
 
   if __cc_ask $'\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\' && [[ $REPLY == *'_Gi=31;OK'* ]]; then
     __cc_report kitty-graphics pass "a=q answered OK"
+    __cc_kitty
   else
     __cc_report kitty-graphics fail "${${(V)REPLY}:-no answer}"
+    __cc_report kitty-under-bg skip "no kitty graphics"
+    __cc_report kitty-el skip "no kitty graphics"
+    __cc_report kitty-crop skip "no kitty graphics"
   fi
 
   if __cc_mode 2026; then
@@ -209,6 +240,14 @@ __cc_cases() {
   else
     __cc_report sync-output fail "DECRQM 2026 = ${REPLY:-no answer}"
   fi
+
+  printf '\e[?2026h'
+  if __cc_ask ''; then
+    __cc_report sync-query pass "a DSR answered inside a synchronized update"
+  else
+    __cc_report sync-query fail "a DSR went unanswered until the synchronized update ended"
+  fi
+  printf '\e[?2026l'
 
   if __cc_mode 1004; then
     __cc_report focus-report pass "DECRQM 1004 = $REPLY"

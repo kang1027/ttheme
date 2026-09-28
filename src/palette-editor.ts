@@ -559,7 +559,7 @@ export class PaletteEditor {
 
   private findPictures(start?: Start): void {
     if (!this.options.find) {
-      this.notice = 'Pictures need ttheme new or edit in a terminal'
+      this.notice = 'Pictures need Ghostty, iTerm2 or kitty, outside tmux'
       return
     }
     this.wants = start ? { start } : {}

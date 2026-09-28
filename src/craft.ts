@@ -8,7 +8,7 @@ import { type Manifest, type PaletteEntry, paletteEntry, toTheme } from './emit/
 import { findFor } from './find.ts'
 import { fixGate, type Move } from './fix.ts'
 import { ensureLocal } from './markets.ts'
-import { colorless, queryTerminalColors, restoreOsc } from './osc.ts'
+import { colorless } from './osc.ts'
 import {
   CODE,
   colorsOfTheme,
@@ -30,8 +30,8 @@ import type { Choice, Edited, EditorOptions } from './palette-editor.ts'
 import { commit, configHome, type Installed, readInstalled, refreshProfiles, sync } from './palettes.ts'
 import { bringPictures, heldPictures } from './pictures.ts'
 import { grow, SEEDS } from './seeds.ts'
+import { livePaint, showsPictures } from './terminal.ts'
 import { marketOf, nameProblem, type SharedPicture, type Theme } from './theme.ts'
-import { detectTerminal } from './wiring.ts'
 
 function tty(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true
@@ -144,6 +144,9 @@ function finder(
   catalog: Manifest,
   text: (edited: Edited) => string,
 ): EditorOptions['find'] {
+  if (!showsPictures(process.env)) {
+    return undefined
+  }
   return async (edited, start) => {
     const entry = paletteEntry(readOwnText(name, text(edited), catalog.palettes))
     const { saved } = await findFor(home, entry, start)
@@ -152,18 +155,13 @@ function finder(
 }
 
 async function editColors(options: EditorOptions): Promise<Edited | undefined> {
-  const terminal = detectTerminal(process.env)
-  const live = !colorless() && !process.env.TMUX && terminal !== 'warp'
-  const saved = live ? await queryTerminalColors() : new Map<string, string>()
+  const live = livePaint(process.env, process.stdout.isTTY === true)
+  const saved = live ? await live.saved() : new Map<string, string>()
   try {
-    return await runEditor(options, {
-      live,
-      color: !colorless(),
-      ...(terminal === 'iterm2' ? { only: [0, 1] } : {}),
-    })
+    return await runEditor(options, { color: !colorless(), ...(live ? { only: live.slots } : {}) })
   } finally {
     if (live) {
-      process.stdout.write(restoreOsc(saved))
+      process.stdout.write(live.restore(saved))
     }
   }
 }

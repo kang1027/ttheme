@@ -27,4 +27,7 @@ __tt_osc_reset() {
   return 0
 }
 
-[[ -o interactive && -t 1 ]] && __tt_listen
+() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  [[ -o interactive && -t 1 ]] && __tt_listen
+}

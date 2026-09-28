@@ -106,7 +106,7 @@ def main():
             elif not steps and not pending and not shot and done is None:
                 done = now
             if done is not None and now - done > LINGER:
-                os.kill(pid, signal.SIGTERM)
+                os.kill(pid, signal.SIGHUP)
                 done = now
             readable, _, _ = select.select([master, term], [], [], 0.02)
             if master in readable:

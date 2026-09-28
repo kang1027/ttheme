@@ -122,31 +122,43 @@ export function itermProfilesPath(home: string): string {
   return join(home, 'Library', 'Application Support', 'iTerm2', 'DynamicProfiles', 'ttheme.json')
 }
 
+type Optional = Exclude<keyof Installed, 'terminals' | 'palettes'>
+
+const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined)
+
+const OPTIONAL: { [K in Optional]-?: (value: unknown) => Installed[K] } = {
+  author: text,
+  startup: text,
+  off: (value) => (value ? true : undefined),
+  itermBase: text,
+  wtHome: text,
+  wtProfile: text,
+  markets: (value) => (Array.isArray(value) ? value.filter((m): m is string => typeof m === 'string') : undefined),
+  updates: (value) =>
+    value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value).filter((pair): pair is [string, boolean] => typeof pair[1] === 'boolean'),
+        )
+      : undefined,
+}
+
 export function readInstalled(configHome: string): Installed {
   const path = installedPath(configHome)
   if (!existsSync(path)) {
     throw new Error(`nothing installed yet at ${path} — run \`ttheme init\` first`)
   }
-  const doc = JSON.parse(readFileSync(path, 'utf8')) as Installed
+  const doc = JSON.parse(readFileSync(path, 'utf8'))
   if (!Array.isArray(doc?.palettes) || !Array.isArray(doc.terminals)) {
     throw new Error(`${path} has no palettes or terminals`)
   }
   return {
-    terminals: doc.terminals.filter((t): t is InitTerminal => INIT_TERMINALS.includes(t)),
-    ...(doc.author ? { author: doc.author } : {}),
-    ...(doc.startup ? { startup: doc.startup } : {}),
-    ...(doc.off ? { off: true as const } : {}),
-    ...(doc.itermBase ? { itermBase: doc.itermBase } : {}),
-    ...(doc.wtHome ? { wtHome: doc.wtHome } : {}),
-    ...(doc.wtProfile ? { wtProfile: doc.wtProfile } : {}),
-    ...(Array.isArray(doc.markets) ? { markets: doc.markets.filter((m) => typeof m === 'string') } : {}),
-    ...(doc.updates && typeof doc.updates === 'object'
-      ? {
-          updates: Object.fromEntries(
-            Object.entries(doc.updates).filter((pair): pair is [string, boolean] => typeof pair[1] === 'boolean'),
-          ),
-        }
-      : {}),
+    terminals: doc.terminals.filter((t: InitTerminal) => INIT_TERMINALS.includes(t)),
+    ...Object.fromEntries(
+      Object.entries(OPTIONAL).flatMap(([key, read]) => {
+        const value = read(doc[key])
+        return value === undefined ? [] : [[key, value]]
+      }),
+    ),
     palettes: doc.palettes,
   }
 }

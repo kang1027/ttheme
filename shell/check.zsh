@@ -246,6 +246,35 @@ __tt_bg_dim $bgd/kagami@fill-42.png && { print -u2 "__tt_bg_dim took an empty fi
   forks_of __tt_shown miku force
   (( REPLY == 0 )) || { print -u2 "a WezTerm picture change forks again ($REPLY processes)"; exit 1 }
 ) || exit 1
+for pictured in ghostty iterm2 kitty; do
+  (
+    source $XDG_CONFIG_HOME/ttheme/adapters/$pictured.zsh
+    print -r -- "config-file = ?miku.conf" > $bgd/shown.conf
+    TTHEME_ITERM_SHOWN=miku
+    forks_of __tt_shown kagami force
+    (( REPLY == 0 )) || { print -u2 "a picture change in $pictured forks again ($REPLY processes) — every focus-in between two pictures pays it"; exit 1 }
+  ) || exit 1
+done
+(
+  source $XDG_CONFIG_HOME/ttheme/adapters/wezterm.zsh
+  typeset -A bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgdim=() bgtunef=() bgofff=() bgimages=()
+  print -rn -- $'\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\x07\x58\0\0\x03\xf0\x08\x06' > $bgd/homura@fill-50.png
+  print -l "background-image = homura@fill-50.png" "background-image-fit = cover" "background-image-opacity = 0.3" > $bgd/homura.conf
+  bgcw=14 bgch=32 pw=80 ph=24 bginc="" bgname="" TTHEME_WEZTERM_VIEW=""
+  __tt_pv_bg_show homura > $bgd/view.out
+  REPLY=; __tt_bg_frame 1880 1008 1120 768 100 5 cover
+  want="${${=TTHEME_PALETTE[homura]}[1]}|$bgd/homura@fill-50.png|0.3|1120|768|${REPLY// /|}|5"
+  [[ $(<$bgd/view.out) == $'\e]1337;SetUserVar=ttheme_view='*$'\a' && "$(print -rn -- ${${$(<$bgd/view.out)#*=ttheme_view=}%$'\a'} | base64 --decode)" == "$want" ]] ||
+    { print -u2 "a WezTerm preview hover sent the wrong view: ${(V)$(<$bgd/view.out)}, wanted $want"; exit 1 }
+  __tt_pv_bg_show homura > $bgd/view.out
+  [[ ! -s $bgd/view.out ]] || { print -u2 "a WezTerm preview hover sent an unchanged view again"; exit 1 }
+  TTHEME_WEZTERM_VIEW=""
+  forks_of __tt_pv_bg_show homura
+  (( REPLY == 0 )) || { print -u2 "a WezTerm preview hover forks again ($REPLY processes)"; exit 1 }
+  __tt_pv_bg_show homura > /dev/null
+  __tt_pv_bg_close > $bgd/view.out
+  [[ $(<$bgd/view.out) == *$'\e]1337;SetUserVar=ttheme_view=\a' ]] || { print -u2 "closing preview in WezTerm left its view up"; exit 1 }
+) || exit 1
 mkdir -p $XDG_CONFIG_HOME/fakebin
 print -rl -- '#!/bin/sh' 'printf %s "$NODE_COMPILE_CACHE"' > $XDG_CONFIG_HOME/fakebin/node
 chmod +x $XDG_CONFIG_HOME/fakebin/node
@@ -275,5 +304,15 @@ out=$(PATH=$XDG_CONFIG_HOME/fakebin:$PATH XDG_CACHE_HOME=/c __tt_cli --version)
   export TTHEME_PAINTED=1
   __tt_recheck
   [[ $TTHEME_SPEC == "$TTHEME_PALETTE[miku]" && $TTHEME_HEARD == $stale ]] || { print -u2 "a recheck trusted a painted tab's colors"; exit 1 }
+) || exit 1
+(
+  setopt noclobber
+  mkdir -p $XDG_CONFIG_HOME/dotfiles $XDG_CONFIG_HOME/linked
+  print -r -- "$TTHEME_CONFIG_TEMPLATE" >| $XDG_CONFIG_HOME/dotfiles/config.zsh
+  ln -s $XDG_CONFIG_HOME/dotfiles/config.zsh $XDG_CONFIG_HOME/linked/config.zsh
+  TTHEME_CONFIG=$XDG_CONFIG_HOME/linked/config.zsh
+  __tt_config_write TTHEME_SORT series || { print -u2 "saving a setting failed under noclobber"; exit 1 }
+  [[ -L $TTHEME_CONFIG && "$(<$XDG_CONFIG_HOME/dotfiles/config.zsh)" == *': ${TTHEME_SORT:=series}'* ]] ||
+    { print -u2 "saving a setting replaced a linked config.zsh, or never reached it"; exit 1 }
 ) || exit 1
 print "shell layer ok — ${#TTHEME_PALETTE} palettes, adapter=$adapter"

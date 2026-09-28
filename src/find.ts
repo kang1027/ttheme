@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -76,6 +76,7 @@ import {
 import { booruTags, find, readAvailable, siteTags } from './catalog.ts'
 import { rgb } from './color.ts'
 import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
+import { writeAtomic } from './edits.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
 import {
   CELL_QUERY,
@@ -107,8 +108,9 @@ import { type Frame, fitOrder, interleave, type Pick } from './fit.ts'
 import { configHome, readInstalled, refreshProfiles } from './palettes.ts'
 import { type Look, Renderer } from './render.ts'
 import { SCENES } from './scenes.ts'
+import { CLEAR, cropsInBands } from './terminal.ts'
 import { POSITIONS } from './theme.ts'
-import { blurOf, detectTerminal, settingDefault, withSetting } from './wiring.ts'
+import { blurOf, settingDefault, withSetting } from './wiring.ts'
 import { kinKeys, near, type Shape, sameKeys, sameSet } from './works.ts'
 
 const SETTINGS: Setting[] = [
@@ -429,8 +431,7 @@ function readCache<T>(site: Site, name: string): Record<string, T> {
 }
 
 function writeCache(site: Site, name: string, data: Record<string, unknown>): void {
-  mkdirSync(cacheDir(site), { recursive: true })
-  writeFileSync(join(cacheDir(site), name), `${JSON.stringify(data)}\n`)
+  writeAtomic(join(cacheDir(site), name), `${JSON.stringify(data)}\n`)
 }
 
 class Finder {
@@ -477,7 +478,7 @@ class Finder {
   private gliding?: NodeJS.Timeout
   private showing?: Board
   private readonly thumbless = new Set<number>()
-  private readonly bands = detectTerminal(process.env) === 'iterm2'
+  private readonly bands = cropsInBands(process.env)
   private readonly bandFiles = new Map<string, { id: number; path: string; ready: boolean }>()
   private nextBand = BAND_ID
   private current?: Current
@@ -696,7 +697,7 @@ class Finder {
     stdin.resume()
     stdin.on('data', this.onData)
     stdout.on('resize', this.onResize)
-    this.write('\x1b[?25l\x1b[?7l\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H')
+    this.write(`\x1b[?25l\x1b[?7l${CLEAR}`)
     const exit = new Promise<number>((resolve) => {
       this.done = resolve
     })
@@ -739,7 +740,7 @@ class Finder {
     clearTimeout(this.gliding)
     stdin.off('data', this.onData)
     stdout.off('resize', this.onResize)
-    this.write('\x1b_Ga=d,d=A,q=2\x1b\\\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H')
+    this.write(`\x1b_Ga=d,d=A,q=2\x1b\\${CLEAR}`)
     stdin.setRawMode(false)
     stdin.pause()
     this.saveKept()
@@ -1019,8 +1020,7 @@ class Finder {
     const id = localId(image.bytes)
     remember(id, image.source)
     const orig = this.origPath(LOCAL, id, image.ext)
-    mkdirSync(dirname(orig), { recursive: true })
-    writeFileSync(orig, image.bytes)
+    writeAtomic(orig, image.bytes)
     const url = pathToFileURL(orig).href
     const post: Post = {
       id,
@@ -1042,8 +1042,7 @@ class Finder {
     }
     const pick = { site: LOCAL, post }
     const preview = this.previewPath(pick)
-    mkdirSync(dirname(preview), { recursive: true })
-    writeFileSync(preview, image.bytes)
+    writeAtomic(preview, image.bytes)
     ++this.gen
     this.current = undefined
     view.shown = undefined
@@ -1404,7 +1403,7 @@ class Finder {
     const path = join(this.home, 'ttheme', 'config.zsh')
     try {
       const before = existsSync(path) ? readFileSync(path, 'utf8') : ''
-      writeFileSync(
+      writeAtomic(
         path,
         pairs.reduce((text, [name, value]) => withSetting(text, name, value), before),
       )
@@ -2465,8 +2464,7 @@ class Finder {
     }
     const job = (async () => {
       const bytes = await fetchBytes(site, url, this.signal, progress)
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, bytes)
+      writeAtomic(path, bytes)
       return bytes.length
     })()
     this.inflight.set(path, job)

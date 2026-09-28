@@ -1,6 +1,7 @@
 import pkg from '../../package.json' with { type: 'json' }
 import { SITES } from '../booru.ts'
 import { SCENES } from '../scenes.ts'
+import { TRAITS } from '../terminal.ts'
 import { alphabetical } from '../theme.ts'
 import { helpText, VERB_SPECS } from '../verbs.ts'
 import { configTemplate, SETTING_NAMES } from '../wiring.ts'
@@ -104,6 +105,11 @@ export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminal
     '',
     "# each booru's ANSI color, which marks a link to one of its posts",
     `typeset -gA TTHEME_SITE_ANSI=(${SITES.map((site) => `${site.name} ${site.ansi}`).join(' ')})`,
+    '',
+    '# the terminals that open OSC 8 links (src/terminal.ts)',
+    `typeset -ga TTHEME_LINKS=(${Object.entries(TRAITS)
+      .flatMap(([terminal, traits]) => (traits.links ? [terminal] : []))
+      .join(' ')})`,
     '',
     '# the six colors a list row shows: foreground, the signature, then red and green',
     'typeset -gA TTHEME_SWATCH=(',

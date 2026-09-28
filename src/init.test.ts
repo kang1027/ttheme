@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { test } from 'node:test'
-
 import {
   againCatalog,
   applyInit,
@@ -14,6 +13,7 @@ import {
   planInit,
   planUpgrade,
 } from './init.ts'
+import type { Installed } from './palettes.ts'
 
 function manifestFixture() {
   const palette = (name: string, order: number, role?: 'default') => ({
@@ -305,4 +305,30 @@ test('setting it up again offers no official palette once the official catalog w
     catalog.palettes.map((e) => e.name),
     ['alice@pastel/dusk'],
   )
+})
+
+test('setting it up again carries every setting it does not ask about again', () => {
+  const paths = makeFixture()
+  const state: Required<Installed> = {
+    terminals: ['ghostty', 'windows-terminal'],
+    author: 'kec',
+    startup: 'miku',
+    off: true,
+    itermBase: 'A1B2C3',
+    wtHome: '/mnt/c/Users/kec/AppData/Local',
+    wtProfile: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}',
+    markets: ['official', 'alice/pastel#v1'],
+    updates: { 'alice/pastel#v1': true },
+    palettes: ['miku'],
+  }
+  const { installed } = planAgain(state, options({ terminals: ['kitty'], palettes: ['neutral'] }), paths)
+  const asked: (keyof Installed)[] = ['terminals', 'palettes', 'off', 'startup', 'wtHome', 'wtProfile']
+  for (const key of Object.keys(state) as (keyof Installed)[]) {
+    if (!asked.includes(key)) {
+      assert.deepEqual(installed[key], state[key], key)
+    }
+  }
+  assert.deepEqual(installed.terminals, ['kitty'])
+  assert.equal(installed.startup, undefined)
+  assert.equal(installed.wtHome, undefined)
 })
