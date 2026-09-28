@@ -192,8 +192,8 @@ look, and never Title Case.
   tags, commands and flags (`ttheme preview`, `--yes`) and key names
   (`enter`, `ctrl+v`). A line that starts with one keeps it as spelled.
 - **As their owners spell them**: Ghostty, iTerm2, WezTerm, kitty, Alacritty,
-  Warp, Windows Terminal, Terminal.app, macOS, GitHub; acronyms in capitals
-  (PNG, URL, OSC, ANSI).
+  Warp, Windows Terminal, Konsole, Terminal.app, macOS, GitHub; acronyms in
+  capitals (PNG, URL, OSC, ANSI).
 - **Lowercase**: key hints in footers and key bars (`↑↓ move · enter save`),
   and error messages, which read the same after the `ttheme:` prefix
   (`ttheme: not installed: kita`) and in a status line. A notice written for

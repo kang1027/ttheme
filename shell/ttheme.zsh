@@ -109,6 +109,8 @@ typeset -g TTHEME_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/ttheme
     typeset -g TTHEME_ADAPTER=wezterm
   elif [[ -n $ALACRITTY_WINDOW_ID ]]; then
     typeset -g TTHEME_ADAPTER=alacritty
+  elif [[ -n $KONSOLE_VERSION ]]; then
+    typeset -g TTHEME_ADAPTER=konsole
   elif [[ -n $ITERM_SESSION_ID || $TERM_PROGRAM == iTerm.app ]]; then
     typeset -g TTHEME_ADAPTER=iterm2
   elif [[ $TERM_PROGRAM == Apple_Terminal ]]; then
@@ -122,27 +124,7 @@ typeset -g TTHEME_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/ttheme
   fi
 }
 
-typeset -g TTHEME_GHOSTTY_PID="" TTHEME_TMUX=0 TTHEME_MUXED=0
-
-__tt_reload() {
-  (( ${TTHEME_TERMINALS[(Ie)ghostty]} )) || return 0
-  local pid=$PPID ppid comm owner=$TTHEME_GHOSTTY_PID
-  (( TTHEME_TMUX )) && { pid=$(tmux display -p '#{client_pid}' 2>/dev/null) owner="" }
-  if [[ -z $owner ]]; then
-    owner=0
-    while (( pid > 1 )); do
-      read -r ppid comm <<< "$(ps -o ppid=,comm= -p $pid)"
-      if [[ ${comm:t} == ghostty ]]; then
-        owner=$pid
-        break
-      fi
-      pid=$ppid
-    done
-    (( TTHEME_TMUX )) || TTHEME_GHOSTTY_PID=$owner
-  fi
-  (( owner )) && kill -USR2 $owner 2>/dev/null && return
-  pkill -USR2 -x ghostty 2>/dev/null
-}
+typeset -g TTHEME_TMUX=0 TTHEME_MUXED=0
 
 __tt_tmux() {
   [[ $(tmux if -t "$TMUX_PANE" -F '#{==:#{allow-passthrough},off}' 'set -p allow-passthrough on' \; set -sq focus-events on \; display -p '#{client_control_mode}' 2>/dev/null) == 1 ]] && return 0
@@ -152,7 +134,7 @@ __tt_tmux() {
 __tt_active() {
   [[ -o interactive ]] || return 1
   (( ${#TTHEME_PALETTE} )) || return 1
-  [[ $TTHEME_ADAPTER != (unknown|warp) || -n $TTHEME_FORCE ]]
+  [[ -n $TTHEME_FORCE ]] || { [[ $TTHEME_ADAPTER != unknown ]] && __tt_paints }
 }
 
 typeset -g TTHEME_HEARD=""
@@ -231,6 +213,7 @@ __tt_recheck() {
 }
 
 source $TTHEME_HOME/adapters/_osc.zsh
+source $TTHEME_HOME/adapters/_wired.zsh
 [[ -r $TTHEME_HOME/adapters/$TTHEME_ADAPTER.zsh ]] &&
   source $TTHEME_HOME/adapters/$TTHEME_ADAPTER.zsh
 
@@ -2736,8 +2719,8 @@ ttheme() {
     print -u2 "ttheme: unknown command '$1' — see \`ttheme help\`"
     return 1
   fi
-  if [[ $TTHEME_ADAPTER == warp && $1 != (browse|list|add|remove|update|market|new|edit|check|share|config|default|on|off) ]]; then
-    print -u2 "ttheme: Warp wears one theme app-wide and paints no tab background of its own — \`ttheme default <palette>\` puts one on every Warp window"
+  if ! __tt_paints && (( ! $# || ${TTHEME_TAB_VERBS[(Ie)$1]} )); then
+    __tt_unpainted
     return 1
   fi
   if (( ! $# )); then
@@ -2837,7 +2820,7 @@ fi
     add-zsh-hook preexec __tt_mux
     add-zsh-hook precmd __tt_unmux
   fi
-  if [[ $TTHEME_ADAPTER == (ghostty|kitty|windows-terminal) ]] || (( TTHEME_TMUX )); then
+  if __tt_follows_focus || (( TTHEME_TMUX )); then
     add-zsh-hook precmd __tt_precmd
     add-zsh-hook preexec __tt_preexec
     __tt_bind_focus
@@ -2850,7 +2833,7 @@ fi
 () {
   emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
   local f
-  for f in $TTHEME_HOME/ttheme.zsh $TTHEME_HOME/palettes.zsh $TTHEME_HOME/adapters/_osc.zsh $TTHEME_HOME/adapters/_bg.zsh $TTHEME_HOME/adapters/$TTHEME_ADAPTER.zsh; do
+  for f in $TTHEME_HOME/ttheme.zsh $TTHEME_HOME/palettes.zsh $TTHEME_HOME/adapters/_osc.zsh $TTHEME_HOME/adapters/_wired.zsh $TTHEME_HOME/adapters/_bg.zsh $TTHEME_HOME/adapters/$TTHEME_ADAPTER.zsh; do
     [[ -r $f && ! $f.zwc -nt $f ]] || continue
     zcompile -UR -- $f.$$.zwc $f 2>/dev/null && command mv -f -- $f.$$.zwc $f.zwc 2>/dev/null
     [[ ! -e $f.$$.zwc ]] || command rm -f -- $f.$$.zwc

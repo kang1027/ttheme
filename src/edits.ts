@@ -16,7 +16,7 @@ export function backupPath(path: string): string {
   return `${path}.ttheme.bak`
 }
 
-const MARKED = /^(?:#|--) ttheme begin$|path = "ttheme-/m
+const MARKED = /^(?:#|--) ttheme begin$|path = "ttheme-|^DefaultProfile=ttheme-/m
 
 export function backupOnce(path: string): void {
   const backup = backupPath(path)

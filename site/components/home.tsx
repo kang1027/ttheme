@@ -27,7 +27,7 @@ function features(palettes: number, series: number) {
     {
       emoji: '🖥️',
       title: 'every terminal you use',
-      text: 'Ghostty, iTerm2, WezTerm, kitty, Alacritty, Windows Terminal and Warp, all wired by one init.',
+      text: 'Ghostty, iTerm2, WezTerm, kitty, Alacritty, Windows Terminal, Warp and Konsole, all wired by one init.',
     },
     {
       emoji: '🗂️',
@@ -110,8 +110,8 @@ export function Home({ themes, series }: { themes: Theme[]; series: number }) {
               in your terminal
             </h1>
             <p className="max-w-[52ch] text-base text-soft-foreground">
-              Character color palettes, measured from official art, for ghostty, iTerm2, WezTerm, kitty, Alacritty,
-              Windows Terminal and Warp. One command, then every tab can wear its own.
+              Character color palettes, measured from official art, for Ghostty, iTerm2, WezTerm, kitty, Alacritty,
+              Windows Terminal, Warp and Konsole. One command, then every tab can wear its own.
             </p>
             <div className="flex w-full flex-wrap items-center gap-3">
               <Button variant="pop" size="lg" nativeButton={false} render={<Link href="/market" />}>

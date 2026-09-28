@@ -100,6 +100,10 @@ export function stem(name: string): string {
   return name.replace('@', '--').replace('/', '--')
 }
 
+export function owned(name: string): string {
+  return `ttheme-${stem(name)}`
+}
+
 export function marketOf(name: string): string | undefined {
   const at = name.indexOf('/')
   return at < 0 ? undefined : name.slice(0, at)

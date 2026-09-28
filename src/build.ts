@@ -1,25 +1,15 @@
 import { rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { checkAll } from './contrast.ts'
-import {
-  alacritty,
-  type Emitter,
-  ghostty,
-  iterm2,
-  kitty,
-  meta,
-  shell,
-  warp,
-  wezterm,
-  windowsTerminal,
-} from './emit/index.ts'
+import { type Emitter, meta, shell } from './emit/index.ts'
+import { WIRED, WIRINGS } from './terminals/index.ts'
 import { loadThemes, rotation } from './theme.ts'
 
 const root = join(import.meta.dirname, '..')
 const THEMES = join(root, 'themes')
 const DIST = join(root, 'dist')
 
-const TERMINAL_EMITTERS: Emitter[] = [ghostty, kitty, alacritty, wezterm, iterm2, windowsTerminal, warp]
+const TERMINAL_EMITTERS: Emitter[] = WIRED.map((id) => WIRINGS[id].emitter)
 const SHARED_EMITTERS: Emitter[] = [shell, meta]
 
 export const EMITTED = TERMINAL_EMITTERS.map((e) => e.id)

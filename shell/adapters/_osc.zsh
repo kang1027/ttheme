@@ -57,6 +57,12 @@ __tt_worn() { : }
 
 __tt_keepable() { return 1 }
 
+__tt_paints() { return 0 }
+
+__tt_unpainted() { : }
+
+__tt_follows_focus() { return 1 }
+
 __tt_pv_bg_open() { : }
 
 __tt_pv_bg_show() { : }

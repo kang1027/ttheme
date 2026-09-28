@@ -7,25 +7,15 @@ import { addSource, localLine } from './markets.ts'
 import { colorless } from './osc.ts'
 import { CODE, readLocal } from './own.ts'
 import { PalettePrompt, type PickerScope, promptFx } from './palette-prompt.ts'
-import {
-  commit,
-  configHome,
-  forget,
-  itermDefaults,
-  pointItermDefault,
-  readInstalled,
-  startupPalette,
-  sync,
-  withItermBase,
-  writeInstalled,
-} from './palettes.ts'
+import { commit, configHome, forget, readInstalled, startupPalette, sync } from './palettes.ts'
 import { pending } from './pending.ts'
 import { bringPictures, since } from './pictures.ts'
 import { refreshLine, refreshMarket } from './refresh.ts'
 import { installedPath, isLocal, marketSources, OFFICIAL, shownSource } from './sources.ts'
 import { livePaint } from './terminal.ts'
+import { type Wired, wirings } from './terminals/index.ts'
+import type { Pointed } from './terminals/types.ts'
 import { alphabetical, marketOf } from './theme.ts'
-import { type InitTerminal, TERMINAL_NAMES } from './wiring.ts'
 
 export function reload(count: number): void {
   console.log(`\n${count} palettes installed — open a new tab, or reload your terminal config`)
@@ -104,12 +94,8 @@ export function runDefault(name: string): void {
     throw new Error(`${name} is not installed — \`ttheme add ${name}\` first`)
   }
   const { off: _, ...rest } = state
-  const prefs = itermDefaults()
-  const next = withItermBase({ ...rest, startup: name }, prefs)
-  sync(home, catalog, next)
-  writeInstalled(home, next)
-  const moved = pointItermDefault(next, prefs)
-  console.log(defaultNote(name, next.terminals, moved && prefs.running()).join('\n'))
+  const pointed = commit(home, catalog, state, { ...rest, startup: name }, true)
+  console.log(defaultNote(name, state.terminals, pointed).join('\n'))
 }
 
 export function runOn(): void {
@@ -124,8 +110,8 @@ export function runOn(): void {
     return
   }
   const { off: _, ...next } = state
-  const restart = commit(home, readCatalog(home), state, next)
-  console.log(defaultNote(name, next.terminals, restart).join('\n'))
+  const pointed = commit(home, readCatalog(home), state, next)
+  console.log(defaultNote(name, next.terminals, pointed).join('\n'))
 }
 
 export function runOff(): void {
@@ -135,28 +121,33 @@ export function runOff(): void {
     console.log('Already off')
     return
   }
-  const restart = commit(home, readCatalog(home), state, { ...state, off: true })
+  const pointed = commit(home, readCatalog(home), state, { ...state, off: true })
   const name = startupPalette(state)
   console.log(`Off · new tabs open in the terminal's own colors${name ? ` — \`ttheme on\` wears ${name} again` : ''}`)
-  if (restart) {
-    console.log('iTerm2 new tabs open on your own profile once iTerm2 restarts')
+  for (const wiring of wirings(state.terminals)) {
+    if (pointed.get(wiring.id)?.restart) {
+      console.log(`${wiring.name} new tabs open on your own profile once ${wiring.name} restarts`)
+    }
   }
 }
 
-function defaultNote(name: string, terminals: InitTerminal[], restart: boolean): string[] {
-  const wearing = terminals.filter((t) => t !== 'iterm2')
+function defaultNote(name: string, terminals: Wired[], pointed: ReadonlyMap<Wired, Pointed>): string[] {
+  const wearing = wirings(terminals).filter((wiring) => !wiring.defaults)
   const lines =
     wearing.length > 0
       ? [
-          `Default ${name} · ${wearing.map((t) => TERMINAL_NAMES[t]).join(', ')} open new tabs with it once their config reloads`,
+          `Default ${name} · ${wearing.map((wiring) => wiring.name).join(', ')} open new tabs with it once their config reloads`,
         ]
       : []
-  if (terminals.includes('iterm2')) {
-    lines.push(
-      restart
-        ? `iTerm2 new tabs open with it once iTerm2 restarts — "ttheme · default" is now its default profile`
-        : `iTerm2 new tabs open with it — "ttheme · default" is its default profile`,
-    )
+  for (const wiring of wirings(terminals)) {
+    const profile = wiring.defaults?.profile(name)
+    if (profile) {
+      lines.push(
+        pointed.get(wiring.id)?.restart
+          ? `${wiring.name} new tabs open with it once ${wiring.name} restarts — "${profile}" is now its default profile`
+          : `${wiring.name} new tabs open with it — "${profile}" is its default profile`,
+      )
+    }
   }
   return lines.length > 0
     ? lines

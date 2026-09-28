@@ -6,9 +6,10 @@ typeset -g ROOT=${${(%):-%x}:A:h:h}
 typeset -g SANDBOX=${${TMPDIR:-/tmp}%/}/ttheme-sandbox
 typeset -g OUT=${${TMPDIR:-/tmp}%/}/ttheme-compat
 typeset -g EXPECT=$ROOT/tests/compat/expect.tsv
-typeset -ga TERMINALS=(ghostty iterm2 wezterm kitty alacritty warp terminal-app)
-typeset -gA FLAG=(ghostty '' iterm2 --iterm wezterm --wezterm kitty --kitty alacritty --alacritty warp --warp terminal-app --terminal-app)
-typeset -gA ADAPTER=(ghostty ghostty iterm2 iterm2 wezterm wezterm kitty kitty alacritty alacritty warp warp terminal-app terminal-app)
+typeset -g KONSOLE_SCREEN=${TTHEME_KONSOLE_SCREEN:-:77}
+typeset -ga TERMINALS=(ghostty iterm2 wezterm kitty alacritty warp terminal-app konsole)
+typeset -gA FLAG=(ghostty '' iterm2 --iterm wezterm --wezterm kitty --kitty alacritty --alacritty warp --warp terminal-app --terminal-app konsole --konsole)
+typeset -gA ADAPTER=(ghostty ghostty iterm2 iterm2 wezterm wezterm kitty kitty alacritty alacritty warp warp terminal-app terminal-app konsole konsole)
 
 installed() {
   case $1 in
@@ -19,6 +20,7 @@ installed() {
     alacritty) [[ -x ${TTHEME_ALACRITTY_APP:-/Applications/Alacritty.app}/Contents/MacOS/alacritty ]] ;;
     warp) [[ -d /Applications/Warp.app ]] ;;
     terminal-app) [[ -d /System/Applications/Utilities/Terminal.app ]] ;;
+    konsole) (( $+commands[konsole] && $+commands[dbus-run-session] && $+commands[Xvfb] && $+commands[xdotool] && $+commands[import] )) ;;
     *) return 1 ;;
   esac
 }
@@ -32,6 +34,7 @@ pids_of() {
     alacritty) pgrep -f -- "alacritty --config-file $SANDBOX/" ;;
     warp) pgrep -f -- "/Applications/Warp.app/Contents/MacOS/" ;;
     terminal-app) pgrep -x Terminal ;;
+    konsole) pgrep -f -- "konsole --separate --workdir $SANDBOX" ;;
   esac | tr '\n' ' '
 }
 
@@ -57,15 +60,32 @@ windows_of() {
 
 sample() { osascript -l JavaScript $ROOT/tests/compat/sample.js $1 }
 
+shoot() {
+  local term=$1 title=$2 old=$3 shot=$4 wid pid
+  if [[ $term == konsole ]]; then
+    for pid in ${=$(pids_of $term)}; do
+      wid=$(DISPLAY=$KONSOLE_SCREEN xdotool search --pid $pid 2>/dev/null | tail -1) && [[ -n $wid ]] && break
+    done
+    [[ -n $wid ]] && DISPLAY=$KONSOLE_SCREEN import -window $wid $shot 2>/dev/null
+    return
+  fi
+  wid=$(window_of "$(pids_of $term)" $title $old)
+  [[ -n $wid ]] && screencapture -x -o -l $wid $shot
+}
+
 serve() {
-  local term=$1 title=$2 old=$3 req wid shot color i
+  local term=$1 title=$2 old=$3 req shot color i
   for req in $SANDBOX/compat/*.req(N); do
     sleep 0.4
-    wid=$(window_of "$(pids_of $term)" $title $old)
     shot=$OUT/$term-${req:t:r}.png
-    [[ -n $wid ]] && screencapture -x -o -l $wid $shot || continue
+    shoot $term $title "$old" $shot || continue
     for i in 1 2 3; do
-      color=$(sample $shot 2>/dev/null) && [[ $color == *'#'* ]] && break
+      if [[ $term == konsole ]]; then
+        color=$(bun $ROOT/tests/compat/sample-png.ts $shot 2>/dev/null)
+      else
+        color=$(sample $shot 2>/dev/null)
+      fi
+      [[ $color == *'#'* ]] && break
       sleep 0.3
     done
     print -r -- $color > $SANDBOX/compat/${req:t:r}.done
@@ -82,15 +102,19 @@ quit() {
     kitty) pkill -f -- "kitty --config $SANDBOX/" 2>/dev/null || : ;;
     alacritty) pkill -f -- "alacritty --config-file $SANDBOX/" 2>/dev/null || : ;;
     warp) rm -f -- $HOME/.warp/launch_configurations/ttheme-sandbox.yaml ;;
+    konsole)
+      pkill -f -- "konsole --separate --workdir $SANDBOX" 2>/dev/null || :
+      pkill -f -- "Xvfb $KONSOLE_SCREEN " 2>/dev/null || :
+      ;;
   esac
   return 0
 }
 
 measure() {
-  local term=$1 hook i title=ttheme-compat-$1-$$ was=0 old
-  old=$(windows_of "$(pids_of $term)")
+  local term=$1 hook i title=ttheme-compat-$1-$$ was=0 old=""
+  [[ $term == konsole ]] || old=$(windows_of "$(pids_of $term)")
   [[ $term == terminal-app ]] && pgrep -x Terminal > /dev/null && was=1
-  hook=$(mktemp -t ttheme-compat)
+  hook=$(mktemp "${TMPDIR:-/tmp}/ttheme-compat.XXXXXX")
   print -rl -- "typeset -g CC_ADAPTER=$ADAPTER[$term] CC_TITLE=$title" "source ${(q)ROOT}/tests/compat/cases.zsh" > $hook
   if ! zsh $ROOT/tests/sandbox.zsh --behind ${FLAG[$term]:+$FLAG[$term]} --zshenv $hook miku asuka > /dev/null; then
     rm -f $hook

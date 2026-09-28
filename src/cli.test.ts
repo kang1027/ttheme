@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EMITTED } from './build.ts'
 import { parse, UsageError, VERBS } from './cli.ts'
-import { TERMINALS } from './verbs.ts'
+import { WIRED } from './terminals/types.ts'
 
 test('build --only rejects unknown terminals', () => {
   assert.throws(() => parse(['build', '--only', 'vscode']), UsageError)
 })
 
 test('build --only offers every terminal', () => {
-  assert.deepEqual(EMITTED, [...TERMINALS])
+  assert.deepEqual(EMITTED, [...WIRED])
   assert.deepEqual(parse(['build', '--only', 'kitty', '--only', 'iterm2']), {
     kind: 'run',
     verb: VERBS.find((v) => v.name === 'build'),

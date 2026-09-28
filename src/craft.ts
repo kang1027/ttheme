@@ -27,7 +27,7 @@ import {
   withPictures,
 } from './own.ts'
 import type { Choice, Edited, EditorOptions } from './palette-editor.ts'
-import { commit, configHome, type Installed, readInstalled, refreshProfiles, sync } from './palettes.ts'
+import { commit, configHome, type Installed, readInstalled, refreshPictures, sync } from './palettes.ts'
 import { bringPictures, heldPictures } from './pictures.ts'
 import { grow, SEEDS } from './seeds.ts'
 import { livePaint, showsPictures } from './terminal.ts'
@@ -124,7 +124,7 @@ function shelfFor(home: string, name: string): Shelf {
         dropImage(home, name)
       }
       if (gone.length > 0) {
-        refreshProfiles(home)
+        refreshPictures(home)
       }
     },
   }

@@ -5,7 +5,8 @@ import { loadManifest } from '@/lib/themes'
 
 export const metadata: Metadata = {
   title: 'ttheme — wear your favorite character',
-  description: 'Character color palettes for ghostty, iTerm2, WezTerm, kitty, Alacritty, Windows Terminal and Warp',
+  description:
+    'Character color palettes for Ghostty, iTerm2, WezTerm, kitty, Alacritty, Windows Terminal, Warp and Konsole',
 }
 
 export default function Page() {

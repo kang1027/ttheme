@@ -1,31 +1,16 @@
-import { existsSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs'
+import { existsSync, rmSync, utimesSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import * as p from '@clack/prompts'
 import { cacheRoot } from './booru.ts'
 import { restoreUserFile } from './edits.ts'
-import { owned } from './emit/index.ts'
 import { Cancelled } from './init.ts'
-import {
-  alacrittyConfig,
-  blockFile,
-  configHome as configDir,
-  type Installed,
-  type ItermDefaults,
-  itermDefaults,
-  itermProfilesPath,
-  pointItermDefault,
-  readInstalled,
-  themeDir,
-  WARP_DEFAULT,
-  warpBasePath,
-  warpSettings,
-  weztermConfig,
-  wtFragmentPath,
-  wtSettings,
-} from './palettes.ts'
+import { configHome as configDir, type Installed, pointDefaults, readInstalled } from './palettes.ts'
 import { localRoot } from './sources.ts'
-import { removeBlock, removeLuaBlock, warpThemeOf, withWarpTheme } from './wiring.ts'
+import { ownedIn, stripped, systemHost } from './terminals/common.ts'
+import { WIRED, wirings } from './terminals/index.ts'
+import type { Host } from './terminals/types.ts'
+import { removeBlock } from './wiring.ts'
 
 export interface UninstallPaths {
   home: string
@@ -42,10 +27,6 @@ export interface UninstallPlan {
   state?: Installed
 }
 
-function readText(path: string): string {
-  return existsSync(path) ? readFileSync(path, 'utf8') : ''
-}
-
 function installed(configHome: string): Installed | undefined {
   try {
     return readInstalled(configHome)
@@ -54,54 +35,26 @@ function installed(configHome: string): Installed | undefined {
   }
 }
 
-function warpEdit(configHome: string, home: string): { file: string; content: string } | undefined {
-  const file = warpSettings(home, configHome)
-  const content = readText(file)
-  if (!warpThemeOf(content)?.includes(`path = "${owned('')}`)) {
-    return undefined
-  }
-  return { file, content: withWarpTheme(content, readText(warpBasePath(configHome)) || WARP_DEFAULT) }
-}
-
 export function planUninstall(paths: UninstallPaths): UninstallPlan {
   const { home, configHome } = paths
   const state = installed(configHome)
-  const edits: UninstallPlan['edits'] = []
-  const strip = (file: string, remove: (content: string) => string) => {
-    const content = readText(file)
-    const next = remove(content)
-    if (next !== content) {
-      edits.push({ file, content: next })
-    }
+  const at = { configHome, home }
+  const every = wirings(WIRED)
+  const parts = every.map((wiring) => wiring.unwire(at, state))
+  const owns = [join(configHome, 'ttheme'), paths.cacheDir, paths.stateDir]
+  return {
+    edits: [...stripped(join(paths.zdotdir, '.zshrc'), removeBlock), ...parts.flatMap((part) => part.edits)],
+    removals: [
+      ...every.flatMap((wiring) => (wiring.shelf ? ownedIn(wiring.shelf.dir(at)) : [])),
+      ...parts.flatMap((part) => part.removals),
+      ...owns.filter((path) => existsSync(path)),
+    ],
+    touches: parts.flatMap((part) => part.touches),
+    ...(state ? { state } : {}),
   }
-  strip(join(paths.zdotdir, '.zshrc'), removeBlock)
-  strip(blockFile('ghostty', configHome), removeBlock)
-  strip(blockFile('kitty', configHome), removeBlock)
-  strip(alacrittyConfig(configHome), removeBlock)
-  strip(weztermConfig(configHome, home), removeLuaBlock)
-  const warp = warpEdit(configHome, home)
-  if (warp) {
-    edits.push(warp)
-  }
-  const removals: string[] = []
-  for (const terminal of ['ghostty', 'kitty', 'alacritty', 'wezterm', 'warp'] as const) {
-    const dir = themeDir(terminal, configHome, home)
-    if (existsSync(dir)) {
-      removals.push(...readdirSync(dir).flatMap((file) => (file.startsWith(owned('')) ? [join(dir, file)] : [])))
-    }
-  }
-  const owns = [
-    itermProfilesPath(home),
-    ...(state?.wtHome ? [dirname(wtFragmentPath(state.wtHome))] : []),
-    join(configHome, 'ttheme'),
-    paths.cacheDir,
-    paths.stateDir,
-  ]
-  removals.push(...owns.filter((path) => existsSync(path)))
-  return { edits, removals, touches: state?.wtHome ? wtSettings(state.wtHome) : [], ...(state ? { state } : {}) }
 }
 
-export function applyUninstall(plan: UninstallPlan, prefs: ItermDefaults = itermDefaults()): string[] {
+export function applyUninstall(plan: UninstallPlan, paths: UninstallPaths, host: Host = systemHost()): string[] {
   const done: string[] = []
   for (const { file, content } of plan.edits) {
     const result = restoreUserFile(file, content)
@@ -113,8 +66,13 @@ export function applyUninstall(plan: UninstallPlan, prefs: ItermDefaults = iterm
           : `Took ttheme out of ${file} — kept ${file}.ttheme.bak, since the file changed after ttheme's first edit`,
     )
   }
-  if (plan.state && pointItermDefault({ ...plan.state, off: true }, prefs)) {
-    done.push('Gave iTerm2 its own default profile back — it takes it at its next start')
+  if (plan.state) {
+    const pointed = pointDefaults(paths.configHome, { ...plan.state, off: true }, false, host, paths.home)
+    for (const wiring of wirings(plan.state.terminals)) {
+      if (pointed.has(wiring.id)) {
+        done.push(`Gave ${wiring.name} its own default profile back — it takes it at its next start`)
+      }
+    }
   }
   for (const path of plan.removals) {
     rmSync(path, { recursive: true, force: true })
@@ -170,7 +128,7 @@ export async function runUninstall(yes = false): Promise<void> {
       throw new Cancelled()
     }
   }
-  for (const line of applyUninstall(plan)) {
+  for (const line of applyUninstall(plan, paths)) {
     console.log(line)
   }
   console.log('Open tabs keep their colors until they close — restart your terminal to drop ttheme everywhere')

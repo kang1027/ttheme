@@ -42,10 +42,11 @@ import { canRemoveBackground, keepable, removeBackground } from './cutout.ts'
 import { writeAtomic } from './edits.ts'
 import type { PaletteEntry } from './emit/manifest.ts'
 import { colorless } from './osc.ts'
-import { refreshProfiles } from './palettes.ts'
+import { aligns as alignsFor, refreshPictures } from './palettes.ts'
 import { pending, progress } from './pending.ts'
 import { decodeImage, decodePng, type Rgba, transparency } from './png.ts'
 import { linkable } from './terminal.ts'
+import type { Wired } from './terminals/types.ts'
 import type { SharedPicture } from './theme.ts'
 import { blurOf } from './wiring.ts'
 
@@ -191,13 +192,13 @@ function postRef(shared: SharedPicture, links: boolean): string {
 export async function bringPictures(
   configHome: string,
   entries: PaletteEntry[],
-  terminals: readonly string[],
+  terminals: readonly Wired[],
 ): Promise<void> {
   const due = entries.flatMap((entry) => missingPictures(configHome, entry).map((shared) => ({ entry, shared })))
   if (due.length === 0) {
     return
   }
-  const aligns = !terminals.includes('iterm2')
+  const aligns = alignsFor(terminals)
   const links = process.stdout.isTTY && linkable(process.env)
   const got = new Set<PaletteEntry>()
   const line = pending()
@@ -224,7 +225,7 @@ export async function bringPictures(
     }
   }
   if (got.size > 0) {
-    refreshProfiles(configHome)
+    refreshPictures(configHome)
   }
 }
 

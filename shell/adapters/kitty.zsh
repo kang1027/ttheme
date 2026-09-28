@@ -1,5 +1,7 @@
 source $TTHEME_HOME/adapters/_bg.zsh
 
+__tt_follows_focus() { return 0 }
+
 typeset -g TTHEME_KITTY_SHOWN=""
 
 __tt_keepable() { (( ${TTHEME_TERMINALS[(Ie)kitty]} )) }

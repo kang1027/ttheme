@@ -1,19 +1,11 @@
 import type { PaletteEntry } from './emit/manifest.ts'
-import { colorless, paletteOsc, queryTerminalColors, restoreOsc, SLOT_CODES } from './osc.ts'
+import { colorless, paletteOsc, queryTerminalColors, restoreOsc, SLOT_CODES, schemeOsc } from './osc.ts'
+import type { Wired } from './terminals/types.ts'
+import { owned } from './theme.ts'
 
 type Env = Record<string, string | undefined>
 
-export type Terminal =
-  | 'ghostty'
-  | 'kitty'
-  | 'wezterm'
-  | 'alacritty'
-  | 'iterm2'
-  | 'terminal-app'
-  | 'windows-terminal'
-  | 'warp'
-  | 'foot'
-  | 'unknown'
+export type Terminal = Wired | 'terminal-app' | 'foot' | 'unknown'
 
 export function detectTerminal(env: Env): Terminal {
   if (env.TERM_PROGRAM === 'WarpTerminal') {
@@ -30,6 +22,9 @@ export function detectTerminal(env: Env): Terminal {
   }
   if (env.ALACRITTY_WINDOW_ID) {
     return 'alacritty'
+  }
+  if (env.KONSOLE_VERSION) {
+    return 'konsole'
   }
   if (env.ITERM_SESSION_ID || env.TERM_PROGRAM === 'iTerm.app') {
     return 'iterm2'
@@ -52,6 +47,8 @@ export interface Traits {
   bands: boolean
   paints: boolean
   repaint?: readonly number[]
+  hex?: true
+  schemes?: true
 }
 
 export const TRAITS: Record<Terminal, Traits> = {
@@ -61,6 +58,7 @@ export const TRAITS: Record<Terminal, Traits> = {
   wezterm: { links: true, pictures: false, bands: false, paints: true },
   alacritty: { links: true, pictures: false, bands: false, paints: true },
   'windows-terminal': { links: true, pictures: false, bands: false, paints: true },
+  konsole: { links: false, pictures: false, bands: false, paints: true, repaint: [0, 1], hex: true, schemes: true },
   foot: { links: true, pictures: false, bands: false, paints: true },
   'terminal-app': { links: false, pictures: false, bands: false, paints: true },
   warp: { links: false, pictures: false, bands: false, paints: false },
@@ -84,12 +82,14 @@ export const CLEAR = '\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H'
 export interface Live {
   slots: readonly number[]
   paint(entry: PaletteEntry): string
+  wear(entry: PaletteEntry, wired: readonly string[]): string | undefined
   saved(): Promise<Map<string, string>>
   restore(saved: ReadonlyMap<string, string>): string
 }
 
 export function livePaint(env: Env, tty: boolean): Live | undefined {
-  const traits = TRAITS[detectTerminal(env)]
+  const terminal = detectTerminal(env)
+  const traits = TRAITS[terminal]
   if (!tty || colorless(env) || env.TMUX || !traits.paints) {
     return undefined
   }
@@ -98,7 +98,13 @@ export function livePaint(env: Env, tty: boolean): Live | undefined {
   return {
     slots,
     paint: (entry) => paletteOsc(entry, slots),
+    wear: (entry, wired) =>
+      !traits.schemes
+        ? paletteOsc(entry)
+        : wired.includes(terminal)
+          ? schemeOsc(owned(entry.name), entry.cursor)
+          : undefined,
     saved: () => queryTerminalColors(codes),
-    restore: (saved) => restoreOsc(saved, codes),
+    restore: (saved) => restoreOsc(saved, codes, traits.hex === true),
   }
 }

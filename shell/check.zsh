@@ -76,7 +76,8 @@ __tt_bg_load wall
   { print -u2 "a plain cover image did not load as fill: $bgsize[wall] $bgfill[wall]@$bgfocus[wall] ($bgdef[wall])"; exit 1 }
 [[ "$(<$TTHEME_CONFIG)" == "$TTHEME_CONFIG_TEMPLATE" ]] || { print -u2 "config seed drifted from the template"; exit 1 }
 reloads=0
-__tt_reload() { (( ++reloads )) }
+TTHEME_TERMINALS=(ghostty)
+__tt_reload_ghostty() { (( ++reloads )) }
 __tt_shown kagami && __tt_reload || { print -u2 "__tt_shown did not move the picture to kagami"; exit 1 }
 [[ "$(<$bgd/shown.conf)" == "config-file = ?kagami.conf" ]] || { print -u2 "shown.conf named the wrong palette: $(<$bgd/shown.conf)"; exit 1 }
 __tt_shown kagami && { print -u2 "__tt_shown asked for a reload with nothing to change"; exit 1 }
@@ -411,6 +412,35 @@ done
   __tt_pv_bg_show homura > /dev/null
   __tt_pv_bg_close > $bgd/view.out
   [[ $(<$bgd/view.out) == *$'\e]1337;SetUserVar=ttheme_view=\a' ]] || { print -u2 "closing preview in WezTerm left its view up"; exit 1 }
+) || exit 1
+(
+  TTHEME_TERMINALS=(konsole) TTHEME_KONSOLE_BASE='ColorScheme=Breeze;UseCustomCursorColor=false' TTHEME_STARTUP=miku TTHEME_TMUX=0
+  source $XDG_CONFIG_HOME/ttheme/adapters/konsole.zsh
+  cursor=${${=TTHEME_PALETTE[kaito]}[3]}
+  [[ "$(__tt_apply "$TTHEME_PALETTE[kaito]")" == $'\e]50;ColorScheme=ttheme-kaito;UseCustomCursorColor=true;customCursorColor='$cursor$'\a' ]] ||
+    { print -u2 "a Konsole paint did not switch the tab to the palette's color scheme: ${(V)$(__tt_apply "$TTHEME_PALETTE[kaito]")}"; exit 1 }
+  forks_of __tt_apply "$TTHEME_PALETTE[kaito]"
+  (( REPLY == 0 )) || { print -u2 "a Konsole paint forks again ($REPLY processes) — every preview hover pays it"; exit 1 }
+  [[ "$(__tt_apply "#123456 ${TTHEME_PALETTE[kaito]#* }")" == $'\e]11;#123456\e\\\e]10;'${${=TTHEME_PALETTE[kaito]}[2]}$'\e\\' ]] ||
+    { print -u2 "Konsole painted colors no scheme holds with more than the background and foreground it can draw"; exit 1 }
+  [[ "$(__tt_osc_reset)" == $'\e]50;ColorScheme=ttheme-miku;UseCustomCursorColor=true;customCursorColor='${${=TTHEME_PALETTE[miku]}[3]}$'\a' ]] ||
+    { print -u2 "a Konsole reset did not go back to the default palette's scheme, which new tabs open with"; exit 1 }
+  TTHEME_STARTUP=
+  [[ "$(__tt_osc_reset)" == $'\e]50;ColorScheme=Breeze;UseCustomCursorColor=false\a' ]] ||
+    { print -u2 "a Konsole reset while ttheme is off did not go back to the user's own scheme"; exit 1 }
+  __tt_keepable || { print -u2 "a wired Konsole did not offer to keep a palette as the default"; exit 1 }
+  TTHEME_TERMINALS=()
+  ! __tt_paints || { print -u2 "an unwired Konsole, which has no ttheme color schemes, claimed the layer can paint it"; exit 1 }
+  out=$(ttheme use kaito 2>&1) && { print -u2 "ttheme use ran in an unwired Konsole"; exit 1 }
+  [[ $out == *"wire it with"* ]] || { print -u2 "an unwired Konsole refused ttheme use without saying how to wire it: $out"; exit 1 }
+  EDITOR=true ttheme config > /dev/null || { print -u2 "an unwired Konsole refused a verb that paints no tab"; exit 1 }
+) || exit 1
+(
+  source $XDG_CONFIG_HOME/ttheme/adapters/warp.zsh
+  out=$(ttheme use kaito 2>&1) && { print -u2 "ttheme use ran in Warp"; exit 1 }
+  [[ $out == *"Warp wears one theme app-wide"* ]] || { print -u2 "Warp refused ttheme use without its reason: $out"; exit 1 }
+  ttheme 2>/dev/null && { print -u2 "the palette menu ran in Warp"; exit 1 }
+  ! __tt_paints || { print -u2 "the layer claimed it can paint Warp's tabs"; exit 1 }
 ) || exit 1
 mkdir -p $XDG_CONFIG_HOME/fakebin
 print -rl -- '#!/bin/sh' 'printf %s "$NODE_COMPILE_CACHE"' > $XDG_CONFIG_HOME/fakebin/node

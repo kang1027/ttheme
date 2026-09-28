@@ -9,53 +9,39 @@ import { available, readCatalog, writeCatalog } from './catalog.ts'
 import { editUserFile, writeAtomic } from './edits.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
 import { pickPalettes } from './market.ts'
-import { paletteOsc } from './osc.ts'
 import {
-  alacrittyConfig,
   configHome as configDir,
   type Installed,
-  type ItermDefaults,
-  itermDefaults,
-  pointItermDefault,
+  pointDefaults,
   readInstalled,
   startupPalette,
   sync,
-  warpThemes,
-  weztermConfig,
+  wiringNext,
   wiringNotes,
   wiringPlan,
-  withItermBase,
+  withBases,
   worn,
   writeInstalled,
 } from './palettes.ts'
 import { redrawPictures } from './redraw.ts'
 import { marketsOf, OFFICIAL } from './sources.ts'
 import { detectTerminal, livePaint, TRAITS } from './terminal.ts'
+import { systemHost } from './terminals/common.ts'
+import { WIRED, WIRINGS, type Wired, wirings } from './terminals/index.ts'
+import type { Host, Pointed, Setup } from './terminals/types.ts'
+import { windowsAppData } from './terminals/windows-terminal.ts'
 import { marketOf } from './theme.ts'
-import {
-  configFile,
-  INIT_TERMINALS,
-  type InitTerminal,
-  TERMINAL_NAMES,
-  upsertAlacrittyImport,
-  upsertBlock,
-  upsertLuaBlock,
-  zshrcBlock,
-} from './wiring.ts'
+import { configFile, upsertBlock, zshrcBlock } from './wiring.ts'
 
 export interface InitOptions {
-  terminals: InitTerminal[]
+  terminals: Wired[]
   palettes: string[]
   off?: boolean
 }
 
-export interface InitPaths {
+export interface InitPaths extends Setup {
   root: string
-  home: string
-  configHome: string
   zdotdir: string
-  wtHome?: string
-  wtProfile?: string
 }
 
 export interface InitPlan {
@@ -91,42 +77,17 @@ export function planInit(opts: InitOptions, paths: InitPaths): InitPlan {
   const configPath = join(home, 'config.zsh')
   const seeded = configFile(existsSync(configPath) ? readFileSync(configPath, 'utf8') : '')
   const settings = { file: configPath, content: seeded }
-  const notes: string[] = []
-  if (opts.terminals.includes('alacritty')) {
-    const config = alacrittyConfig(paths.configHome)
-    if (existsSync(config) && upsertAlacrittyImport(readFileSync(config, 'utf8'), undefined) === undefined) {
-      notes.push(
-        `${config} already imports files under [general] — ttheme left it alone; add ${join(paths.configHome, 'alacritty', 'themes')}/<palette>.toml to that import list yourself`,
-      )
-    }
-  }
-  if (opts.terminals.includes('wezterm')) {
-    const config = weztermConfig(paths.configHome, paths.home)
-    if (existsSync(config) && upsertLuaBlock(readFileSync(config, 'utf8'), '') === undefined) {
-      notes.push(
-        `${config} has no \`return config\` line — ttheme left it alone; call \`dofile("${join(home, 'wezterm.lua')}")(config)\` from it yourself`,
-      )
-    }
-  }
-  const wt = opts.terminals.includes('windows-terminal')
-  if (wt && !paths.wtHome) {
-    notes.push(
-      'Windows Terminal: %LOCALAPPDATA% was not found — drop the release fragment into its Fragments folder yourself',
-    )
-  }
-  if (opts.terminals.includes('warp')) {
-    notes.push(
-      'Warp wears the default palette app-wide through its settings.toml — the shell layer stays off in it, since Warp paints no tab background of its own',
-    )
-  }
   const installed: Installed = {
     terminals: opts.terminals,
     palettes: opts.palettes,
-    ...(wt && paths.wtHome ? { wtHome: paths.wtHome } : {}),
-    ...(wt && paths.wtProfile ? { wtProfile: paths.wtProfile } : {}),
+    ...Object.fromEntries(
+      wirings(opts.terminals).flatMap((wiring) =>
+        Object.entries(wiring.installs?.(paths) ?? {}).filter(([, value]) => value !== undefined),
+      ),
+    ),
     ...(opts.off ? { off: true as const } : {}),
   }
-  notes.push(...wiringNotes(paths.configHome, opts.terminals, paths.home))
+  const notes = wiringNotes(paths.configHome, installed, paths.home)
   return { home: paths.home, copies, edits, settings, catalog: loadManifest(paths.root), installed, notes }
 }
 
@@ -164,10 +125,17 @@ export function keptStartup(state: Installed, palettes: string[]): string | unde
 export function planAgain(state: Installed, opts: InitOptions, paths: InitPaths): InitPlan {
   const plan = planInit(opts, paths)
   const startup = keptStartup(state, opts.palettes)
-  const { terminals, palettes, off, wtHome, wtProfile, startup: was, ...kept } = state
+  const asked = new Set<string>([
+    'terminals',
+    'palettes',
+    'off',
+    'startup',
+    ...WIRED.flatMap((id) => Object.keys(WIRINGS[id].installs?.(paths) ?? {})),
+  ])
+  const kept = Object.fromEntries(Object.entries(state).filter(([key]) => !asked.has(key)))
   return {
     ...plan,
-    installed: { ...kept, ...plan.installed, ...(startup ? { startup } : {}) },
+    installed: { ...kept, ...plan.installed, ...(startup ? { startup } : {}) } as Installed,
   }
 }
 
@@ -201,21 +169,15 @@ function installedVersion(configHome: string): string | undefined {
 function summary(state: Installed): string {
   const startup = worn(state)
   return [
-    state.terminals.map((t) => TERMINAL_NAMES[t]).join(', '),
+    wirings(state.terminals)
+      .map((wiring) => wiring.name)
+      .join(', '),
     `${state.palettes.length} palettes`,
     startup ? `default ${startup}` : 'no default — ttheme is off',
   ].join(' · ')
 }
 
-function keptBase(configHome: string): string | undefined {
-  try {
-    return readInstalled(configHome).itermBase
-  } catch {
-    return undefined
-  }
-}
-
-export function applyInit(plan: InitPlan, prefs: ItermDefaults = itermDefaults()): boolean {
+export function applyInit(plan: InitPlan, host: Host = systemHost()): Map<Wired, Pointed> {
   for (const c of plan.copies) {
     mkdirSync(dirname(c.to), { recursive: true })
     rmSync(c.to, { force: true })
@@ -227,8 +189,15 @@ export function applyInit(plan: InitPlan, prefs: ItermDefaults = itermDefaults()
   }
   writeAtomic(plan.settings.file, plan.settings.content)
   const configHome = dirname(dirname(plan.settings.file))
-  const base = keptBase(configHome)
-  const installed = withItermBase(base ? { ...plan.installed, itermBase: base } : plan.installed, prefs)
+  const kept = installedState(configHome)
+  const carried = Object.fromEntries(
+    wirings(plan.installed.terminals).flatMap((wiring) => {
+      const key = wiring.defaults?.key
+      const base = key ? kept?.[key] : undefined
+      return key && base ? [[key, base]] : []
+    }),
+  )
+  const installed = withBases(configHome, { ...plan.installed, ...carried }, host, plan.home)
   if (marketsOf(installed.markets).includes(OFFICIAL)) {
     writeCatalog(configHome, plan.catalog)
   }
@@ -239,7 +208,7 @@ export function applyInit(plan: InitPlan, prefs: ItermDefaults = itermDefaults()
     const current = existsSync(e.file) ? readFileSync(e.file, 'utf8') : ''
     editUserFile(e.file, upsertBlock(current, e.block))
   }
-  return pointItermDefault(installed, prefs)
+  return pointDefaults(configHome, installed, true, host, plan.home)
 }
 
 export class Cancelled extends Error {}
@@ -252,57 +221,17 @@ function accepted<T>(value: T | symbol): T {
   return value as T
 }
 
-function offered(paths: InitPaths): InitTerminal[] {
-  return INIT_TERMINALS.filter((t) => {
-    if (t === 'iterm2') {
-      return process.platform === 'darwin'
-    }
-    if (t === 'windows-terminal') {
-      return paths.wtHome !== undefined
-    }
-    return t !== 'warp' || process.platform !== 'win32'
-  })
+function offered(paths: InitPaths, host: Host): Wired[] {
+  return WIRED.filter((id) => WIRINGS[id].offered(paths, host))
 }
 
-function present(terminal: InitTerminal, paths: InitPaths): boolean {
-  if (terminal === 'iterm2') {
-    return existsSync(join(paths.home, 'Library', 'Application Support', 'iTerm2'))
-  }
-  if (terminal === 'windows-terminal') {
-    return paths.wtHome !== undefined
-  }
-  if (terminal === 'warp') {
-    return existsSync(dirname(warpThemes(paths.home)))
-  }
-  if (terminal === 'wezterm') {
-    return existsSync(join(paths.configHome, 'wezterm')) || existsSync(join(paths.home, '.wezterm.lua'))
-  }
-  return existsSync(join(paths.configHome, terminal))
-}
-
-function windowsAppData(): string | undefined {
-  if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA
-  }
-  if (!process.env.WSL_DISTRO_NAME) {
-    return undefined
-  }
-  const run = (command: string, args: string[]) =>
-    execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  try {
-    return run('wslpath', ['-u', run('cmd.exe', ['/d', '/c', 'echo %LOCALAPPDATA%'])]) || undefined
-  } catch {
-    return undefined
-  }
-}
-
-async function askTerminals(detected: string, preselected: InitTerminal[], paths: InitPaths): Promise<InitTerminal[]> {
+async function askTerminals(detected: string, preselected: Wired[], paths: InitPaths, host: Host): Promise<Wired[]> {
   return accepted(
     await p.multiselect({
       message: 'Wire which terminals?',
-      options: offered(paths).map((t) => ({
+      options: offered(paths, host).map((t) => ({
         value: t,
-        label: TERMINAL_NAMES[t],
+        label: WIRINGS[t].name,
         hint: t === detected ? 'detected' : undefined,
       })),
       initialValues: preselected,
@@ -328,10 +257,11 @@ function seriesOf(catalog: Manifest, names: string[]): string[] {
 
 function paintStartup(catalog: Manifest, installed: Installed): boolean {
   const startup = catalog.palettes.find((e) => e.name === worn(installed))
-  if (!startup || !livePaint(process.env, process.stdout.isTTY === true)) {
+  const wear = startup && livePaint(process.env, process.stdout.isTTY === true)?.wear(startup, installed.terminals)
+  if (!wear) {
     return false
   }
-  process.stdout.write(paletteOsc(startup))
+  process.stdout.write(wear)
   return true
 }
 
@@ -355,56 +285,30 @@ function pickDefault(configHome: string): void {
   })
 }
 
-function receipt(plan: InitPlan, opts: InitOptions, painted: boolean, restart: boolean): void {
+function receipt(plan: InitPlan, opts: InitOptions, painted: boolean, pointed: ReadonlyMap<Wired, Pointed>): void {
   const series = seriesOf(plan.catalog, opts.palettes)
   p.note(
     [`${series.join(', ')} (${opts.palettes.length})`, ...startupLines(plan.installed, painted)].join('\n'),
     `Installed ${opts.palettes.length} palettes`,
   )
-  p.note(
-    ['exec zsh          The ttheme command in this tab', ...nextLines(opts.terminals, plan, restart)].join('\n'),
-    'Next',
-  )
+  p.note(['exec zsh          The ttheme command in this tab', ...nextLines(plan, pointed)].join('\n'), 'Next')
   p.outro('Done')
 }
 
-function nextLines(terminals: InitTerminal[], plan: InitPlan, restart: boolean): string[] {
-  const next: string[] = []
-  if (terminals.includes('ghostty')) {
-    next.push('Restart Ghostty   New tabs pick up its config')
-  }
-  if (terminals.includes('kitty')) {
-    next.push('New kitty window  Pictures follow it — kitty reloads its colors by itself')
-  }
-  if (terminals.includes('alacritty')) {
-    next.push('Alacritty         Reloads its config by itself')
-  }
-  if (terminals.includes('wezterm')) {
-    next.push('WezTerm           Reloads its config by itself')
-  }
-  if (terminals.includes('windows-terminal')) {
-    next.push('Windows Terminal  Reloads its settings by itself')
-  }
-  if (terminals.includes('iterm2')) {
-    next.push(...itermLines(worn(plan.installed), restart))
-  }
-  return [...next, ...plan.notes]
+function nextLines(plan: InitPlan, pointed: ReadonlyMap<Wired, Pointed>): string[] {
+  return [...wiringNext(dirname(dirname(plan.settings.file)), plan.installed, pointed, plan.home), ...plan.notes]
 }
 
 function say(interactive: boolean): (line: string) => void {
   return interactive ? (line) => p.log.step(line) : (line) => console.log(line)
 }
 
-async function upgrade(state: Installed, paths: InitPaths, interactive: boolean): Promise<void> {
+async function upgrade(state: Installed, paths: InitPaths, host: Host, interactive: boolean): Promise<void> {
   const plan = planUpgrade(state, paths)
-  const prefs = itermDefaults()
-  const moved = applyInit(plan, prefs)
+  const pointed = applyInit(plan, host)
   verify(plan)
   await redrawPictures(paths.configHome, say(interactive), paths.home)
-  const lines = [
-    'exec zsh          Open tabs run the new layer — new tabs already do',
-    ...nextLines(plan.installed.terminals, plan, moved && prefs.running()),
-  ]
+  const lines = ['exec zsh          Open tabs run the new layer — new tabs already do', ...nextLines(plan, pointed)]
   const title = `Updated to ${pkg.version} — kept ${summary(plan.installed)}`
   if (!interactive) {
     console.log([title, ...lines].join('\n'))
@@ -414,41 +318,14 @@ async function upgrade(state: Installed, paths: InitPaths, interactive: boolean)
   p.outro('Done')
 }
 
-function itermLines(startup: string | undefined, restart: boolean): string[] {
-  const lines = ['iTerm2 profiles   A "ttheme · <palette>" per palette in Settings › Profiles']
-  if (startup) {
-    lines.push(
-      restart
-        ? `Restart iTerm2    New tabs open on "ttheme · default", which wears ${startup}`
-        : `iTerm2 default    "ttheme · default" wears ${startup} and follows \`ttheme default\``,
-    )
-  }
-  return lines
-}
-
-function report(plan: InitPlan, opts: InitOptions): void {
+function report(plan: InitPlan, pointed: ReadonlyMap<Wired, Pointed>): void {
   const lines = [
     `Placed ${plan.copies.length} files`,
     `Settings in ${plan.settings.file} — edit later with \`ttheme config\``,
     ...plan.edits.map((e) => `Wired ${e.file}`),
+    ...nextLines(plan, pointed),
+    'No palettes yet — open a new shell (`exec zsh`), then `ttheme browse` picks them from the catalog',
   ]
-  if (opts.terminals.includes('ghostty')) {
-    lines.push('Restart Ghostty to pick up its config')
-  }
-  if (opts.terminals.includes('kitty')) {
-    lines.push('kitty reloads its colors by itself; pictures show in kitty windows opened from now on')
-  }
-  if (opts.terminals.includes('alacritty')) {
-    lines.push('Alacritty reloads its config by itself')
-  }
-  if (opts.terminals.includes('wezterm') || opts.terminals.includes('windows-terminal')) {
-    lines.push('WezTerm and Windows Terminal reload their config by themselves')
-  }
-  if (opts.terminals.includes('iterm2')) {
-    lines.push('iTerm2 gets a "ttheme · <palette>" profile per palette under Settings › Profiles')
-  }
-  lines.push(...plan.notes)
-  lines.push('No palettes yet — open a new shell (`exec zsh`), then `ttheme browse` picks them from the catalog')
   console.log(lines.join('\n'))
 }
 
@@ -466,7 +343,8 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
   const home = homedir()
   const configHome = configDir()
   const zdotdir = process.env.ZDOTDIR ?? home
-  const wtHome = windowsAppData()
+  const host = systemHost()
+  const wtHome = windowsAppData(host)
   const wtProfile = process.env.WT_PROFILE_ID
   const paths: InitPaths = {
     root,
@@ -477,7 +355,7 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
     ...(wtProfile ? { wtProfile } : {}),
   }
   const detected = detectTerminal(process.env)
-  const preselected = offered(paths).filter((t) => t === detected || present(t, paths))
+  const preselected = offered(paths, host).filter((t) => t === detected || WIRINGS[t].present(paths))
   if (!flags.yes && (process.stdin.isTTY !== true || process.stdout.isTTY !== true)) {
     throw new Error(
       'init asks before it edits your configs — run it in a terminal, or pass --yes to accept the defaults',
@@ -485,20 +363,23 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
   }
   const existing = installedState(configHome)
   if (flags.yes && existing) {
-    await upgrade(existing, paths, false)
+    await upgrade(existing, paths, host, false)
     return
   }
   if (flags.yes) {
     if (preselected.length === 0) {
       throw new Error(
-        'no supported terminal detected — run this inside ghostty, kitty, alacritty, wezterm, iterm2, windows terminal or warp',
+        `no supported terminal detected — run this inside ${wirings(offered(paths, host))
+          .map((wiring) => wiring.name.toLowerCase())
+          .join(', ')
+          .replace(/, ([^,]*)$/, ' or $1')}`,
       )
     }
     const opts: InitOptions = { terminals: preselected, palettes: [] }
     const plan = planInit(opts, paths)
-    applyInit(plan)
+    const pointed = applyInit(plan, host)
     verify(plan)
-    report(plan, opts)
+    report(plan, pointed)
     return
   }
   p.intro('ttheme init')
@@ -513,11 +394,11 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
       }),
     )
     if (keep) {
-      await upgrade(existing, paths, true)
+      await upgrade(existing, paths, host, true)
       return
     }
   }
-  const terminals = await askTerminals(detected, existing?.terminals ?? preselected, paths)
+  const terminals = await askTerminals(detected, existing?.terminals ?? preselected, paths, host)
   const catalog = existing ? againCatalog(existing, paths) : loadManifest(root)
   const palettes = existing
     ? await pickPalettes(catalog, existing.palettes, 'palette', true)
@@ -549,21 +430,26 @@ export async function runInit(flags: { yes?: boolean } = {}): Promise<void> {
           ? `Open ttheme preview — every tab wears the palette picked there, ${first} until then`
           : `Paint every tab with ${first}, this one now`
         : 'Leave the terminal colors as they are — `ttheme on` wears a palette later',
-      ...(terminals.includes('iterm2') && wear ? ['Make "ttheme · default" the iTerm2 default profile'] : []),
+      ...(wear && first
+        ? wirings(terminals).flatMap((wiring) =>
+            wiring.defaults ? [`Make "${wiring.defaults.profile(first)}" the ${wiring.name} default profile`] : [],
+          )
+        : []),
     ].join('\n'),
-    `Wiring ${terminals.map((t) => TERMINAL_NAMES[t]).join(', ')}`,
+    `Wiring ${wirings(terminals)
+      .map((wiring) => wiring.name)
+      .join(', ')}`,
   )
   if (!accepted(await p.confirm({ message: 'Apply these changes?' }))) {
     p.cancel('Nothing changed')
     throw new Cancelled()
   }
-  const prefs = itermDefaults()
-  const moved = applyInit(plan, prefs)
+  const pointed = applyInit(plan, host)
   verify(plan)
   await redrawPictures(configHome, say(true), home)
   if (wear && choose) {
     pickDefault(configHome)
   }
   const installed = readInstalled(configHome)
-  receipt({ ...plan, catalog, installed }, opts, paintStartup(catalog, installed), moved && prefs.running())
+  receipt({ ...plan, catalog, installed }, opts, paintStartup(catalog, installed), pointed)
 }

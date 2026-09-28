@@ -14,7 +14,12 @@ function spoken(tag: string): string {
   return tag.replace(/_\([^)]*\)$/, '').replaceAll('_', ' ')
 }
 
-export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminals: readonly string[] = []): string {
+export function palettesZsh(
+  palettes: PaletteEntry[],
+  startup?: string,
+  terminals: readonly string[] = [],
+  layer: Readonly<Record<string, string>> = {},
+): string {
   for (const p of palettes) {
     for (const field of [p.name, p.group, p.native ?? '', ...(p.nativeNames ?? []), p.ansiSource]) {
       if (UNQUOTABLE.test(field)) {
@@ -41,9 +46,20 @@ export function palettesZsh(palettes: PaletteEntry[], startup?: string, terminal
     '',
     '# the terminals ttheme is wired into: a picture change reaches every one of them, from whichever runs the shell',
     `typeset -ga TTHEME_TERMINALS=(${terminals.join(' ')})`,
+    ...(Object.keys(layer).length > 0
+      ? [
+          '',
+          "# what a wired terminal's adapter needs to know of it (src/terminals/)",
+          ...Object.entries(layer).map(([key, value]) => `typeset -g ${key}=${quote(value)}`),
+        ]
+      : []),
     '',
     '# the commands the shell layer knows (src/verbs.ts): help, completion and argument checks read them',
     `typeset -ga TTHEME_VERBS=(${verbs.map((v) => v.name).join(' ')})`,
+    `typeset -ga TTHEME_TAB_VERBS=(${verbs
+      .filter((v) => v.section === 'tab')
+      .map((v) => v.name)
+      .join(' ')})`,
     `typeset -ga TTHEME_SHELL_VERBS=(${verbs
       .filter((v) => v.shell)
       .map((v) => v.name)

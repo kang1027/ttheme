@@ -6,7 +6,8 @@ import { test } from 'node:test'
 
 import { backupPath } from './edits.ts'
 import type { Manifest, PaletteEntry } from './emit/manifest.ts'
-import { type Installed, type ItermDefaults, sync, writeInstalled } from './palettes.ts'
+import { type Installed, sync, writeInstalled } from './palettes.ts'
+import type { Host } from './terminals/types.ts'
 import { applyUninstall, planUninstall, type UninstallPaths } from './uninstall.ts'
 
 function entry(name: string, order: number): PaletteEntry {
@@ -34,7 +35,7 @@ const catalog: Manifest = {
   palettes: [entry('gojo', 1), entry('geto', 2)],
 }
 
-const prefs: ItermDefaults = { read: () => undefined, write: () => {}, running: () => false }
+const host: Host = { platform: 'linux', env: {}, run: () => undefined }
 
 function paths(): UninstallPaths {
   const home = mkdtempSync(join(tmpdir(), 'ttheme-uninstall-'))
@@ -69,7 +70,7 @@ test('uninstall gives every config back as it was and deletes only what ttheme w
   assert.equal(readFileSync(backupPath(ghostty), 'utf8'), 'font-size = 13\ntheme = Dracula\n')
   assert.ok(!existsSync(backupPath(kitty)))
 
-  applyUninstall(planUninstall(p), prefs)
+  applyUninstall(planUninstall(p), p, host)
 
   assert.equal(readFileSync(ghostty, 'utf8'), 'font-size = 13\ntheme = Dracula\n')
   assert.ok(!existsSync(backupPath(ghostty)))
@@ -89,7 +90,7 @@ test('uninstall keeps the backup when the config changed after ttheme first edit
   install(p, { terminals: ['ghostty'], palettes: ['gojo'] })
   writeFileSync(ghostty, `window-padding-x = 4\n${readFileSync(ghostty, 'utf8')}`)
 
-  applyUninstall(planUninstall(p), prefs)
+  applyUninstall(planUninstall(p), p, host)
 
   assert.equal(readFileSync(ghostty, 'utf8'), 'window-padding-x = 4\nfont-size = 13\n')
   assert.equal(readFileSync(backupPath(ghostty), 'utf8'), 'font-size = 13\n')
@@ -106,7 +107,7 @@ test('a config kept as a symlink stays one through install and uninstall', () =>
   assert.ok(lstatSync(ghostty).isSymbolicLink())
   assert.match(readFileSync(real, 'utf8'), /# ttheme begin/)
 
-  applyUninstall(planUninstall(p), prefs)
+  applyUninstall(planUninstall(p), p, host)
 
   assert.ok(lstatSync(ghostty).isSymbolicLink())
   assert.equal(readFileSync(real, 'utf8'), 'font-size = 13\n')
@@ -124,7 +125,7 @@ test('uninstall puts back the Warp theme ttheme replaced', () => {
   install(p, { terminals: ['warp'], palettes: ['gojo'] })
   assert.match(readFileSync(settings, 'utf8'), /ttheme-gojo\.yaml/)
 
-  applyUninstall(planUninstall(p), prefs)
+  applyUninstall(planUninstall(p), p, host)
 
   assert.equal(readFileSync(settings, 'utf8'), before)
   assert.ok(!existsSync(backupPath(settings)))
