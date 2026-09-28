@@ -1680,8 +1680,11 @@ __tt_pv_foot() {
     else
       kk+=(⇧←→) kl+=(×10)
     fi
-    kk+=(space enter)
-    if (( bgoff[$tpick] )); then kl+=(show keep); else kl+=(hide keep); fi
+    if (( bgoff[$tpick] )); then
+      kk+=(space enter) kl+=(show keep)
+    else
+      kk+=(c space enter) kl+=(colors hide keep)
+    fi
     __tt_pv_bg_images $tune
     (( REPLY > 1 )) && { kk+=(', .' D); kl+=("image ×$REPLY" remove) }
     __tt_pv_bg_findable $tune && { kk+=(f); kl+=(find) }
@@ -1777,8 +1780,8 @@ __tt_pv_help() {
     "enter  ·  esc restores $back"
   )
   if (( bgcw )); then
-    hk+=("Tune bg" "" "" "" "" "")
-    hv+=("tab  ·  finds one on the boorus, or takes your own, if none" "↑↓ field  ←→ step  ⇧←→ ×10  1-9 place" "=  resets a field  ·  +  resets all" "space hides  ·  enter keeps  ·  esc undoes" ",  .  other pictures  ·  D removes one" "f  adds one from the boorus or your own")
+    hk+=("Tune bg" "" "" "" "" "" "")
+    hv+=("tab  ·  finds one on the boorus, or takes your own, if none" "↑↓ field  ←→ step  ⇧←→ ×10  1-9 place" "=  resets a field  ·  +  resets all" "space hides  ·  enter keeps  ·  esc undoes" "c  tone  ↔  the picture's own colors" ",  .  other pictures  ·  D removes one" "f  adds one from the boorus or your own")
   fi
   hk+=(Config "")
   hv+=("alt-c  ·  ↑↓ setting  ←→ value" "enter saves  ·  esc undoes")
@@ -1896,6 +1899,7 @@ __tt_pv_tune() {
     $'\x03') return 1 ;;
     up) tf=$(( tf > 1 ? tf - 1 : 4 )) ;;
     down) tf=$(( tf < 4 ? tf + 1 : 1 )) ;;
+    c) (( bgoff[$tpick] )) || __tt_pv_bg_recolor ;;
     left|right|sleft|sright)
       if (( tf == 4 )); then
         (( bgoff[$tpick] )) || __tt_pv_bg_recolor

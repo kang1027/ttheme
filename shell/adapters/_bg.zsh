@@ -547,7 +547,7 @@ __tt_pv_bg_drop() {
 
 __tt_pv_bg_recolor() {
   local name=$tune was=$tpick key=${tpick##*:} want err REPLY
-  local -i rc
+  local -i rc row=$tf
   [[ $tpick == *:* ]] || key=${bgact[$name]}
   __tt_bg_coloring $tpick
   want=original
@@ -575,7 +575,7 @@ __tt_pv_bg_recolor() {
     __tt_bg_load $tpick
     tsnaps[$tpick]="${bgsize[$tpick]} ${bgpos[$tpick]} ${bgop[$tpick]} ${bgoff[$tpick]}"
   fi
-  tf=4
+  tf=$row
 }
 
 __tt_pv_bg_panel() {

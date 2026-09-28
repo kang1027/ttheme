@@ -121,6 +121,8 @@ out=; __tt_pv_foot 80
 [[ $out == *"f find"* ]] || { print -u2 "an IMAGE EDIT bar with several images dropped the find key: $out"; exit 1 }
 out=; __tt_pv_foot 200
 [[ $out == *"image ×3"* ]] || { print -u2 "the IMAGE EDIT bar did not count the palette's pictures: $out"; exit 1 }
+[[ $out == *"space show"* && $out != *"c colors"* ]] ||
+  { print -u2 "the IMAGE EDIT bar of a hidden picture offered the colors key: $out"; exit 1 }
 msg=${(l:200::x:)} msgt=100 out=; __tt_pv_foot 80
 plain=${out//$'\e[K'/}
 (( ${(m)#plain} <= 80 )) || { print -u2 "a long preview message overran the bar: ${(m)#plain} columns"; exit 1 }
@@ -188,13 +190,29 @@ tune= tpick= bgcw=0 out=
   bgsrc=() bgcolors=() bgedit=() bgview=() bgswap=() tsnaps=()
   bgcw=8 color=0 msgt=0 help=0 pick= conf=0 flt=
   __tt_pv_tune_open kagami
-  tf=4
-  __tt_pv_bg_recolor > /dev/null
+  bgoff[kagami]=1 tf=1 key=c
+  rm -f $bgd/cli.log
+  __tt_pv_tune > /dev/null
+  [[ ! -e $bgd/cli.log ]] || { print -u2 "c drew a hidden picture again"; exit 1 }
+  bgoff[kagami]=0 out=; __tt_pv_foot 200
+  [[ $out == *"c colors"* ]] || { print -u2 "the IMAGE EDIT bar did not offer the colors key: $out"; exit 1 }
+  __tt_pv_tune > /dev/null
   REPLY=; __tt_bg_coloring $tpick
-  [[ "$(<$bgd/cli.log)" == "image kagami original safebooru_2" && $REPLY == original && $tf == 4 && $tune == kagami && $bgsrc[kagami] == *5e5e5e5e* ]] ||
-    { print -u2 "the Colors row did not draw the picture again through the CLI: $(<$bgd/cli.log) coloring=$REPLY tf=$tf tune=$tune src=$bgsrc[kagami]"; exit 1 }
+  [[ "$(<$bgd/cli.log)" == "image kagami original safebooru_2" && $REPLY == original && $tf == 1 && $tune == kagami && $bgsrc[kagami] == *5e5e5e5e* ]] ||
+    { print -u2 "c did not draw the picture again through the CLI, on the row it was pressed on: $(<$bgd/cli.log) coloring=$REPLY tf=$tf tune=$tune src=$bgsrc[kagami]"; exit 1 }
+  rm -f $bgd/cli.log
+  tf=4 key=right
+  __tt_pv_tune > /dev/null
+  [[ "$(<$bgd/cli.log)" == "image kagami tone safebooru_2" && $tf == 4 ]] ||
+    { print -u2 "the Colors row did not switch back on an arrow key: $(<$bgd/cli.log) tf=$tf"; exit 1 }
 ) || exit 1
 tune= tpick= bgcw=0 out=
+(
+  bgcw=8 color=0 split=1 sw=60 sc=40 se=100 pw=100 ph=24 help=1 out=
+  __tt_pv_help
+  [[ $out == *"c  tone  ↔  the picture's own colors"* ]] ||
+    { print -u2 "the help did not name the colors key: $out"; exit 1 }
+) || exit 1
 proj=$XDG_CONFIG_HOME/proj
 mkdir -p $proj/sub/deep $proj-sibling
 ln -s $proj/sub $XDG_CONFIG_HOME/link
