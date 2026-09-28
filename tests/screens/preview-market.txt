@@ -21,4 +21,4 @@
 
 
 
-enter apply   ? keys                                                                     esc restore
+[PREVIEW] enter apply   ? keys                                                           esc restore
