@@ -1662,9 +1662,9 @@ __tt_pv_foot() {
     printf -v y '\e[38;2;%d;%d;%dm' $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
   fi
   if (( help )); then
-    badge=KEYS right=$b"? esc"$z$d" close"$z
+    badge=HELP right=$b"? esc"$z$d" close"$z
   elif [[ -n $pick ]]; then
-    badge=APPLY lead="$pick →"
+    badge='PREVIEW (APPLY)' lead="$pick →"
     for (( i = 1; i <= ${#plabel}; i++ )); do
       if (( i != pk )); then
         lead+=" "$d${plabel[i]}$z
@@ -1675,7 +1675,7 @@ __tt_pv_foot() {
       fi
     done
     if [[ $mode == pin ]]; then
-      badge=PIN
+      badge='PREVIEW (PIN)'
       __tt_pin_base "${pkeys[pk]}"
       __tt_dir_label "$REPLY"
       note=$REPLY
@@ -1687,7 +1687,7 @@ __tt_pv_foot() {
     kk=(enter) kl=(confirm)
     right=$b"esc"$z$d" back"$z
   elif [[ -n $tune ]]; then
-    badge=TUNE kk=(↑↓ ←→ '=' +) kl=(field step reset "reset all")
+    badge='IMAGE EDIT' kk=(↑↓ ←→ '=' +) kl=(field step reset "reset all")
     if (( tf == 2 )); then
       kl[2]=move kk+=(1-9) kl+=(place)
     else
@@ -1703,7 +1703,8 @@ __tt_pv_foot() {
     badge=CONFIG kk=(↑↓ ←→ enter) kl=(setting value save)
     right=$b"esc"$z$d" undo"$z
   else
-    [[ -n $flt ]] && badge=FILTER
+    badge=PREVIEW
+    [[ -n $flt ]] && badge='PREVIEW (FILTER)'
     if (( ! ${#rval} )); then
       kk=(bksp) kl=(edit)
     elif [[ ${rtype[cur]} == (hdr|cat) ]]; then
@@ -1810,7 +1811,7 @@ __tt_pv_help() {
   x=$(( (pw - w) / 2 + 1 )) y=$(( (ph - hh) / 2 ))
   (( y < 4 )) && y=4
   blank=${(l:w:: :)}
-  out+=$'\e['$y';'$x'H'"╭─ Keys ${(l:$(( w - 9 ))::─:)}╮"
+  out+=$'\e['$y';'$x'H'"╭─ Help ${(l:$(( w - 9 ))::─:)}╮"
   for (( r = y + 1; r < y + hh - 1; r++ )); do
     out+=$'\e['$r';'$x'H'$blank$'\e['$r';'$x'H│'$'\e['$r';'$(( x + w - 1 ))'H│'
   done
@@ -2287,7 +2288,7 @@ __tt_pv_draw() {
   __tt_pv_foot $(( split ? se : pw ))
   if (( split )); then
     if (( help && sw >= 48 )); then
-      __tt_pv_head 1 $sc $se Keys
+      __tt_pv_head 1 $sc $se Help
       __tt_pv_help
     elif (( ${#reach} )); then
       __tt_pv_head 1 $sc $se "$pick" "$rsub"

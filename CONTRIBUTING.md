@@ -198,7 +198,7 @@ look, and never Title Case.
   and error messages, which read the same after the `ttheme:` prefix
   (`ttheme: not installed: kita`) and in a status line. A notice written for
   the screen (`No picture on the clipboard`) is not an error.
-- **Capitals**: only a mode badge (`SET`, `KEYS`, `TUNE`, `CONFIG`).
+- **Capitals**: only a mode badge (`PREVIEW`, `IMAGE SEARCH`, `IMAGE PREVIEW`, `IMAGE EDIT`, `HELP`, `CONFIG`).
 
 Counts on screen come from the catalog, never from the rows being drawn. A
 folded series still reports how many of its palettes are picked, and the

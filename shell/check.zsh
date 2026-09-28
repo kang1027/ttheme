@@ -117,9 +117,9 @@ __tt_bg_write kagami || { print -u2 "__tt_bg_write (a picture's own tuning) fail
   { print -u2 "tuning did not go to the picture the conf names:"; ls $bgd; cat $bgd/kagami.conf; exit 1 }
 bgcw=8 tune=kagami tpick=kagami tf=1 help=0 pick= conf=0 msgt=0 flt= color=0
 out=; __tt_pv_foot 80
-[[ $out == *"f find"* ]] || { print -u2 "a TUNE bar with several images dropped the find key: $out"; exit 1 }
+[[ $out == *"f find"* ]] || { print -u2 "an IMAGE EDIT bar with several images dropped the find key: $out"; exit 1 }
 out=; __tt_pv_foot 200
-[[ $out == *"image ×3"* ]] || { print -u2 "the TUNE bar did not count the palette's pictures: $out"; exit 1 }
+[[ $out == *"image ×3"* ]] || { print -u2 "the IMAGE EDIT bar did not count the palette's pictures: $out"; exit 1 }
 msg=${(l:200::x:)} msgt=100 out=; __tt_pv_foot 80
 plain=${out//$'\e[K'/}
 (( ${(m)#plain} <= 80 )) || { print -u2 "a long preview message overran the bar: ${(m)#plain} columns"; exit 1 }

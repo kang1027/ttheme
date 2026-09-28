@@ -1036,7 +1036,7 @@ function grid(lines: Line[], images: Placement[], cols: number, rows: number, vi
   const stage = loading(view, waiting, shown)
   const lead = status(view, stage)
   foot(lines[rows - 1] as Line, cols, accent, {
-    badge: 'FIND',
+    badge: 'IMAGE SEARCH',
     lead,
     keys:
       quiet && lead?.[0] === stage
@@ -1097,7 +1097,7 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
   }
   if (view.tuning) {
     foot(lines[rows - 1] as Line, cols, accent, {
-      badge: 'TUNE',
+      badge: 'IMAGE EDIT',
       lead: status(view),
       keys: [
         ['↑↓', 'field'],
@@ -1113,7 +1113,7 @@ function trial(lines: Line[], images: Placement[], cols: number, rows: number, v
   }
   const lead = status(view)
   foot(lines[rows - 1] as Line, cols, accent, {
-    badge: 'TRY',
+    badge: 'IMAGE PREVIEW',
     lead,
     keys:
       view.installing === undefined
@@ -1413,7 +1413,7 @@ function panel(lines: Line[], cols: number, rows: number, view: FindView, accent
   })
   lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
   const { keys, right } = panelKeys(view, view.settings[at])
-  foot(lines[rows - 1] as Line, cols, accent, { badge: 'SET', keys, right })
+  foot(lines[rows - 1] as Line, cols, accent, { keys, right })
 }
 
 function help(lines: Line[], cols: number, rows: number, view: FindView, accent: string): void {
@@ -1423,7 +1423,7 @@ function help(lines: Line[], cols: number, rows: number, view: FindView, accent:
   const h = laid.reduce((n, { parts }) => n + parts.length, 0) + 4
   const x = Math.floor((cols - w) / 2)
   const y = Math.max(2, Math.floor((rows - h) / 2))
-  lines[y]?.put(x, `╭─ Keys ${'─'.repeat(w - 9)}╮`)
+  lines[y]?.put(x, `╭─ Help ${'─'.repeat(w - 9)}╮`)
   for (let r = y + 1; r < y + h - 1; r++) {
     lines[r]?.put(x, `│${' '.repeat(w - 2)}│`)
   }
@@ -1436,7 +1436,7 @@ function help(lines: Line[], cols: number, rows: number, view: FindView, accent:
     }
   }
   lines[y + h - 1]?.put(x, `╰${'─'.repeat(w - 2)}╯`)
-  foot(lines[rows - 1] as Line, cols, accent, { badge: 'KEYS', right: ['? esc', 'close'] })
+  foot(lines[rows - 1] as Line, cols, accent, { badge: 'HELP', right: ['? esc', 'close'] })
 }
 
 function suggestions(lines: Line[], view: FindView, accent: string): void {

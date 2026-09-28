@@ -279,7 +279,7 @@ const KEYS: [string, string][] = [
 ]
 
 function keysPane(p: Paint, e: PaletteEditor, width: number): string[] {
-  const lines = [`  ${p.bold('Keys')}`, '']
+  const lines = [`  ${p.bold('Help')}`, '']
   for (const [name, text] of KEYS.filter(([name]) => name !== 'Pictures' || e.options.find)) {
     wrapText(text, width - 16).forEach((line, i) => {
       lines.push(`  ${p.bold((i === 0 ? name : '').padEnd(11))}  ${line}`)
@@ -335,7 +335,7 @@ function footer(p: Paint, e: PaletteEditor, width: number): string {
     ]
     right = 'esc back'
   } else if (e.overlay === 'keys') {
-    badge = 'KEYS'
+    badge = 'HELP'
     right = 'any key closes'
   } else if (e.overlay === 'open') {
     badge = 'OPEN'
@@ -363,7 +363,7 @@ function footer(p: Paint, e: PaletteEditor, width: number): string {
     ]
     right = e.fresh && !e.dirty() ? 'esc cancel' : 'esc back'
   } else if (e.mode === 'tune') {
-    badge = 'TUNE'
+    badge = 'IMAGE EDIT'
     keys = [
       ['↑↓', 'L C H'],
       ['←→', 'step'],

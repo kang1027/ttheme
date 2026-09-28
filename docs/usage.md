@@ -63,8 +63,9 @@ search field itself.
 Enter applies, and esc steps back — first out of the filter, then out of the
 preview with the original colors restored. Each palette row carries its 16
 colors, normal over bright. The last line lists only the keys that work right
-there, names the mode when it is not plain browsing (`FILTER`, `TUNE`, `CONFIG`,
-`APPLY`, `PIN`, `KEYS`) and pins where esc goes to the right; `?` shows all of them.
+there, always names the mode (`PREVIEW`, `PREVIEW (FILTER)`, `IMAGE EDIT`,
+`CONFIG`, `PREVIEW (APPLY)`, `PREVIEW (PIN)`, `HELP`) and pins where esc goes
+to the right; `?` shows all of them.
 alt-c opens the [settings](#settings) in place — `↑`/`↓` pick one, `←`/`→` change it
 (the sort and the search hint animation change live), enter writes the changed
 lines to `config.zsh`, esc puts every value back. From 76
