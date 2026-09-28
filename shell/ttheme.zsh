@@ -77,6 +77,7 @@ __tt_pins_load() {
     line=${line%%[[:space:]]##}
     [[ $line == [~/]*[[:space:]]* ]] || continue
     name=${line##*[[:space:]]} key=${${line%[[:space:]]*}%%[[:space:]]##}
+    [[ $key == \~ ]] && key=$HOME
     TTHEME_PINS[${key/#\~\//$HOME/}]=$name
     [[ -n ${TTHEME_PALETTE[$name]} ]] || print -u2 "ttheme: unknown palette '$name' pinned to $key"
   done
@@ -292,11 +293,12 @@ __tt_dir_rule() {
     [[ -n ${TTHEME_PALETTE[$TTHEME_PINS[$k]]} ]] || continue
     base=${${k%/\*\*}:A}
     if [[ $k == *"/**" ]]; then
-      [[ $p == "$base" || $p == "$base"/* ]] || continue
+      [[ $p == "$base" || $p == "${base%/}"/* ]] || continue
     else
       [[ $p == "$base" ]] || continue
     fi
-    (( ${#base} > bestlen )) && { best=$k; bestlen=${#base} }
+    (( ${#base} > bestlen )) || [[ ${#base} == $bestlen && $k != *"/**" ]] || continue
+    best=$k bestlen=${#base}
   done
   [[ -n $best ]] || return 1
   REPLY=$best
@@ -423,50 +425,667 @@ __tt_pins_write() {
   TTHEME_PINS_RAW="$(<$TTHEME_PINS_FILE)"
 }
 
+__tt_pin_base() { REPLY=${${${1%/\*\*}:-/}:a} }
+
+__tt_dir_label() {
+  if [[ $1 == "${HOME:a}" ]]; then
+    REPLY='~'
+  else
+    __tt_tilde "$1"
+  fi
+}
+
+__tt_pin_scope() {
+  if [[ $1 == *"/**" ]]; then
+    REPLY="and below"
+  else
+    REPLY="this directory"
+  fi
+}
+
+__tt_repo() {
+  local at=${1:a}
+  while [[ $at != / ]]; do
+    [[ -e $at/.git ]] && break
+    at=${at:h}
+  done
+  [[ $at != / && $at != "${HOME:a}" ]] || return 1
+  REPLY=$at
+}
+
+__tt_pin_cover() {
+  local k b best=""
+  local -i len=-1
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* && $k == *"/**" && -n ${TTHEME_PALETTE[$TTHEME_PINS[$k]]} ]] || continue
+    __tt_pin_base "$k"
+    b=$REPLY
+    [[ $1 == "$b" || $1 == "${b%/}"/* ]] || continue
+    (( ${#b} > len )) && { best=$k len=${#b} }
+  done
+  [[ -n $best ]] || return 1
+  REPLY=$best
+}
+
+__tt_pin_scopes() {
+  local d=${1:a} k
+  plabel=(" This directory " " And below ") pkeys=("$d" "${d%/}/**") pkdef=2
+  if __tt_repo "$d" && [[ $REPLY != "$d" ]]; then
+    plabel+=(" Repository ") pkeys+=("$REPLY/**")
+  fi
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* ]] || continue
+    __tt_pin_base "$k"
+    [[ $REPLY == "$d" ]] || continue
+    if [[ $k == *"/**" ]]; then pkdef=2; else pkdef=1; fi
+  done
+}
+
 __tt_pin_save() {
-  local name=$1 key=$PWD REPLY
-  (( $2 == 2 )) && key="$PWD/**"
-  unset "TTHEME_PINS[$PWD]" "TTHEME_PINS[$PWD/**]"
+  local name=$1 key=$2 k base spec REPLY
+  __tt_pin_base "$key"
+  base=$REPLY
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* ]] || continue
+    __tt_pin_base "$k"
+    [[ $REPLY == "$base" ]] && unset "TTHEME_PINS[$k]"
+  done
   TTHEME_PINS[$key]=$name
   if ! __tt_pins_write; then
     print -u2 "ttheme pin: could not write $TTHEME_PINS_FILE"
     return 1
   fi
   [[ -n $TTHEME_PIN ]] || TTHEME_BASE_SPEC=$3
-  TTHEME_PIN=$key TTHEME_PIN_SPEC=${TTHEME_PALETTE[$name]}
-  __tt_tilde "$key"
-  if __tt_color; then
-    printf '\033[2mPinned · %s → %s\033[0m\n' "$REPLY" "$name"
+  if __tt_dir_rule "$PWD"; then
+    spec=${TTHEME_PALETTE[$TTHEME_PINS[$REPLY]]}
+    TTHEME_PIN=$REPLY TTHEME_PIN_SPEC=$spec
   else
-    print -r -- "Pinned · $REPLY → $name"
+    spec=$TTHEME_BASE_SPEC
+    TTHEME_PIN="" TTHEME_PIN_SPEC=""
+  fi
+  if [[ $spec != "$TTHEME_SPEC" ]]; then
+    if [[ -n $spec ]]; then
+      __tt_apply "$spec"
+    else
+      __tt_osc_reset
+    fi
+    TTHEME_SPEC=$spec
+  fi
+  __tt_dir_label "$base"
+  k=$REPLY
+  __tt_pin_scope "$key"
+  if __tt_color; then
+    printf '\033[2mPinned · %s → %s · %s\033[0m\n' "$name" "$k" "$REPLY"
+  else
+    print -r -- "Pinned · $name → $k · $REPLY"
+  fi
+  if [[ $TTHEME_PIN != "$key" ]]; then
+    __tt_here_line Here
+    print -r -- "$REPLY"
   fi
 }
 
-__tt_unpin() {
-  local key REPLY
-  for key in "$PWD" "$PWD/**"; do
-    [[ -n ${TTHEME_PINS[$key]} ]] || continue
-    unset "TTHEME_PINS[$key]"
-    if ! __tt_pins_write; then
-      print -u2 "ttheme unpin: could not write $TTHEME_PINS_FILE"
-      return 1
-    fi
-    __tt_dir_sync
-    __tt_tilde "$key"
-    if __tt_color; then
-      printf '\033[2mUnpinned · %s\033[0m\n' "$REPLY"
-    else
-      print -r -- "Unpinned · $REPLY"
-    fi
-    return 0
+__tt_unpin_drop() {
+  local k REPLY where
+  local -a gone=()
+  for k in "$@"; do
+    [[ -n ${TTHEME_PINS[$k]} ]] || continue
+    __tt_pin_base "$k"
+    __tt_dir_label "$REPLY"
+    where=$REPLY
+    __tt_pin_scope "$k"
+    gone+=("Unpinned · ${TTHEME_PINS[$k]} on $where · $REPLY")
+    unset "TTHEME_PINS[$k]"
   done
-  if __tt_dir_rule "$PWD"; then
-    __tt_tilde "$REPLY"
-    print -u2 "ttheme unpin: nothing pinned here — $REPLY covers this directory"
-  else
-    print -u2 "ttheme unpin: nothing pinned here"
+  if ! __tt_pins_write; then
+    print -u2 "ttheme unpin: could not write $TTHEME_PINS_FILE"
+    return 1
   fi
+  __tt_dir_sync
+  for k in $gone; do
+    if __tt_color; then
+      print -r -- $'\e[2m'"$k"$'\e[0m'
+    else
+      print -r -- "$k"
+    fi
+  done
+  __tt_here_line Here
+  print -r -- "$REPLY"
+}
+
+__tt_unpin_then() {
+  local k
+  local -A TTHEME_PINS=("${(@kv)TTHEME_PINS}")
+  for k in "${@:2}"; do
+    unset "TTHEME_PINS[$k]"
+  done
+  __tt_here_fit "Then here" $1
+}
+
+__tt_key() {
+  local c seq=""
+  REPLY=""
+  read -sk 1 c || return 1
+  case $c in
+    $'\e')
+      if ! read -sk 1 -t 0.05 c; then
+        REPLY=esc
+      elif [[ $c == '[' || $c == O ]]; then
+        while read -sk 1 -t 0.05 c; do
+          seq+=$c
+          [[ $c == [A-Za-z~] ]] && break
+        done
+        case $seq in
+          C) REPLY=right ;;
+          D) REPLY=left ;;
+          Z) REPLY=stab ;;
+          *) REPLY=nop ;;
+        esac
+      else
+        REPLY=nop
+      fi
+      ;;
+    $'\t') REPLY=tab ;;
+    $'\r'|$'\n') REPLY=enter ;;
+    q|$'\x03') REPLY=esc ;;
+    *) REPLY=$c ;;
+  esac
+}
+
+__tt_unpin_block() {
+  local b=$'\e[1m' d=$'\e[2m' z=$'\e[0m' on=$'\e[7;1m' bar plain keys top k home=${HOME:a} here=${PWD:a} htip="" REPLY
+  local -A own=() below=() parent=() mark=() tstrip=()
+  local -a roots=() lp=() lpw=() ll=() lat=() lpal=() lnote=() lflag=() reply gone=(${(f)drops[$1]})
+  local -i i width=$(( (COLUMNS > 0 ? COLUMNS : 80) - 1 )) room=$(( (LINES > 0 ? LINES : 24) - 3 ))
+  (( color )) || b= d= z= on=
+  if (( color )); then
+    bar=$'\e[7;1m UNPIN \e[0m ' plain="  UNPIN  "
+  else
+    bar="[UNPIN]" plain=$bar
+  fi
+  for (( i = 1; i <= ${#lab}; i++ )); do
+    plain+=" ${lab[i]}"
+    if (( i != $1 )); then
+      bar+=" "$d${lab[i]}$z
+    elif (( color )); then
+      bar+=" "$on${lab[i]}$z
+    else
+      bar+=" [${${lab[i]# }% }]"
+    fi
+  done
+  keys="←→ choose · enter unpin · esc keep"
+  (( ${(m)#plain} + 3 + ${(m)#keys} <= width )) && bar+="   "$d$keys$z
+  __tt_clip "$bar" $width
+  bar=$REPLY
+  for k in $gone; do
+    __tt_pin_base "$k"
+    mark[$REPLY]=drop
+  done
+  top=${PWD:a}
+  [[ -n $cover ]] && __tt_pin_base "$cover" && top=$REPLY
+  __tt_map_build "$top"
+  __tt_map_fit $width
+  (( ${#reply} > room )) && reply=("${(@)reply[1,room-1]}" "   …")
+  block=("$bar" "${reply[@]}")
+  __tt_unpin_then $width $gone
+  block+=("${reply[@]}")
+}
+
+__tt_unpin_paint() {
+  local out=$'\r'
+  (( $1 > 1 )) && out+=$'\e['$(( $1 - 1 ))'A'
+  out+=${(pj:\e[K\n:)block}$'\e[K\e[J'
+  print -rn -- "$out"
+}
+
+__tt_unpin_choose() {
+  local tty="" REPLY
+  local -i n=0 at=1
+  local -a block=()
+  chosen=0
+  {
+    tty=$(stty -g 2>/dev/null && stty -echo -icanon min 1 time 0 2>/dev/null)
+    print -rn -- $'\e[?25l'
+    while :; do
+      __tt_unpin_block $at
+      __tt_unpin_paint $n
+      n=${#block}
+      __tt_key || break
+      case $REPLY in
+        left|stab) at=$(( (at + ${#lab} - 2) % ${#lab} + 1 )) ;;
+        right|tab) at=$(( at % ${#lab} + 1 )) ;;
+        enter) chosen=$at; break ;;
+        esc) break ;;
+      esac
+    done
+  } always {
+    REPLY=$'\r'
+    (( n > 1 )) && REPLY+=$'\e['$(( n - 1 ))'A'
+    print -rn -- "$REPLY"$'\e[J\e[?25h'
+    [[ -n $tty ]] && stty "$tty" 2>/dev/null
+  }
+  (( chosen ))
+}
+
+__tt_unpin_options() {
+  local d=${PWD:a} k REPLY
+  local -a both
+  mine=() under=() lab=() drops=() cover=""
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* ]] || continue
+    __tt_pin_base "$k"
+    if [[ $REPLY == "$d" ]]; then
+      mine+=("$k")
+    elif [[ $REPLY == "${d%/}"/* ]]; then
+      under+=("$k")
+    fi
+  done
+  [[ $d != / ]] && __tt_pin_cover "${d:h}" && cover=$REPLY
+  if (( ${#mine} )); then
+    lab+=(" This directory ") drops+=("${(pj:\n:)mine}")
+  fi
+  if (( ${#under} )); then
+    both=($mine $under)
+    lab+=(" And below ") drops+=("${(pj:\n:)both}")
+  fi
+  if [[ -n $cover ]]; then
+    __tt_pin_base "$cover"
+    __tt_dir_label "$REPLY"
+    lab+=(" $REPLY ") drops+=("$cover")
+  fi
+  return 0
+}
+
+__tt_unpin() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  local d k cover="" REPLY
+  local -a mine=() under=() lab=() drops=()
+  local -i chosen=0 color=0
+  __tt_color && color=1
+  __tt_pins_load
+  if (( $# )); then
+    d=$1
+    [[ $d == \~ || $d == \~/* ]] && d=$HOME${d#\~}
+    d=${d:a}
+    for k in ${(k)TTHEME_PINS}; do
+      [[ $k == /* ]] || continue
+      __tt_pin_base "$k"
+      [[ $REPLY == "$d" ]] && mine+=("$k")
+    done
+    if (( ${#mine} )); then
+      __tt_unpin_drop $mine
+      return
+    fi
+    __tt_dir_label "$d"
+    k=$REPLY
+    if __tt_pin_cover "$d"; then
+      __tt_pin_base "$REPLY"
+      __tt_dir_label "$REPLY"
+      print -u2 -r -- "ttheme unpin: nothing pinned to $k — the pin on $REPLY and below covers it"
+    else
+      print -u2 -r -- "ttheme unpin: nothing pinned to $k"
+    fi
+    return 1
+  fi
+  __tt_unpin_options
+  if (( ! ${#lab} )); then
+    print -u2 "ttheme unpin: nothing pinned here"
+    return 1
+  fi
+  if (( ${#lab} == 1 && ${#mine} )); then
+    __tt_unpin_drop $mine
+    return
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    if (( ${#mine} )); then
+      __tt_unpin_drop $mine
+      return
+    fi
+    if [[ -n $cover ]]; then
+      __tt_pin_base "$cover"
+      __tt_dir_label "$REPLY"
+      print -u2 -r -- "ttheme unpin: nothing pinned here — the pin on $REPLY and below covers it: ttheme unpin $REPLY"
+    elif (( ${#under} == 1 )); then
+      print -u2 -r -- "ttheme unpin: nothing pinned here — 1 pin below it: ttheme pins maps it"
+    else
+      print -u2 -r -- "ttheme unpin: nothing pinned here — ${#under} pins below it: ttheme pins maps them"
+    fi
+    return 1
+  fi
+  __tt_unpin_choose || return 1
+  __tt_unpin_drop ${(f)drops[chosen]}
+}
+
+__tt_clip() {
+  local c out=""
+  local -i i n=${#1} w=0 cw
+  REPLY=$1
+  for (( i = 1; i <= n; i++ )); do
+    c=${1[i]}
+    if [[ $c == $'\e' ]]; then
+      while (( i < n )) && [[ ${1[i]} != [A-Za-z] || ${1[i]} == $'\e' ]]; do (( i++ )); done
+      continue
+    fi
+    (( w += ${(m)#c} ))
+  done
+  (( w <= $2 )) && return 0
+  w=0
+  for (( i = 1; i <= n; i++ )); do
+    c=${1[i]}
+    if [[ $c == $'\e' ]]; then
+      out+=$c
+      while (( i < n )); do
+        (( i++ ))
+        out+=${1[i]}
+        [[ ${1[i]} == [A-Za-z] ]] && break
+      done
+      continue
+    fi
+    cw=${(m)#c}
+    (( w + cw > $2 - 1 )) && break
+    out+=$c
+    (( w += cw ))
+  done
+  REPLY=$out…
+  [[ $1 == *$'\e'* ]] && REPLY+=$'\e[0m'
   return 1
+}
+
+__tt_map_tip() {
+  local -a p=(${=TTHEME_PALETTE[$1]})
+  local c=${p[3]#\#}
+  REPLY=""
+  (( color && ${#p} >= 20 )) || return 0
+  printf -v REPLY '\e[38;2;%d;%d;%dm' $((16#${c:0:2})) $((16#${c:2:2})) $((16#${c:4:2}))
+}
+
+__tt_map_chip() {
+  local -a p=(${=TTHEME_PALETTE[$1]})
+  local bg=${p[1]#\#} fg=${p[2]#\#}
+  if (( ! color )); then
+    printf -v REPLY '%-*s' $2 "$1"
+  elif (( ${#p} >= 20 )); then
+    printf -v REPLY '\e[48;2;%d;%d;%d;38;2;%d;%d;%dm %-*s \e[0m' $((16#${bg:0:2})) $((16#${bg:2:2})) $((16#${bg:4:2})) \
+      $((16#${fg:0:2})) $((16#${fg:2:2})) $((16#${fg:4:2})) $2 "$1"
+  else
+    printf -v REPLY '\e[2m %-*s \e[0m' $2 "$1"
+  fi
+}
+
+__tt_here_line() {
+  local rule name where
+  if ! __tt_dir_rule "$PWD"; then
+    reply=("$1 · no pin" "the tab's own palette")
+    REPLY="$1 · no pin — the tab's own palette"
+    return 0
+  fi
+  rule=$REPLY name=$TTHEME_PINS[$REPLY]
+  __tt_pin_base "$rule"
+  if [[ ${REPLY:A} == "${PWD:A}" ]]; then
+    where="this directory"
+  else
+    __tt_dir_label "$REPLY"
+    where=$REPLY
+  fi
+  [[ $rule == *"/**" ]] && where+=" and below"
+  __tt_map_chip "$name" ${#name}
+  reply=("$1 · $REPLY" "pinned to $where")
+  REPLY="$1 · $REPLY pinned to $where"
+}
+
+__tt_here_fit() {
+  __tt_here_line "$1"
+  __tt_clip "$REPLY" $2 && { reply=("$REPLY"); return 0 }
+  __tt_clip "${reply[1]}" $2
+  reply[1]=$REPLY
+  __tt_clip "  ${reply[2]}" $2
+  reply[2]=$REPLY
+}
+
+__tt_map_under() {
+  local b name
+  local -i len=-1
+  REPLY=""
+  for b in ${(k)below}; do
+    name=${below[$b]}
+    [[ -n ${TTHEME_PALETTE[$name]} && ( $1 == "$b" || $1 == "${b%/}"/* ) ]] || continue
+    (( ${#b} > len )) && { REPLY=$name len=${#b} }
+  done
+}
+
+__tt_map_link() {
+  local at=$1 root=/
+  if [[ -n $top ]]; then
+    root=$top
+  elif [[ $at == "$home" || $at == "$home"/* ]]; then
+    root=$home
+  fi
+  (( ${roots[(Ie)$root]} )) || roots+=("$root")
+  while [[ $at != "$root" && -z ${parent[$at]} ]]; do
+    parent[$at]=${at:h}
+    at=${at:h}
+  done
+}
+
+__tt_map_chain() {
+  local at=$1 lbl=$2
+  local -a ks
+  while [[ -z ${own[$at]}${below[$at]} && $at != "$here" ]]; do
+    ks=(${(k)parent[(Re)$at]})
+    (( ${#ks} == 1 )) || break
+    at=$ks[1] lbl+=/${at:t}
+  done
+  reply=("$at" "${lbl:-/}")
+}
+
+__tt_map_line() {
+  local at=$1 name=${own[$1]:-${below[$1]}} note="" flag=""
+  if [[ -n $name ]]; then
+    if [[ -n ${own[$at]} ]]; then
+      note="this directory"
+      [[ -n ${below[$at]} ]] && note+=" · ${below[$at]} below"
+    else
+      note="and below"
+    fi
+    [[ -n ${TTHEME_PALETTE[$name]} ]] || flag="not installed"
+    [[ -d $at ]] || flag+="${flag:+ · }no such directory"
+  fi
+  lp+=("$2") lpw+=($3) ll+=("$4") lat+=("$at") lpal+=("$name") lnote+=("$note") lflag+=("$flag")
+}
+
+__tt_map_walk() {
+  local at=$1 pre=$2 tip z=$'\e[0m' REPLY
+  local -i i
+  local -a ks=(${(oi)${(k)parent[(Re)$1]}}) reply
+  (( color )) || z=
+  __tt_map_under "$at"
+  __tt_map_tip "$REPLY"
+  tip=$REPLY
+  (( color )) && [[ -z $tip ]] && tip=$'\e[2m'
+  for (( i = 1; i <= ${#ks}; i++ )); do
+    __tt_map_chain "$ks[i]" "${ks[i]:t}"
+    if (( i < ${#ks} )); then
+      __tt_map_line "$reply[1]" "$pre$tip├─ $z" $(( $3 + 3 )) "$reply[2]"
+      __tt_map_walk "$reply[1]" "$pre$tip│  $z" $(( $3 + 3 ))
+    else
+      __tt_map_line "$reply[1]" "$pre$tip└─ $z" $(( $3 + 3 )) "$reply[2]"
+      __tt_map_walk "$reply[1]" "$pre   " $(( $3 + 3 ))
+    fi
+  done
+}
+
+__tt_map_build() {
+  local top=$1 k base root REPLY
+  local -a order=()
+  own=() below=() parent=() roots=() lp=() lpw=() ll=() lat=() lpal=() lnote=() lflag=() htip=""
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* ]] || continue
+    __tt_pin_base "$k"
+    base=$REPLY
+    if [[ $k == *"/**" ]]; then
+      below[$base]=$TTHEME_PINS[$k]
+    else
+      own[$base]=$TTHEME_PINS[$k]
+    fi
+    [[ -z $top || $base == "$top" || $base == "${top%/}"/* ]] && __tt_map_link "$base"
+  done
+  [[ -z $top || $here == "$top" || $here == "${top%/}"/* ]] && __tt_map_link "$here"
+  __tt_dir_rule "$PWD" && __tt_map_tip "$TTHEME_PINS[$REPLY]" && htip=$REPLY
+  if [[ -n $top ]]; then
+    order=("$top")
+  else
+    (( ${roots[(Ie)$home]} )) && order+=("$home")
+    [[ $home != / ]] && (( ${roots[(Ie)/]} )) && order+=(/)
+  fi
+  for root in $order; do
+    if [[ $root == / ]]; then
+      __tt_map_chain / ""
+    else
+      __tt_dir_label "$root"
+      __tt_map_chain "$root" "$REPLY"
+    fi
+    __tt_map_line "$reply[1]" "" 0 "$reply[2]"
+    __tt_map_walk "$reply[1]" "" 0
+  done
+}
+
+__tt_map_fit() {
+  local b=$'\e[1m' d=$'\e[2m' y=$'\e[33m' r=$'\e[31m' z=$'\e[0m' lab line tag tip note REPLY
+  local -i width=$1 i lvl maxw namew need wr cap
+  local -a lw=() rw=() cut=()
+  (( color )) || b= d= y= r= z=
+  reply=()
+  for (( i = 1; i <= ${#ll}; i++ )); do
+    lw+=($(( lpw[i] + ${(m)#ll[i]} )))
+    [[ ${lat[i]} == "$here" ]] && (( lw[i] += 7 ))
+    (( ${#lpal[i]} > namew )) && namew=${#lpal[i]}
+  done
+  for (( lvl = 0; lvl < 4; lvl++ )); do
+    rw=() maxw=0 need=0
+    for (( i = 1; i <= ${#ll}; i++ )); do
+      wr=0
+      if [[ -n $lpal[i] ]]; then
+        wr=$(( 2 + namew + 2 * color ))
+        (( lvl == 0 && color )) && (( wr += 13 ))
+        note=${lnote[i]}
+        (( lvl == 2 )) && note=${${note//this directory/only}//and below/below}
+        (( lvl < 3 )) && (( wr += 2 + ${(m)#note} ))
+        [[ -n $lflag[i] ]] && (( wr += 3 + ${(m)#lflag[i]} ))
+        tag=${mark[$lat[i]]}
+        [[ $tag == new ]] && (( wr += 5 ))
+        [[ $tag == drop ]] && (( wr += 9 ))
+        (( lw[i] > maxw )) && maxw=$lw[i]
+      fi
+      rw+=($wr)
+    done
+    for (( i = 1; i <= ${#ll}; i++ )); do
+      if (( rw[i] )); then
+        (( maxw + rw[i] > need )) && need=$(( maxw + rw[i] ))
+      else
+        (( lw[i] > need )) && need=$lw[i]
+      fi
+    done
+    (( need <= width )) && break
+  done
+  (( lvl > 3 )) && lvl=3
+  cut=()
+  if (( need > width )); then
+    cap=0
+    for (( i = 1; i <= ${#ll}; i++ )); do
+      (( rw[i] > cap )) && cap=$rw[i]
+    done
+    cap=$(( width - cap ))
+    maxw=0
+    for (( i = 1; i <= ${#ll}; i++ )); do
+      wr=$(( rw[i] ? cap : width ))
+      lab=${ll[i]}
+      if (( lw[i] > wr )); then
+        while [[ -n $lab ]] && (( lw[i] - ${(m)#ll[i]} + ${(m)#lab} + 1 > wr )); do
+          lab=${lab[2,-1]}
+        done
+        lab=…$lab
+        lw[i]=$(( lw[i] - ${(m)#ll[i]} + ${(m)#lab} ))
+      fi
+      cut+=("$lab")
+      (( rw[i] && lw[i] > maxw )) && maxw=$lw[i]
+    done
+  else
+    cut=("${ll[@]}")
+  fi
+  for (( i = 1; i <= ${#ll}; i++ )); do
+    if [[ -n $lpal[i] ]]; then
+      line=${lp[i]}$b${cut[i]}$z
+    else
+      line=${lp[i]}$d${cut[i]}$z
+    fi
+    [[ ${lat[i]} == "$here" ]] && line+=" "$htip$b"← here"$z
+    if [[ -n $lpal[i] ]]; then
+      __tt_map_chip "$lpal[i]" $namew
+      line+=${(l:maxw - lw[i] + 2:: :)}$REPLY
+      if (( lvl == 0 && color )); then
+        if [[ -n ${TTHEME_PALETTE[$lpal[i]]} ]]; then
+          [[ -n ${tstrip[$lpal[i]]} ]] || __tt_pv_strip "$lpal[i]"
+          line+="  "${tstrip[$lpal[i]]}
+        else
+          line+=${(l:13:: :)}
+        fi
+      fi
+      note=${lnote[i]}
+      (( lvl == 2 )) && note=${${note//this directory/only}//and below/below}
+      (( lvl < 3 )) && line+="  "$d$note$z
+      [[ -n $lflag[i] ]] && line+=$y" · "$lflag[i]$z
+      tag=${mark[$lat[i]]}
+      if [[ $tag == new ]]; then
+        __tt_map_tip "$lpal[i]"
+        line+="  "$b$REPLY"new"$z
+      elif [[ $tag == drop ]]; then
+        line+="  "$r"✕ unpin"$z
+      fi
+    fi
+    while [[ $line == *' ' ]]; do line=${line% }; done
+    reply+=("$line")
+  done
+}
+
+__tt_map_tree() {
+  local home=${HOME:a} here=${PWD:a} htip="" REPLY
+  local -A own=() below=() parent=() mark=() tstrip=()
+  local -a roots=() lp=() lpw=() ll=() lat=() lpal=() lnote=() lflag=() reply
+  local -i width=$(( COLUMNS > 0 ? COLUMNS : 80 ))
+  __tt_map_build ""
+  __tt_map_fit $width
+  print -rl -- "${reply[@]}"
+  print
+  __tt_here_line Here
+  __tt_clip "$REPLY" $width
+  print -r -- "$REPLY"
+  __tt_tilde "$TTHEME_PINS_FILE"
+  if (( color )); then
+    __tt_clip $'\e[2m'"ttheme pin picks one here · ttheme unpin drops one · $REPLY"$'\e[0m' $width
+  else
+    __tt_clip "ttheme pin picks one here · ttheme unpin drops one · $REPLY" $width
+  fi
+  print -r -- "$REPLY"
+}
+
+__tt_pins_map() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  local k REPLY
+  local -i color=0
+  __tt_pins_load
+  if [[ ! -t 1 ]]; then
+    for k in ${(oi)${(k)TTHEME_PINS}}; do
+      __tt_tilde "$k"
+      print -r -- "$REPLY"$'\t'"$TTHEME_PINS[$k]"
+    done
+    return 0
+  fi
+  if (( ! ${#TTHEME_PINS} )); then
+    print -r -- 'No pins yet — `ttheme pin` picks a palette for this directory'
+    return 0
+  fi
+  __tt_color && color=1
+  __tt_map_tree
 }
 
 __tt_keep() {
@@ -1045,17 +1664,21 @@ __tt_pv_foot() {
   if (( help )); then
     badge=KEYS right=$b"? esc"$z$d" close"$z
   elif [[ -n $pick ]]; then
-    local a=$plabel[1] c=$plabel[2]
-    if (( color )); then
-      if (( pk == 1 )); then a=$on$a$z c=$d$c$z; else a=$d$a$z c=$on$c$z; fi
-    else
-      if (( pk == 1 )); then a="[${${a# }% }]"; else c="[${${c# }% }]"; fi
-    fi
-    badge=APPLY lead="$pick → $a $c"
+    badge=APPLY lead="$pick →"
+    for (( i = 1; i <= ${#plabel}; i++ )); do
+      if (( i != pk )); then
+        lead+=" "$d${plabel[i]}$z
+      elif (( color )); then
+        lead+=" "$on${plabel[i]}$z
+      else
+        lead+=" [${${plabel[i]# }% }]"
+      fi
+    done
     if [[ $mode == pin ]]; then
-      __tt_tilde "$PWD"
+      badge=PIN
+      __tt_pin_base "${pkeys[pk]}"
+      __tt_dir_label "$REPLY"
       note=$REPLY
-      (( pk == 2 )) && note+="/**"
     elif (( pk == 1 )); then
       note="Until this tab closes"
     else
@@ -1504,10 +2127,51 @@ __tt_pv_flush() {
   printf '\e[1;%dH\e[?2026l' $(( 4 + ${(m)#flt} ))
 }
 
+__tt_pv_reach() {
+  local key=${pkeys[pk]} base top k home=${HOME:a} here=${PWD:a} htip="" d=$'\e[2m' z=$'\e[0m' REPLY
+  local -A own=() below=() parent=() mark=() tstrip=()
+  local -a roots=() lp=() lpw=() ll=() lat=() lpal=() lnote=() lflag=() reply was=()
+  local -A TTHEME_PINS=("${(@kv)TTHEME_PINS}")
+  local -i room=$2
+  (( color )) || d= z=
+  (( room < 2 )) && room=2
+  __tt_pin_base "$key"
+  base=$REPLY
+  for k in ${(k)TTHEME_PINS}; do
+    [[ $k == /* ]] || continue
+    __tt_pin_base "$k"
+    [[ $REPLY == "$base" ]] || continue
+    if [[ $k != "$key" || $TTHEME_PINS[$k] != "$pick" ]]; then
+      __tt_pin_scope "$k"
+      was+=("${TTHEME_PINS[$k]} · $REPLY")
+    fi
+    unset "TTHEME_PINS[$k]"
+  done
+  TTHEME_PINS[$key]=$pick
+  top=$base
+  [[ $base != / ]] && __tt_pin_cover "${base:h}" && __tt_pin_base "$REPLY" && top=$REPLY
+  mark[$base]=new
+  __tt_map_build "$top"
+  __tt_map_fit $1
+  (( ${#reply} > room )) && reply=("${(@)reply[1,room-1]}" "   …")
+  reach=("${reply[@]}" "")
+  __tt_dir_label "$base"
+  base=$REPLY
+  for k in $was; do
+    __tt_clip "${d}Replaces ${k% · *} on $base · ${k##* · }$z" $1
+    reach+=("$REPLY")
+  done
+  __tt_pin_scope "$key"
+  __tt_clip "→ $base · $REPLY" $(( $1 - ${(m)#pick} - 2 ))
+  rsub=$REPLY
+  __tt_here_fit "Then here" $1
+  reach+=("${reply[@]}")
+}
+
 __tt_pv_draw() {
-  local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" nflt="" REPLY
+  local out line cnt ex ag="" acat="" ac="" sb="" dd="" zz="" state=on src="" nflt="" rsub="" REPLY
   local -i lw sw split sc se=$(( pw - 2 )) h k i N=${#rval} mt=${#TTHEME_ORDER} wiped=0
-  local -a pk
+  local -a held
   bgstrip=""
   if [[ -n $flt ]]; then
     __tt_pv_norm "$flt"
@@ -1519,6 +2183,15 @@ __tt_pv_draw() {
   h=$(( ph - 5 ))
   [[ -n $tune ]] && (( ! split )) && h=$(( ph - 14 ))
   (( conf && ! split )) && h=$(( ph - 12 ))
+  reach=()
+  if [[ -n $pick && $mode == pin ]]; then
+    if (( split )); then
+      __tt_pv_reach $sw $(( ph - 6 ))
+    else
+      __tt_pv_reach $se $(( ph - 13 ))
+      h=$(( ph - 6 - ${#reach} ))
+    fi
+  fi
   (( h < 1 )) && h=1
   (( cur < top )) && top=$cur
   (( cur >= top + h )) && top=$(( cur - h + 1 ))
@@ -1616,6 +2289,11 @@ __tt_pv_draw() {
     if (( help && sw >= 48 )); then
       __tt_pv_head 1 $sc $se Keys
       __tt_pv_help
+    elif (( ${#reach} )); then
+      __tt_pv_head 1 $sc $se "$pick" "$rsub"
+      for (( k = 1; k <= ${#reach} && k + 2 < ph; k++ )); do
+        out+=$'\e['$(( k + 2 ))';'$sc'H'${reach[k]}
+      done
     elif [[ -n $tune ]]; then
       (( bgoff[$tpick] )) && state=off
       __tt_pv_bg_title $(( sw - ${#tune} - 6 ))
@@ -1635,14 +2313,19 @@ __tt_pv_draw() {
     fi
     (( help && sw < 48 )) && __tt_pv_help
   else
-    if [[ -n $tune ]]; then
+    if (( ${#reach} )); then
+      __tt_pv_head $(( ph - 1 - ${#reach} )) 1 $se "$pick" "$rsub"
+      for (( k = 1; k <= ${#reach}; k++ )); do
+        out+=$'\e['$(( ph - 1 - ${#reach} + k ))';1H'${reach[k]}
+      done
+    elif [[ -n $tune ]]; then
       (( bgoff[$tpick] )) && state=off
-      pk=(${=bgpics[$tune]})
+      held=(${=bgpics[$tune]})
       src=""
-      if (( ${#pk} > 1 )); then
-        k=${pk[(Ie)${${tpick#$tune}#:}]}
-        (( k )) || k=${pk[(Ie)${bgact[$tune]}]}
-        src=" · $k/${#pk}"
+      if (( ${#held} > 1 )); then
+        k=${held[(Ie)${${tpick#$tune}#:}]}
+        (( k )) || k=${held[(Ie)${bgact[$tune]}]}
+        src=" · $k/${#held}"
       fi
       __tt_pv_bg_title $(( lw - ${#tune} - 6 )) "$src"
       __tt_pv_head $(( ph - 9 )) 1 $lw $tune "$REPLY" $state
@@ -1789,7 +2472,8 @@ __tt_pv_pick() {
   case $key in
     $'\x03') return 1 ;;
     esc) pick="" ;;
-    left|right|$'\t'|stab) pk=$(( 3 - pk )) ;;
+    left|stab) pk=$(( (pk + ${#plabel} - 2) % ${#plabel} + 1 )) ;;
+    right|$'\t') pk=$(( pk % ${#plabel} + 1 )) ;;
     $'\r'|$'\n')
       sel=$pick picked=$pk
       return 1
@@ -1932,7 +2616,7 @@ __tt_pv_handle() {
 
 __tt_preview() {
   emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
-  local mode=$1
+  local mode=$1 pdir=${2:-$PWD}
   if [[ ! -t 0 || ! -t 1 ]]; then
     print -u2 "ttheme ${mode:-preview}: needs a terminal"
     return 1
@@ -1945,7 +2629,7 @@ __tt_preview() {
   local -A bgfrom=() bgurl=() bgby=() bgsent=() bgcost=() bgdim=() bgsrc=() bgfill=() bgfocus=() bgsize=() bgpos=() bgop=() bgdef=() bgoff=() bgbase=() bgload=() bgshot=() bgshotkey=() bgedit=() bgtunef=() bgofff=() bgimages=()
   local -A bgpic=() bgpics=() bgact=() bgview=() bgswap=() bgthumb=() tsnaps=() pvseek=()
   local conf=0 cf=1
-  local -a plabel=(" This tab " " Default ") csnap=()
+  local -a plabel=(" This tab " " Default ") pkeys=() reach=() csnap=()
   local -a cvars=(TTHEME_TAB_PALETTE TTHEME_ANNOUNCE TTHEME_FX TTHEME_SORT TTHEME_BG_BLUR) clabel=("New tabs" Announce "Search fx" Sort Blur)
   local -a cchoice=("off seq" "1 0" "typewriter decode glitch" "abc series" "0 1 2 3 4") cshow=("off seq" "on off" "typewriter decode glitch" "abc series" "off 1px 2px 3px 4px")
   local -A cnote=(
@@ -1957,7 +2641,7 @@ __tt_preview() {
     TTHEME_BG_BLUR:2 "Pictures soften behind the text" TTHEME_BG_BLUR:3 "Pictures blur behind the text"
     TTHEME_BG_BLUR:4 "Pictures blur well behind the text"
   )
-  [[ $mode == pin ]] && pkdef=2 plabel=(" This directory " " And below ")
+  [[ $mode == pin ]] && __tt_pin_scopes "$pdir"
   [[ $mode == init ]] && pkdef=2
   __tt_pv_canpick
   __tt_pv_size
@@ -2017,13 +2701,15 @@ __tt_preview() {
     __tt_pv_bg_save
     if [[ -n $spec ]]; then
       TTHEME_SPEC=$spec
-      __tt_announce
       if [[ $mode == pin ]]; then
-        __tt_pin_save "$sel" $picked "$orig"
-        __tt_shown "$sel" && __tt_reload
+        __tt_pin_save "$sel" "${pkeys[picked]}" "$orig"
+        [[ $TTHEME_SPEC == "$orig" ]] || __tt_announce
+        __tt_sync
       elif (( picked == 2 )); then
+        __tt_announce
         __tt_keep "$sel"
       else
+        __tt_announce
         __tt_shown "$sel" force && __tt_reload
       fi
     else
@@ -2081,8 +2767,15 @@ ttheme() {
       __tt_resolve "$2" || return 1
       __tt_keep "$REPLY" ;;
     preview) __tt_preview ;;
-    pin) __tt_preview pin ;;
-    unpin) __tt_unpin ;;
+    pin)
+      if [[ -n $2 ]]; then
+        REPLY=$2
+        [[ $REPLY == \~ || $REPLY == \~/* ]] && REPLY=$HOME${REPLY#\~}
+        [[ -d $REPLY ]] || { print -u2 -r -- "ttheme pin: no such directory: $2"; return 1 }
+      fi
+      __tt_preview pin ${REPLY:+${REPLY:a}} ;;
+    unpin) __tt_unpin "${@:2}" ;;
+    pins) __tt_pins_map ;;
   esac
 }
 
@@ -2092,7 +2785,7 @@ if (( ${+functions[compdef]} )); then
     local -a reply
     if (( CURRENT == 2 )); then
       compadd -- $TTHEME_VERBS help
-    elif [[ $words[2] == remove || ( $words[2] == (use|default|edit|check|share) && CURRENT == 3 ) ]]; then
+    elif [[ $words[2] == remove || ( $words[2] == (use|default|edit|check|share) && $CURRENT == 3 ) ]]; then
       compadd -- $TTHEME_ORDER
     elif [[ $words[2] == new && $words[CURRENT-1] == --from ]]; then
       compadd -- $TTHEME_ORDER
@@ -2100,9 +2793,11 @@ if (( ${+functions[compdef]} )); then
       _files -/
     elif [[ $words[2] == new ]]; then
       compadd -- --from --in
-    elif [[ $words[2] == market && CURRENT == 3 ]]; then
+    elif [[ $words[2] == market && $CURRENT == 3 ]]; then
       compadd -- add remove search init
-    elif [[ $words[2] == market && $words[3] == (add|init) && CURRENT == 4 ]]; then
+    elif [[ $words[2] == market && $words[3] == (add|init) && $CURRENT == 4 ]]; then
+      _files -/
+    elif [[ $words[2] == (pin|unpin) && $CURRENT == 3 ]]; then
       _files -/
     elif [[ $words[2] == add && $words[CURRENT-1] == --market ]]; then
       _files -/

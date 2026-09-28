@@ -29,7 +29,7 @@ test('--version is its own invocation', () => {
 test('every verb either runs here or belongs to the shell layer', () => {
   assert.deepEqual(
     VERBS.filter((v) => !v.run).map((v) => v.name),
-    ['preview', 'use', 'next', 'pin', 'unpin', 'config'],
+    ['preview', 'use', 'next', 'pin', 'unpin', 'pins', 'config'],
   )
   assert.ok(VERBS.filter((v) => v.shell).every((v) => !v.run))
 })

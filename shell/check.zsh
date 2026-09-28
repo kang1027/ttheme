@@ -17,6 +17,8 @@ out=$(ttheme use city 2>&1) && { print -u2 "ttheme use took a bad name"; exit 1 
 ttheme --frobnicate 2>/dev/null && { print -u2 "ttheme took an unknown option"; exit 1 }
 ttheme next extra 2>/dev/null && { print -u2 "ttheme next took an extra argument"; exit 1 }
 [[ $(ttheme pin --help) == "Usage: ttheme pin"* ]] || { print -u2 "ttheme pin --help did not describe pin"; exit 1 }
+[[ $(ttheme pins --help) == "Usage: ttheme pins"$'\n\n'"Map every pinned directory"* ]] || { print -u2 "ttheme pins --help did not describe pins"; exit 1 }
+ttheme pins extra 2>/dev/null && { print -u2 "ttheme pins took an extra argument"; exit 1 }
 out=$(ttheme preview </dev/null 2>&1) && { print -u2 "ttheme preview ran without a tty"; exit 1 }
 [[ $out == *"needs a terminal"* ]] || { print -u2 "preview tty guard broke: $out"; exit 1 }
 EDITOR=true ttheme config > /dev/null || { print -u2 "ttheme config broke"; exit 1 }
@@ -148,9 +150,9 @@ proj=$XDG_CONFIG_HOME/proj
 mkdir -p $proj/sub/deep $proj-sibling
 ln -s $proj/sub $XDG_CONFIG_HOME/link
 cd $proj
-__tt_pin_save homura 2 "$TTHEME_PALETTE[miku]" > /dev/null || { print -u2 "__tt_pin_save failed"; exit 1 }
+__tt_pin_save homura "$proj/**" "$TTHEME_PALETTE[miku]" > /dev/null || { print -u2 "__tt_pin_save failed"; exit 1 }
 cd $proj/sub
-__tt_pin_save kaito 1 "$TTHEME_PALETTE[miku]" > /dev/null || { print -u2 "__tt_pin_save (exact) failed"; exit 1 }
+__tt_pin_save kaito "$proj/sub" "$TTHEME_PALETTE[miku]" > /dev/null || { print -u2 "__tt_pin_save (exact) failed"; exit 1 }
 TTHEME_PINS_RAW=; __tt_pins_load
 [[ ${#TTHEME_PINS} == 2 && $TTHEME_PINS[$proj/**] == homura && $TTHEME_PINS[$proj/sub] == kaito ]] || { print -u2 "pins did not round-trip: ${(kv)TTHEME_PINS}"; cat $TTHEME_PINS_FILE; exit 1 }
 REPLY=; __tt_dir_rule $proj/sub/deep && [[ $REPLY == "$proj/**" ]] || { print -u2 "subtree rule broke: $REPLY"; exit 1 }
@@ -191,6 +193,141 @@ cd $proj-sibling; __tt_chpwd > /dev/null
 REPLY=; __tt_tilde $HOME/proj-home
 [[ $REPLY == "~/proj-home" ]] || { print -u2 "__tt_tilde kept the home prefix: $REPLY"; exit 1 }
 cd $OLDPWD
+(
+  HOME=$XDG_CONFIG_HOME/home
+  mkdir -p $HOME/work/api/v2 $HOME/work/site/x $HOME/notes
+  print -r -- "//**  rei" > $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=; __tt_pins_load
+  REPLY=; __tt_dir_rule $HOME/work && [[ $REPLY == "//**" ]] || { print -u2 "a pin on / and below skipped what is below it: $REPLY"; exit 1 }
+  print -l "~/work/**  homura" "~/work/site  kaito" "~/work/site/**  miku" "~/notes/**  nosuchpalette" "/nonexistent-ttheme/place/**  rei" "~  mio" > $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=; __tt_pins_load 2>/dev/null
+  REPLY=; __tt_dir_rule $HOME && [[ $REPLY == "$HOME" ]] || { print -u2 "a pin on ~ alone did not cover the home directory: $REPLY"; exit 1 }
+  REPLY=; __tt_dir_rule $HOME/work/site && [[ $REPLY == "$HOME/work/site" ]] || { print -u2 "a directory's own pin lost to its pin on everything below: $REPLY"; exit 1 }
+  REPLY=; __tt_dir_rule $HOME/work/site/x && [[ $REPLY == "$HOME/work/site/**" ]] || { print -u2 "a pin on everything below skipped a subdirectory: $REPLY"; exit 1 }
+  cd $HOME/work/api/v2
+  color=0
+  out=$(COLUMNS=200 __tt_map_tree)
+  want=(
+    "~                          mio            this directory"
+    "├─ notes                   nosuchpalette  and below · not installed"
+    "└─ work                    homura         and below"
+    "   ├─ api/v2 ← here"
+    "   └─ site                 kaito          this directory · miku below"
+    "/nonexistent-ttheme/place  rei            and below · no such directory"
+    ""
+    "Here · homura pinned to ~/work and below"
+    "ttheme pin picks one here · ttheme unpin drops one · $TTHEME_PINS_FILE"
+  )
+  [[ $out == ${(F)want} ]] || { print -u2 "the pins map drew:"; print -ru2 -- $out; exit 1 }
+  color=1
+  out=$(__tt_map_tree)
+  __tt_map_tip homura
+  [[ ${${(f)out}[4]} == "   $REPLY├─ "$'\e[0m\e[2mapi/v2\e[0m '"$REPLY"$'\e[1m← here\e[0m' ]] ||
+    { print -u2 "the pins map did not draw homura's branches, or the here mark, in homura's color: ${(q+)${(f)out}[4]}"; exit 1 }
+  [[ ${${(f)out}[2]} == $'\e[2m├─ \e[0m\e[1mnotes\e[0m'* ]] || { print -u2 "a branch outside every pin was not dim: ${(q+)${(f)out}[2]}"; exit 1 }
+  cd $HOME/work/site
+  [[ ${${(f)"$(color=0 __tt_map_tree)"}[-2]} == "Here · kaito pinned to this directory" ]] ||
+    { print -u2 "the pins map named the wrong pin here: ${${(f)"$(color=0 __tt_map_tree)"}[-2]}"; exit 1 }
+  out=$(__tt_pins_map)
+  want=("/nonexistent-ttheme/place/**"$'\t'rei "$HOME"$'\t'mio "~/notes/**"$'\t'nosuchpalette "~/work/**"$'\t'homura "~/work/site"$'\t'kaito "~/work/site/**"$'\t'miku)
+  [[ $out == ${(F)want} ]] || { print -u2 "piped, pins did not print path and palette per line:"; print -ru2 -- $out; exit 1 }
+  rm -f $TTHEME_PINS_FILE
+  TTHEME_PINS_RAW=x
+  [[ -z $(__tt_pins_map) ]] || { print -u2 "piped, pins printed something with nothing pinned"; exit 1 }
+) || exit 1
+(
+  HOME=$XDG_CONFIG_HOME/scope
+  mkdir -p $HOME/code/acme/.git $HOME/code/acme/src/deep $HOME/code/acme/docs/api $HOME/code/acme/web $HOME/solo
+  __tt_apply() { : }
+  __tt_osc_reset() { : }
+  typeset -a plabel pkeys reach mine under lab drops block
+  typeset pkdef="" rsub="" pick="" cover=""
+  typeset -i pk color=0
+  fresh() {
+    print -l "~/code/**  konata" "~/code/acme/docs/**  rei" "~/code/acme/docs/api  miku" "~/code/acme/web  kita" > $TTHEME_PINS_FILE
+    TTHEME_PINS_RAW=; __tt_pins_load
+  }
+  fresh
+  __tt_pin_scopes $HOME/code/acme/src/deep
+  [[ ${(j:|:)plabel} == " This directory | And below | Repository " && $pkdef == 2 &&
+    ${(j:|:)pkeys} == "$HOME/code/acme/src/deep|$HOME/code/acme/src/deep/**|$HOME/code/acme/**" ]] ||
+    { print -u2 "a directory inside a repository was not offered the repository: ${(j:|:)plabel} ${(j:|:)pkeys} $pkdef"; exit 1 }
+  __tt_pin_scopes $HOME/code/acme
+  (( ${#plabel} == 2 )) || { print -u2 "a repository's root was offered itself as its repository"; exit 1 }
+  __tt_pin_scopes $HOME/code/acme/web
+  [[ $pkdef == 1 ]] || { print -u2 "a directory pinned alone did not start on that scope"; exit 1 }
+  mkdir $HOME/.git
+  __tt_pin_scopes $HOME/solo
+  (( ${#plabel} == 2 )) || { print -u2 "a home directory under git was offered as a repository"; exit 1 }
+  rmdir $HOME/.git
+  cd $HOME/code/acme/src/deep
+  __tt_pin_scopes $PWD
+  pick=homura pk=3
+  __tt_pv_reach 60 12
+  want=(
+    "~/code        konata  and below"
+    "└─ acme       homura  and below  new"
+    "   ├─ docs    rei     and below"
+    "   │  └─ api  miku    this directory"
+    "   ├─ src/deep ← here"
+    "   └─ web     kita    this directory"
+    ""
+    "Then here · homura pinned to ~/code/acme and below"
+  )
+  [[ ${(F)reach} == ${(F)want} && $rsub == "→ ~/code/acme · and below" ]] ||
+    { print -u2 "pinning the repository did not show what it reaches ($rsub):"; print -rlu2 -- $reach; exit 1 }
+  __tt_pv_reach 30 12
+  [[ ${reach[2]} == "└─ acme       homura  new" && ${reach[-1]} == "  pinned to ~/code/acme and b…" ]] ||
+    { print -u2 "a narrow reach panel did not give up the notes before the tree, or wrap what paints here:"; print -rlu2 -- $reach; exit 1 }
+  __tt_clip $'\e[1mabcdef\e[0m' 4 && { print -u2 "a clip that cut said it fit"; exit 1 }
+  [[ $REPLY == $'\e[1mabc…\e[0m' ]] || { print -u2 "a clip lost its colors or its width: ${(q+)REPLY}"; exit 1 }
+  __tt_clip ab 2 && [[ $REPLY == ab ]] || { print -u2 "a clip cut what fits"; exit 1 }
+  cd $HOME/code/acme/docs
+  __tt_unpin_options
+  [[ ${(j:|:)lab} == " This directory | And below | ~/code " && $drops[1] == "$HOME/code/acme/docs/**" &&
+    $drops[2] == "$HOME/code/acme/docs/**"$'\n'"$HOME/code/acme/docs/api" && $drops[3] == "$HOME/code/**" ]] ||
+    { print -u2 "unpin offered the wrong scopes: ${(j:|:)lab}"; print -rlu2 -- $drops; exit 1 }
+  COLUMNS=100 LINES=30 __tt_unpin_block 2
+  want=(
+    "[UNPIN]  This directory  [And below]  ~/code    ←→ choose · enter unpin · esc keep"
+    "~/code             konata  and below"
+    "└─ acme"
+    "   ├─ docs ← here  rei     and below  ✕ unpin"
+    "   │  └─ api       miku    this directory  ✕ unpin"
+    "   └─ web          kita    this directory"
+    "Then here · konata pinned to ~/code and below"
+  )
+  [[ ${(F)block} == ${(F)want} ]] || { print -u2 "unpin's and-below choice did not mark what goes:"; print -rlu2 -- $block; exit 1 }
+  COLUMNS=100 LINES=30 __tt_unpin_block 3
+  [[ ${block[2]} == *"✕ unpin" && ${block[4]} != *"✕"* && ${block[-1]} == "Then here · rei pinned to this directory and below" ]] ||
+    { print -u2 "unpin's covering choice marked the wrong pin:"; print -rlu2 -- $block; exit 1 }
+  out=$(ttheme unpin < /dev/null 2>&1) || { print -u2 "unpin without a terminal did not drop this directory's own pin: $out"; exit 1 }
+  TTHEME_PINS_RAW=; __tt_pins_load
+  [[ -z ${TTHEME_PINS[$HOME/code/acme/docs/**]} && -n ${TTHEME_PINS[$HOME/code/acme/docs/api]} && $out == *"Unpinned · rei on ~/code/acme/docs · and below"* ]] ||
+    { print -u2 "unpin without a terminal dropped the wrong pins: $out"; exit 1 }
+  cd $HOME/code/acme/src/deep
+  out=$(ttheme unpin < /dev/null 2>&1) && { print -u2 "unpin dropped a pin above without being asked"; exit 1 }
+  [[ $out == *"ttheme unpin ~/code"* ]] || { print -u2 "unpin under someone else's pin did not say how to drop it: $out"; exit 1 }
+  out=$(ttheme unpin '~/code/acme/web' 2>&1) || { print -u2 "unpin with a path did not drop its pin: $out"; exit 1 }
+  TTHEME_PINS_RAW=; __tt_pins_load
+  [[ -z ${TTHEME_PINS[$HOME/code/acme/web]} && $out == *"Unpinned · kita on ~/code/acme/web · this directory"* ]] ||
+    { print -u2 "unpin with a path dropped the wrong pin: $out"; exit 1 }
+  out=$(ttheme unpin $HOME/code/acme 2>&1) && { print -u2 "unpin with a path took one without a pin"; exit 1 }
+  [[ $out == *"nothing pinned to ~/code/acme — the pin on ~/code and below covers it"* ]] || { print -u2 "unpin's hint for a path under a pin broke: $out"; exit 1 }
+  ttheme pin $HOME/nowhere 2>/dev/null && { print -u2 "ttheme pin took a directory that does not exist"; exit 1 }
+  fresh
+  TTHEME_SPEC=$TTHEME_PALETTE[mio] TTHEME_PIN= TTHEME_PIN_SPEC= TTHEME_BASE_SPEC=
+  TTHEME_SPEC=$TTHEME_PALETTE[homura]
+  __tt_pin_save homura "$HOME/code/acme/**" "$TTHEME_PALETTE[mio]" > /dev/null
+  [[ $TTHEME_SPEC == "$TTHEME_PALETTE[homura]" && $TTHEME_PIN == "$HOME/code/acme/**" && $TTHEME_BASE_SPEC == "$TTHEME_PALETTE[mio]" ]] ||
+    { print -u2 "a repository pin did not take the tab inside it: pin=$TTHEME_PIN"; exit 1 }
+  cd $HOME/code/acme/docs
+  __tt_dir_sync
+  TTHEME_SPEC=$TTHEME_PALETTE[kaito]
+  out=$(__tt_pin_save kaito "$HOME/code/acme/**" "$TTHEME_PALETTE[rei]"; print -r -- "|$TTHEME_PIN|${TTHEME_SPEC%% *}")
+  [[ $out == *"Here · rei pinned to this directory and below"*"|$HOME/code/acme/docs/**|${TTHEME_PALETTE[rei]%% *}" ]] ||
+    { print -u2 "a tab under its own pin took a pin above it: $out"; exit 1 }
+) || exit 1
 print -r -- 'typeset -g TTHEME_STARTUP=rei' >> $TTHEME_HOME/palettes.zsh
 touch -t 203001010000 $TTHEME_HOME/palettes.zsh
 __tt_fresh

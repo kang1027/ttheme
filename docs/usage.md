@@ -12,8 +12,9 @@ This tab
   preview                                        Browse live — focus repaints, enter keeps (this tab or default), esc restores, ? lists keys
   use <palette>                                  Paint this tab — a unique prefix works: ttheme use ho
   next                                           Advance this tab to the next palette
-  pin                                            Pick a palette for this directory — cd into it repaints, cd out restores
-  unpin                                          Drop the palette pinned to this directory
+  pin [directory]                                Pick a palette for this directory, everything below it or its repository — cd in repaints, cd out restores
+  unpin [directory]                              Drop a pin — this directory's, every one below it, or the one above that paints it
+  pins                                           Map every pinned directory as a tree in its palette's colors, and the pin that covers this one
 
 New tabs
   default <palette>                              Make a palette the one new tabs open with
@@ -63,7 +64,7 @@ Enter applies, and esc steps back — first out of the filter, then out of the
 preview with the original colors restored. Each palette row carries its 16
 colors, normal over bright. The last line lists only the keys that work right
 there, names the mode when it is not plain browsing (`FILTER`, `TUNE`, `CONFIG`,
-`APPLY`, `KEYS`) and pins where esc goes to the right; `?` shows all of them.
+`APPLY`, `PIN`, `KEYS`) and pins where esc goes to the right; `?` shows all of them.
 alt-c opens the [settings](#settings) in place — `↑`/`↓` pick one, `←`/`→` change it
 (the sort and the search hint animation change live), enter writes the changed
 lines to `config.zsh`, esc puts every value back. From 76
@@ -85,15 +86,81 @@ tab was painted.
 
 ## Directory pins
 
-`pin` opens the same browser and, on enter, asks **this directory** or **and
-below**; the answer lands in `~/.config/ttheme/pins`, one `path  palette` per
-line, where `path/**` covers everything below it (`~` works, and the file is
-yours to edit). From then on a tab that `cd`s into a pinned path takes its
-palette — symlinks resolve to the pinned directory — and `cd`ing out restores
-what the tab had before, unless you painted it by hand in between, in which
-case your pick stays. The nearest pinned ancestor wins, so a project can pin
-one palette and a subfolder another. Open tabs pick up a changed pins file on
-their next `cd`; `unpin` drops the pin on the current directory.
+`pin` opens the same browser, and enter on a palette asks how far it reaches:
+
+- **This directory** — the directory alone; `cd` into a folder below it and the
+  tab takes back whatever covers that folder.
+- **And below** — the directory and everything under it, except a folder that
+  has a pin of its own.
+- **Repository** — the whole git repository you are in, from its root down;
+  offered when you are below the root (never for your home directory itself).
+
+`←`/`→` move between them, starting on the reach the directory's pin already
+has (**and below** for one without a pin), and the right-hand panel — above the
+key bar in a narrow window — shows what the choice does before you confirm: the
+pins around it as a tree, as they will be, the new one marked `new`, the pins
+below that keep their own palette, the pin it replaces, and the palette this
+directory will wear. `ttheme pin <directory>` pins another directory without
+going there.
+
+The answer lands in `~/.config/ttheme/pins`, one `path  palette` per line, where
+`path/**` covers everything below it (`~` works, and the file is yours to edit).
+From then on a tab that `cd`s into a pinned path takes its palette — symlinks
+resolve to the pinned directory — and `cd`ing out restores what the tab had
+before, unless you painted it by hand in between, in which case your pick stays.
+The nearest pinned ancestor wins, so a project can pin one palette and a
+subfolder another, and where a directory has both a pin of its own and one for
+everything below, its own one wins there. Open tabs pick up a changed pins file
+on their next `cd`.
+
+`unpin` works from wherever you are and offers what can go:
+
+- **This directory** — the pin on this directory.
+- **And below** — that and every pin further down (offered when there are any).
+- **The pin above** — named by its path, such as `~/work`: the pin that covers
+  this directory from a parent, which also covers its other folders.
+
+With only this directory's own pin to drop it drops it at once. Otherwise it
+shows a bar under the prompt — `←`/`→` choose, enter unpins, esc keeps
+everything — above the pins involved as a tree, where `✕ unpin` marks what the
+choice drops and the last line says what this directory will wear afterwards:
+
+```
+[UNPIN] [This directory]  And below   ~/work    ←→ choose · enter unpin · esc keep
+~/work          konata  and below
+└─ site ← here  kita    this directory  ✕ unpin
+   └─ docs      rei     and below
+Then here · konata pinned to ~/work and below
+```
+
+`ttheme unpin <directory>` drops that directory's pins without asking, and
+without a terminal `unpin` drops this directory's own pin or says which command
+drops the one above.
+
+`pins` draws them as a map: every pinned directory in a tree from `~`, and in
+another from `/` for those outside your home, with a run of directories that
+hold no pin folded into one row. Each pin shows its palette's name in that
+palette's own background and foreground, then its six colors and how far it
+reaches. The branches below an **and below** pin are drawn in its cursor color,
+so each palette's ground shows at a glance; the directory you are in is marked
+`← here` in the color of the pin that covers it, and the line under the tree
+names that pin:
+
+```
+~
+├─ notes      ryo     and below · not installed
+└─ work       konata  and below
+   ├─ api/v2 ← here
+   └─ site    kita    this directory
+/srv/archive  kita    and below · no such directory
+
+Here · konata pinned to ~/work and below
+ttheme pin picks one here · ttheme unpin drops one · ~/.config/ttheme/pins
+```
+
+A pin whose palette is not installed, or whose directory is gone, stays in the
+file and does nothing; the map says which. Piped, `pins` prints one line per pin
+instead: its path, a tab and its palette.
 
 ## Names and output
 

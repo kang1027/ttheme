@@ -156,7 +156,8 @@ from the booru the way `find` does.
 | `ttheme use <palette>` | Paint this tab (a unique prefix works) |
 | `ttheme next` | Advance this tab to the next palette |
 | `ttheme default <palette>` | The palette new tabs open with |
-| `ttheme pin` / `unpin` | A palette for this directory — `cd` in repaints, `cd` out restores |
+| `ttheme pin` / `unpin` | A palette for this directory, everything below it or its repository — a panel shows what each choice reaches; `cd` in repaints, `cd` out restores |
+| `ttheme pins` | Map every pinned directory as a tree, in each palette's colors, with where you are marked |
 | `ttheme browse` | Pick palettes and markets — tab moves between Catalog, Installed, Markets and Errors |
 | `ttheme market add <owner/repo>` | Add someone's market (`#v1` pins it) — `ttheme market` lists yours; `search`, `remove` too |
 | `ttheme new <name>` | Make a palette of your own in the palette editor (`--from <palette>` starts from its colors); `edit`, `check`, `share` follow |
