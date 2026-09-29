@@ -66,10 +66,10 @@ colors, normal over bright. The last line lists only the keys that work right
 there, always names the mode (`PREVIEW`, `PREVIEW (FILTER)`, `IMAGE EDIT`,
 `CONFIG`, `PREVIEW (APPLY)`, `PREVIEW (PIN)`, `HELP`) and pins where esc goes
 to the right; `?` shows all of them.
-In Warp, which wears one theme for the whole app, preview switches that theme
-as the focus moves — every Warp window at once, about 0.6 s behind — enter makes
-the palette the default, and esc puts back the theme Warp wore; the other
-commands for this tab stay off there.
+In Warp, which wears one theme for the whole app, the tab in front decides it:
+preview switches that theme as the focus moves — every Warp window at once,
+about 0.6 s behind — and so do `ttheme use`, `next` and a pin, while switching
+tabs or windows puts on the palette of the one you switch to.
 alt-c opens the [settings](#settings) in place — `↑`/`↓` pick one, `←`/`→` change it
 (the sort and the search hint animation change live), enter writes the changed
 lines to `config.zsh`, esc puts every value back. From 76

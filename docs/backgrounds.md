@@ -49,9 +49,9 @@ the picture laid whole on the palette's background at the picture's opacity —
 laid on it because Warp's opacity lays the background color over the picture,
 so a picture with see-through parts would let the desktop through. The hash
 changes with the picture and its opacity, because Warp reads a theme file once
-and never again: `ttheme default` wears the palette's newest one, and a picture
-changed anywhere moves Warp to its new file within a second while Warp wears
-that palette. Warp has no position or size setting and draws every picture as
+and never again: `ttheme default`, and a tab that wears the palette, put on its
+newest one, and a picture changed anywhere moves Warp to its new file within a
+second while Warp wears that palette. Warp has no position or size setting and draws every picture as
 cover, so with Warp wired a tuned picture that is not a fill is baked onto a
 canvas the size of the window, centered or not.
 
