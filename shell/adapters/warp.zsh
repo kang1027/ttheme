@@ -157,7 +157,6 @@ __tt_warp_publish() {
   [[ -r $f && "$(<$f)" == "$line" ]] && return 0
   [[ -d $TTHEME_WARP_TABS ]] || zf_mkdir -p $TTHEME_WARP_TABS 2>/dev/null || return 0
   __tt_put $f "$line" 2>/dev/null
-  __tt_warp_follow
 }
 
 __tt_warp_db() {
