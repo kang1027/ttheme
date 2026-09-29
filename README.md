@@ -174,7 +174,7 @@ tabs and every setting are in [docs/usage.md](docs/usage.md).
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Setup with `init`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | **Runtime repaint** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| **Background pictures** | ✅ | ✅ | ✅ | — | ◐ | — | ◐ | — | — |
+| **Background pictures** | ✅ | ✅ | ✅ | — | ◐ | — | ✅ | — | — |
 
 Nothing is emulated — a terminal that cannot express something does not get it.
 Any other terminal that speaks OSC 4/10/11 gets runtime repainting. A default

@@ -34,6 +34,12 @@ export interface Rgb {
   data: Uint8Array
 }
 
+export interface Canvas {
+  width: number
+  height: number
+  at: Box
+}
+
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10]
 const CLEAR = 13
 const INDEXED = 3
@@ -67,16 +73,79 @@ export function decodeImage(bytes: Uint8Array, limit: number): Rgba {
   throw new Error('not a PNG or JPEG image')
 }
 
-export function flatten(image: Rgba, background: Hex, opacity: number): Rgb {
-  const base = rgb(background)
-  const data = new Uint8Array(image.width * image.height * 3)
-  for (let s = 0, o = 0; s < image.data.length; s += 4, o += 3) {
-    const a = ((image.data[s + 3] as number) / 255) * opacity
-    for (let c = 0; c < 3; c++) {
-      data[o + c] = Math.round((base[c] as number) * (1 - a) + (image.data[s + c] as number) * a)
+interface Laid {
+  part: Rgba
+  box: Box
+  dx: number
+  dy: number
+}
+
+function region(image: Rgba, canvas: Canvas): Laid | undefined {
+  const { width, height, at } = canvas
+  const x0 = Math.max(0, at.x)
+  const y0 = Math.max(0, at.y)
+  const x1 = Math.min(width, at.x + at.w)
+  const y1 = Math.min(height, at.y + at.h)
+  if (x1 <= x0 || y1 <= y0) {
+    return undefined
+  }
+  const box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+  if (at.w === image.width && at.h === image.height) {
+    return { part: image, box, dx: x0 - at.x, dy: y0 - at.y }
+  }
+  const from = {
+    x: ((x0 - at.x) * image.width) / at.w,
+    y: ((y0 - at.y) * image.height) / at.h,
+    w: (box.w * image.width) / at.w,
+    h: (box.h * image.height) / at.h,
+  }
+  return { part: resample(image, from, box.w, box.h), box, dx: 0, dy: 0 }
+}
+
+export function lay(image: Rgba, canvas: Canvas): Rgba {
+  const data = new Uint8Array(canvas.width * canvas.height * 4)
+  const laid = region(image, canvas)
+  if (laid) {
+    const { part, box, dx, dy } = laid
+    for (let y = 0; y < box.h; y++) {
+      const s = ((y + dy) * part.width + dx) * 4
+      data.set(part.data.subarray(s, s + box.w * 4), ((box.y + y) * canvas.width + box.x) * 4)
     }
   }
-  return { width: image.width, height: image.height, data }
+  return { width: canvas.width, height: canvas.height, data }
+}
+
+export function flatten(
+  image: Rgba,
+  background: Hex,
+  opacity: number,
+  canvas: Canvas = { width: image.width, height: image.height, at: { x: 0, y: 0, w: image.width, h: image.height } },
+): Rgb {
+  const base = rgb(background)
+  const { width, height } = canvas
+  const data = new Uint8Array(width * height * 3)
+  for (let i = 0; i < width * 3; i += 3) {
+    data.set(base, i)
+  }
+  for (let y = 1; y < height; y++) {
+    data.copyWithin(y * width * 3, 0, width * 3)
+  }
+  const laid = region(image, canvas)
+  if (!laid) {
+    return { width, height, data }
+  }
+  const { part, box, dx, dy } = laid
+  for (let y = 0; y < box.h; y++) {
+    for (let x = 0; x < box.w; x++) {
+      const s = ((y + dy) * part.width + x + dx) * 4
+      const o = ((box.y + y) * width + box.x + x) * 3
+      const a = ((part.data[s + 3] as number) / 255) * opacity
+      for (let c = 0; c < 3; c++) {
+        data[o + c] = Math.round((base[c] as number) * (1 - a) + (part.data[s + c] as number) * a)
+      }
+    }
+  }
+  return { width, height, data }
 }
 
 export function encodePng(image: Rgba): Buffer {
@@ -443,6 +512,10 @@ function packed(width: number, height: number, colorType: number, channels: numb
 
 export function encodeRgb(image: Rgb): Buffer {
   return packed(image.width, image.height, 2, 3, image.data)
+}
+
+export function encodeRgba(image: Rgba): Buffer {
+  return packed(image.width, image.height, 6, 4, image.data)
 }
 
 export function encodeMask(mask: Mask, tone: Hex): Buffer {

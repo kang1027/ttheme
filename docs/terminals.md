@@ -8,7 +8,7 @@ get it.
 | **Setup with `init`** | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![No][no] | ![No][no] |
 | **Palette files** | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![No][no] | ![No][no] |
 | **Runtime repaint** | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![Done][done] | ![No][no] | ![Done][done] | ![Done][done] | ![Partial][partial] |
-| **Background pictures** | ![Done][done] | ![Done][done] | ![Done][done] | ![No][no] | ![Partial][partial] | ![No][no] | ![Partial][partial] | ![No][no] | ![No][no] | ![No][no] |
+| **Background pictures** | ![Done][done] | ![Done][done] | ![Done][done] | ![No][no] | ![Partial][partial] | ![No][no] | ![Done][done] | ![No][no] | ![No][no] | ![No][no] |
 
 - **Setup with `init`** — iTerm2 is offered on macOS only, Windows Terminal
   from WSL (or a native Windows zsh), where init writes a settings fragment on
@@ -44,9 +44,9 @@ get it.
   pane included), both with the same preview, tuning and find. WezTerm shows the
   picture of the active tab per window and switches it as `preview` moves, but
   has no in-terminal preview or tuning — find and tune from Ghostty, iTerm2 or
-  kitty. Warp shows the default palette's picture for the whole app, through
-  its theme, with no in-terminal preview or tuning either. Alacritty has no
-  graphics at all. Konsole passes the kitty graphics
+  kitty. Warp shows one picture for the whole app, through its theme, with
+  find, preview and tuning as in Ghostty — a tuning step reaches the window
+  about a second after the key. Alacritty has no graphics at all. Konsole passes the kitty graphics
   cases, but keeps a color scheme's wallpaper for as long as any tab shows the
   scheme, so a picture tuned elsewhere could not reach an open tab — it shows
   none. Cut-outs and baked crops need macOS.

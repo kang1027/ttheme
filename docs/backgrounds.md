@@ -55,6 +55,19 @@ that palette. Warp has no position or size setting and draws every picture as
 cover, so with Warp wired a tuned picture that is not a fill is baked onto a
 canvas the size of the window, centered or not.
 
+`preview` tunes and finds pictures in Warp too. While the tuning panel is open,
+each step lays the picture on the background in one pass (about 0.2 s), writes a
+short-lived theme and switches Warp to it; a held key does this once, when it is
+let go, and an opacity step keeps the same picture, so it draws nothing. Warp
+takes another 0.6–0.7 s to show any theme change, and the first time it loads a
+picture it draws one frame of the background color alone, which the picture's
+opacity shows through (faint at 0.2, a grey flash at 1). Each step's picture is
+written where saving it would put it, so applying a tuning shows the very
+picture already on screen, and closing preview removes the short-lived theme
+and the pictures no theme uses. Warp draws every picture layer above colored
+cells, so find draws no cover there and preview puts the palette's plain theme
+on while find runs.
+
 ## Finding one
 
 A palette with no background yet can find one: on it in `preview`, tab opens

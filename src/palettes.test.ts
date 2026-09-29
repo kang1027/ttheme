@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -15,6 +16,7 @@ import { test } from 'node:test'
 
 import { writeCatalog } from './catalog.ts'
 import { type Manifest, type PaletteEntry, toTheme } from './emit/manifest.ts'
+import { warpPictureFile } from './emit/warp.ts'
 import {
   forget,
   type Installed,
@@ -367,6 +369,33 @@ test('a picture changed anywhere moves Warp to the new pictured theme only while
   assert.equal(now.length, 1)
   assert.match(readFileSync(settings, 'utf8'), new RegExp(`name = "gojo", path = "${now[0]?.replace(/\./g, '\\.')}"`))
   assert.match(readFileSync(join(warpThemes(home), now[0] as string), 'utf8'), /^ {2}opacity: 30$/m)
+})
+
+test('the shell names a laid Warp picture as the CLI does, so preview draws straight into the file a save shows', () => {
+  const layer = readFileSync(join(import.meta.dirname, '..', 'shell', 'adapters', 'warp.zsh'), 'utf8')
+  const from = layer.indexOf('__tt_warp_laid() {')
+  const laid = layer.slice(from, layer.indexOf('\n}\n', from) + 2)
+  const cases: [string, string, string][] = [
+    ['asuka', '/Users/kdh/.config/ttheme/backgrounds/asuka.6fc048f5@115-center-right-2912x2040.png', '#211513'],
+    [
+      'kecan@market/miku',
+      '/home/사용자/.config/ttheme/backgrounds/kecan--market--miku.0a1b2c3d@fill-40.png',
+      '#2A1B3C',
+    ],
+  ]
+  const shell = spawnSync(
+    'zsh',
+    [
+      '-f',
+      '-c',
+      `typeset -A TTHEME_PALETTE; TTHEME_WARP_THEMES=/t\n${laid}\nwhile read -r pal bg img; do TTHEME_PALETTE[$pal]="$bg #ffffff"; __tt_warp_laid $pal $img; print -r -- $REPLY; done`,
+    ],
+    { input: `${cases.map(([pal, image, bg]) => `${pal} ${bg} ${image}`).join('\n')}\n`, encoding: 'utf8' },
+  )
+  assert.deepEqual(
+    shell.stdout.trimEnd().split('\n'),
+    cases.map(([pal, image, bg]) => `/t/${warpPictureFile(pal, image, bg)}`),
+  )
 })
 
 test('sync writes an iTerm2 profile per listed palette, in P3 with one color set for both modes', () => {

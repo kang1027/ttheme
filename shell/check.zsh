@@ -589,6 +589,82 @@ done
   [[ $REPLY == '{ custom = { name = "miku", path = "ttheme-miku.89abcdef.yaml" } }' ]] ||
     { print -u2 "a Warp palette with a picture did not wear its newest pictured theme: $REPLY"; exit 1 }
 ) || exit 1
+(
+  source $XDG_CONFIG_HOME/ttheme/adapters/warp.zsh
+  mkdir -p $XDG_CONFIG_HOME/warpview $XDG_CONFIG_HOME/warpviewthemes
+  TTHEME_WARP_SETTINGS=$XDG_CONFIG_HOME/warpview/settings.toml TTHEME_WARP_THEMES=$XDG_CONFIG_HOME/warpviewthemes TTHEME_TERMINALS=(warp)
+  print -rl -- '[appearance.themes]' 'theme = "Dracula"' > $TTHEME_WARP_SETTINGS
+  head -c 6000 /dev/urandom > $XDG_CONFIG_HOME/big.png
+  out=$(__tt_bg_transmit 7 $XDG_CONFIG_HOME/big.png)
+  [[ $out == $'\e_Ga=t,f=100,i=7,m=1,q=2;'* && ${#${(M)${(ps:\e_G:)out}:#m=0,*}} == 1 && "$(print -rn -- ${(j::)${${${(ps:\e_G:)out}#*;}%$'\e\\'}} | base64 --decode | shasum)" == "$(shasum < $XDG_CONFIG_HOME/big.png)" ]] ||
+    { print -u2 "a picture sent to Warp did not arrive whole in its chunks"; exit 1 }
+  print -rl -- 'name: "miku"' 'details: darker' 'terminal_colors:' >| $TTHEME_WARP_THEMES/ttheme-miku.yaml
+  : >| $TTHEME_WARP_THEMES/ttheme-miku.89abcdef.yaml
+  printf '\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\x06\x5a\0\0\x07\x60' >| $bgd/miku.0a1b2c3d.png
+  : >| $bgd/miku.0a1b2c3d@fill-40.png
+  print -rl -- 'background-image = miku.0a1b2c3d@fill-40.png' 'background-image-fit = cover' 'background-image-opacity = 0.19' >| $bgd/miku.conf
+  __tt_pv_draw() { : }
+  __tt_cli() { print -r -- "$*" >> $XDG_CONFIG_HOME/cli.log; [[ $1 == flatten ]] && : >| $3 }
+  bgsrc=() bgcut="" pw=91 ph=51 bgcw=32 bgch=40 msg="" msgt=0
+  __tt_bg_load miku
+  bgsize[miku]=140 bgpos[miku]=6
+  __tt_warp_view miku > /dev/null
+  view=$TTHEME_WARP_SHOWING
+  __tt_warp_laid miku $bgd/miku.0a1b2c3d@140-center-right-2912x2040.png
+  out=$REPLY
+  [[ $out == $TTHEME_WARP_THEMES/ttheme-miku.????????.png && "$(<$XDG_CONFIG_HOME/cli.log)" == "flatten $bgd/miku.0a1b2c3d.png $out ${TTHEME_PALETTE[miku]%% *} 1 2912x2040 2459x2856+453-122" && $TTHEME_WARP_LAID == "$out" ]] ||
+    { print -u2 "a Warp view did not lay its picture whole on the grid's canvas, into the file saving it shows: $(<$XDG_CONFIG_HOME/cli.log)"; exit 1 }
+  [[ "$(<$TTHEME_WARP_THEMES/$view)" == *$'details: darker\nbackground_image:\n  path: "'$out$'"\n  opacity: 19\nterminal_colors:'* && "$(<$TTHEME_WARP_SETTINGS)" == *"path = \"$view\""* ]] ||
+    { print -u2 "Warp was not put on a view of the laid picture at its opacity:"; cat $TTHEME_WARP_THEMES/$view; exit 1 }
+  [[ "$(<$TTHEME_HOME/warp.base)" == '"Dracula"' ]] || { print -u2 "a Warp view did not keep the user's theme where ttheme off finds it"; exit 1 }
+  : >| $XDG_CONFIG_HOME/cli.log
+  bgop[miku]=0.3
+  __tt_warp_view miku > /dev/null
+  [[ ! -s $XDG_CONFIG_HOME/cli.log && ! -e $TTHEME_WARP_THEMES/$view && "$(<$TTHEME_WARP_THEMES/$TTHEME_WARP_SHOWING)" == *$'  path: "'$out$'"\n  opacity: 30\n'* ]] ||
+    { print -u2 "a Warp view that only changed its opacity drew its picture again or moved to another file: $(<$XDG_CONFIG_HOME/cli.log)"; exit 1 }
+  bgop[miku]=0.19 view=$TTHEME_WARP_SHOWING
+  bgsize[miku]=141
+  __tt_warp_view miku > /dev/null
+  [[ ! -e $TTHEME_WARP_THEMES/$view && "$(<$TTHEME_WARP_SETTINGS)" == *"path = \"$TTHEME_WARP_SHOWING\""* ]] ||
+    { print -u2 "a new Warp view left the one before it behind"; exit 1 }
+  : >| $XDG_CONFIG_HOME/cli.log
+  bgsize[miku]=140
+  __tt_warp_view miku > /dev/null
+  [[ ! -s $XDG_CONFIG_HOME/cli.log && "$(<$TTHEME_WARP_SETTINGS)" == *"path = \"$TTHEME_WARP_SHOWING\""* ]] ||
+    { print -u2 "a Warp view drew a picture it had drawn already: $(<$XDG_CONFIG_HOME/cli.log)"; exit 1 }
+  : >| $XDG_CONFIG_HOME/cli.log
+  bgsize[miku]=fill bgpos[miku]=5
+  __tt_warp_view miku > /dev/null
+  __tt_warp_laid miku $bgd/miku.0a1b2c3d@fill-40.png
+  [[ "$(<$XDG_CONFIG_HOME/cli.log)" == "flatten $bgd/miku.0a1b2c3d@fill-40.png $REPLY ${TTHEME_PALETTE[miku]%% *} 1" ]] ||
+    { print -u2 "a Warp view of the fill did not lay the fill itself into the file its theme shows: $(<$XDG_CONFIG_HOME/cli.log)"; exit 1 }
+  bgsize[miku]=140 bgpos[miku]=6
+  __tt_warp_view miku > /dev/null
+  view=$TTHEME_WARP_SHOWING bgname=miku bgedit[miku]=1 applied=$TTHEME_PALETTE[miku]
+  __tt_pv_bg_close > /dev/null
+  [[ ${#TTHEME_WARP_LAID} == 0 ]] || { print -u2 "closing preview kept its list of laid pictures to sweep"; exit 1 }
+  [[ $TTHEME_WARP_SHOWING == "$view" && "$(<$TTHEME_WARP_SETTINGS)" == *"path = \"$view\""* ]] ||
+    { print -u2 "closing preview took Warp off the view of a tuning about to be saved"; exit 1 }
+  __tt_bg_refresh miku
+  [[ -z $TTHEME_WARP_SHOWING && ! -e $TTHEME_WARP_THEMES/$view && "$(<$TTHEME_WARP_SETTINGS)" == *"path = \"$view\""* ]] ||
+    { print -u2 "a saved tuning moved Warp itself where the CLI puts its new picture on, or left the view file"; exit 1 }
+  : >| $XDG_CONFIG_HOME/cli.log
+  __tt_bg_bake $bgd/miku.0a1b2c3d.png $bgd/miku.0a1b2c3d@140-center-right-2912x2040.png 2912 2040 2459 2856 453 -122
+  [[ "$(<$XDG_CONFIG_HOME/cli.log)" == "bake $bgd/miku.0a1b2c3d.png $bgd/miku.0a1b2c3d@140-center-right-2912x2040.png 2912x2040 2459x2856+453-122" ]] ||
+    { print -u2 "Warp baked a tuned picture without the CLI: $(<$XDG_CONFIG_HOME/cli.log)"; exit 1 }
+  bgedit=() bgsize[miku]=144
+  __tt_warp_view miku > /dev/null
+  view=$TTHEME_WARP_SHOWING bgname=miku:k2 bgview[miku]=miku:k2
+  __tt_pv_bg_close > /dev/null
+  [[ $TTHEME_WARP_SHOWING == "$view" ]] || { print -u2 "closing preview took Warp off the view of a picture chosen to be shown"; exit 1 }
+  bgname=miku bgview=()
+  __tt_pv_bg_close > /dev/null
+  [[ -z $TTHEME_WARP_SHOWING && ! -e $TTHEME_WARP_THEMES/$view && "$(<$TTHEME_WARP_SETTINGS)" == *'path = "ttheme-miku.89abcdef.yaml"'* ]] ||
+    { print -u2 "closing preview left up the view of a picture nobody kept"; exit 1 }
+  __tt_bg_hide miku
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == *'path = "ttheme-miku.yaml"'* ]] || { print -u2 "find opened over Warp's picture, which covers its loading bar"; exit 1 }
+  rm -f $bgd/miku.0a1b2c3d.png $bgd/miku.0a1b2c3d@fill-40.png $bgd/miku.conf $XDG_CONFIG_HOME/cli.log
+) || exit 1
 mkdir -p $XDG_CONFIG_HOME/fakebin
 print -rl -- '#!/bin/sh' 'printf %s "$NODE_COMPILE_CACHE"' > $XDG_CONFIG_HOME/fakebin/node
 chmod +x $XDG_CONFIG_HOME/fakebin/node
