@@ -174,7 +174,7 @@ tabs and every setting are in [docs/usage.md](docs/usage.md).
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Setup with `init`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | **Runtime repaint** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| **Background pictures** | ✅ | ✅ | ✅ | — | ◐ | — | — | — | — |
+| **Background pictures** | ✅ | ✅ | ✅ | — | ◐ | — | ◐ | — | — |
 
 Nothing is emulated — a terminal that cannot express something does not get it.
 Any other terminal that speaks OSC 4/10/11 gets runtime repainting. A default
@@ -188,7 +188,7 @@ preview` → tab searches danbooru, konachan, yande.re and zerochan for the char
 (safe-rated by default), or takes a picture you paste or drop, cuts the
 character out on macOS, tints it to the palette — or keeps its own colors — and
 installs it on your machine only. Ghostty shows the focused tab's picture, iTerm2 one per tab, kitty one per
-window. See [docs/backgrounds.md](docs/backgrounds.md).
+window, Warp one for the whole app. See [docs/backgrounds.md](docs/backgrounds.md).
 
 ## Contributing
 

@@ -35,7 +35,7 @@ import {
 import { luminance, mix } from './color.ts'
 import { checkReadability } from './contrast.ts'
 import { redrawOne } from './pictures.ts'
-import { decodePng, encodeMask, encodePng, type Rgba, retone } from './png.ts'
+import { decodePng, encodeMask, encodePng, encodeRgb, flatten, type Rgba, retone } from './png.ts'
 
 const KAGAMI: Colors = {
   name: 'kagami',
@@ -457,6 +457,13 @@ test('a picture file is the tone with the ink as its alpha, so a terminal lays t
   const again = retone(encodeMask(mask, '#9b86c8'), '#123456')
   assert.ok(again)
   assert.deepEqual([...decodePng(again).data.subarray(4, 8)], [0x12, 0x34, 0x56, 128])
+})
+
+test('Warp gets a picture laid whole on the background, so no transparent part lets the window show through', () => {
+  const image: Rgba = { width: 2, height: 1, data: Uint8Array.from([255, 0, 0, 255, 0, 255, 0, 0]) }
+  const laid = flatten(image, '#204060', 0.5)
+  assert.deepEqual([...laid.data], [144, 32, 48, 32, 64, 96])
+  assert.deepEqual([...decodePng(encodeRgb(laid)).data], [144, 32, 48, 255, 32, 64, 96, 255])
 })
 
 test('a dim picture is lifted until its brightest part reaches the tone, at most twice, and a bright one is left alone', () => {

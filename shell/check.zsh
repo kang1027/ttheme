@@ -77,6 +77,26 @@ print -l "background-image = wall.png" "background-image-fit = cover" > $bgd/wal
 __tt_bg_load wall
 [[ $bgsize[wall] == fill && $bgfill[wall] == "$bgd/wall.png" && $bgfocus[wall] == 50 && $bgdef[wall] == "fill 5 1" ]] ||
   { print -u2 "a plain cover image did not load as fill: $bgsize[wall] $bgfill[wall]@$bgfocus[wall] ($bgdef[wall])"; exit 1 }
+(
+  TTHEME_TERMINALS=(warp)
+  ! __tt_bg_aligns && __tt_bg_covers || { print -u2 "with Warp wired a tuned picture was not baked for it"; exit 1 }
+  printf '\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\x06\x5a\0\0\x07\x60' >| $bgd/kagami.png
+  __tt_bg_bake() { print -r -- "$*" >| $XDG_CONFIG_HOME/bake.log; : >| $2 }
+  pw=80 ph=24 bgcw=20 bgch=40 bgmx=0 bgmy=0
+  bgsrc=(); __tt_bg_load kagami
+  bgsize[kagami]=60 bgpos[kagami]=5 bgop[kagami]=0.3
+  __tt_bg_write kagami || { print -u2 "__tt_bg_write (Warp wired) failed"; exit 1 }
+  [[ "$(<$bgd/kagami.tune.conf)" == "$(print -l "background-image = $bgd/kagami@60-center-1600x960.png" "background-image-fit = cover" "background-image-position = center" "background-image-opacity = 0.3")" &&
+    "$(<$XDG_CONFIG_HOME/bake.log)" == "$bgd/kagami.png $bgd/kagami@60-center-1600x960.png 1600 960 "* ]] ||
+    { print -u2 "a centered picture tuned with Warp wired was not baked on the window, which Warp covers:"; cat $bgd/kagami.tune.conf; exit 1 }
+  __tt_cli() { print -r -- "$*" >> $XDG_CONFIG_HOME/cli.log }
+  __tt_pictured kagami
+  TTHEME_TERMINALS=(iterm2 warp)
+  __tt_pictured kagami
+  [[ "$(<$XDG_CONFIG_HOME/cli.log)" == "$(print -l "image kagami tuned" "image kagami tuned")" ]] ||
+    { print -u2 "a picture saved with Warp wired did not refresh Warp's themes once:"; cat $XDG_CONFIG_HOME/cli.log; exit 1 }
+  rm -f $bgd/kagami.png $bgd/kagami.tune.conf $bgd/kagami@60-center-1600x960.png $XDG_CONFIG_HOME/bake.log $XDG_CONFIG_HOME/cli.log
+) || exit 1
 [[ "$(<$TTHEME_CONFIG)" == "$TTHEME_CONFIG_TEMPLATE" ]] || { print -u2 "config seed drifted from the template"; exit 1 }
 reloads=0
 TTHEME_TERMINALS=(ghostty)

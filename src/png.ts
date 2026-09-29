@@ -28,6 +28,12 @@ export interface Mask {
   data: Uint8Array
 }
 
+export interface Rgb {
+  width: number
+  height: number
+  data: Uint8Array
+}
+
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10]
 const CLEAR = 13
 const INDEXED = 3
@@ -59,6 +65,18 @@ export function decodeImage(bytes: Uint8Array, limit: number): Rgba {
     return { width: jpeg.width, height: jpeg.height, data: jpeg.data }
   }
   throw new Error('not a PNG or JPEG image')
+}
+
+export function flatten(image: Rgba, background: Hex, opacity: number): Rgb {
+  const base = rgb(background)
+  const data = new Uint8Array(image.width * image.height * 3)
+  for (let s = 0, o = 0; s < image.data.length; s += 4, o += 3) {
+    const a = ((image.data[s + 3] as number) / 255) * opacity
+    for (let c = 0; c < 3; c++) {
+      data[o + c] = Math.round((base[c] as number) * (1 - a) + (image.data[s + c] as number) * a)
+    }
+  }
+  return { width: image.width, height: image.height, data }
 }
 
 export function encodePng(image: Rgba): Buffer {
@@ -402,6 +420,29 @@ function tonePalette(tone: Hex): Buffer {
     plte.set([r, g, b], i * 3)
   }
   return chunk('PLTE', plte)
+}
+
+function packed(width: number, height: number, colorType: number, channels: number, data: Uint8Array): Buffer {
+  const head = Buffer.alloc(13)
+  head.writeUInt32BE(width, 0)
+  head.writeUInt32BE(height, 4)
+  head[8] = 8
+  head[9] = colorType
+  const stride = width * channels
+  const raw = new Uint8Array(height * (stride + 1))
+  for (let y = 0; y < height; y++) {
+    raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1)
+  }
+  return Buffer.concat([
+    Buffer.from(SIGNATURE),
+    chunk('IHDR', head),
+    chunk('IDAT', deflateSync(raw, { level: 1 })),
+    chunk('IEND', new Uint8Array()),
+  ])
+}
+
+export function encodeRgb(image: Rgb): Buffer {
+  return packed(image.width, image.height, 2, 3, image.data)
 }
 
 export function encodeMask(mask: Mask, tone: Hex): Buffer {

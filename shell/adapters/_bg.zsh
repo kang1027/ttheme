@@ -220,7 +220,7 @@ __tt_bg_write() {
     rm -f -- $dir/${bgtunef[$1]}
   else
     shape=$size
-    [[ $size == <20-100> && $pos != center ]] && ! __tt_bg_aligns && shape=window
+    [[ $size == <20-100> ]] && { [[ $pos != center ]] || __tt_bg_covers } && ! __tt_bg_aligns && shape=window
     case $shape in
       fill) img=${bgfill[$1]} fit=cover ;;
       100) img=$src ;;
