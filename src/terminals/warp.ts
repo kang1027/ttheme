@@ -96,8 +96,10 @@ function laidFiles(ctx: Ctx): Laid {
     const picture = readBackdrop(pictures, theme.name, ctx.home)
     const file = warpThemeFile(theme.name, picture && laidOf(dir, theme, picture))
     files.set(theme.name, file)
-    if (!existsSync(join(dir, file))) {
-      fresh.add(file)
+    for (const name of new Set([file, warpThemeFile(theme.name)])) {
+      if (!existsSync(join(dir, name))) {
+        fresh.add(name)
+      }
     }
   }
   return { files, fresh }
@@ -118,6 +120,7 @@ function writePictures(ctx: Ctx, out: Out, files: Map<string, string>): void {
           const image = decodePng(new Uint8Array(readFileSync(picture.image)))
           writeAtomic(laid.image, encodeRgb(flatten(image, theme.background, 1)))
         } catch {
+          files.set(theme.name, warpThemeFile(theme.name))
           continue
         }
       }
@@ -159,7 +162,7 @@ function wearWarp(at: At, startup: string | undefined, laid: Laid, keep = false)
   const base = warpBasePath(at.configHome)
   const content = readFileSync(file, 'utf8')
   const wear = keep ? warpWorn(warpThemeOf(content)) : startup
-  if (keep && !wear) {
+  if (keep && (wear === undefined || !laid.files.has(wear))) {
     return undefined
   }
   let value: string

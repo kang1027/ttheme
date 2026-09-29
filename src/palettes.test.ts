@@ -317,6 +317,25 @@ test("sync gives a palette's Warp theme its picture under a name of its own, and
   )
 })
 
+test('Warp wears the plain theme of a palette whose picture cannot be read', () => {
+  const configHome = fixture()
+  const home = fixture()
+  const dir = join(configHome, 'ttheme', 'backgrounds')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'geto.conf'), 'background-image = geto@fill-40.png\n')
+  const settings = warpSettings(home, configHome)
+  mkdirSync(join(settings, '..'), { recursive: true })
+  writeFileSync(settings, '[appearance.themes]\ntheme = "Dracula"\n')
+  const state: Installed = { terminals: ['warp'], palettes: ['gojo', 'geto'], startup: 'geto' }
+  sync(configHome, catalog, state, home)
+  sync(configHome, catalog, state, home)
+  assert.match(readFileSync(settings, 'utf8'), /name = "geto", path = "ttheme-geto\.yaml"/)
+  assert.deepEqual(
+    readdirSync(warpThemes(home)).filter((file) => file.startsWith('ttheme-geto.')),
+    ['ttheme-geto.yaml'],
+  )
+})
+
 test('a picture changed anywhere moves Warp to the new pictured theme only while Warp wears that palette', () => {
   const configHome = fixture()
   const home = fixture()
@@ -338,6 +357,10 @@ test('a picture changed anywhere moves Warp to the new pictured theme only while
   refreshPictures(configHome, home)
   refreshPictures(configHome, home)
   assert.match(readFileSync(settings, 'utf8'), /path = "ttheme-geto\.yaml"/)
+  const gone = `[appearance.themes]\ntheme = ${warpThemeValue('kaito', 'ttheme-kaito.0123abcd.yaml')}\n`
+  writeFileSync(settings, gone)
+  refreshPictures(configHome, home)
+  assert.equal(readFileSync(settings, 'utf8'), gone)
   writeFileSync(settings, `[appearance.themes]\ntheme = ${warpThemeValue('gojo')}\n`)
   refreshPictures(configHome, home)
   const now = picturedThemes(home)
