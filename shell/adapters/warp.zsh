@@ -291,6 +291,11 @@ __tt_shown() {
   return 1
 }
 
+__tt_reloaded() {
+  __tt_paints && __tt_shown "" force
+  return 0
+}
+
 __tt_bg_shown() { __tt_warp_wearing }
 
 __tt_bg_refresh() { __tt_warp_unview }

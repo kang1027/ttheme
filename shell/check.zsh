@@ -581,6 +581,9 @@ done
     { print -u2 "a Warp prompt moved the app-wide theme itself where tab switches are followed, or did not record its palette"; exit 1 }
   __tt_shown kaito force
   [[ "$(<$TTHEME_WARP_SETTINGS)" == *"$(ours kaito)"* ]] || { print -u2 "a Warp tab that took a palette did not put it on"; exit 1 }
+  print -rl -- "${(@)mine[1,5]}" 'theme = "dark_city"' "${(@)mine[7,-1]}" >| $XDG_CONFIG_HOME/dotwarp/settings.toml
+  __tt_reloaded
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == *"$(ours kaito)"* ]] || { print -u2 "a Warp tab did not put its palette back over the theme a command's sync wrote"; exit 1 }
   TTHEME_WARP_FOLLOWS=0
   : >| $TTHEME_WARP_TABS/.follow
   print -r -- bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >| $TTHEME_WARP_TABS/.active
