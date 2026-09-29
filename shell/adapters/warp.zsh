@@ -324,7 +324,7 @@ __tt_bg_cells() {
 __tt_bg_transmit() {
   local data
   integer at=1 n
-  data=${$(base64 < $2 2>/dev/null)//$'\n'/}
+  data=${"$(base64 < $2 2>/dev/null)"//$'\n'/}
   n=${#data}
   (( n )) || return 0
   printf '\e_Ga=t,f=100,i=%d,m=%d,q=2;%s\e\\' $1 $(( n > 4096 )) "${data[1,4096]}"
