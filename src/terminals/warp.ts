@@ -225,7 +225,7 @@ export const warp: Wiring = {
       : []
   },
   notes: () => [
-    'Warp wears the default palette app-wide through its settings.toml — the shell layer stays off in it, since Warp paints no tab background of its own',
+    'Warp wears the default palette app-wide through its settings.toml — the shell layer stays off in it, since Warp paints no tab background of its own, and `ttheme preview` switches that theme while it browses, enter keeping the default',
   ],
   next: () => [],
   unwire(at) {

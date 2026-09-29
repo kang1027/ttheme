@@ -531,6 +531,64 @@ done
   ttheme 2>/dev/null && { print -u2 "the palette menu ran in Warp"; exit 1 }
   ! __tt_paints || { print -u2 "the layer claimed it can paint Warp's tabs"; exit 1 }
 ) || exit 1
+(
+  source $XDG_CONFIG_HOME/ttheme/adapters/warp.zsh
+  mkdir -p $XDG_CONFIG_HOME/warp $XDG_CONFIG_HOME/dotwarp $XDG_CONFIG_HOME/warpthemes
+  TTHEME_WARP_SETTINGS=$XDG_CONFIG_HOME/warp/settings.toml TTHEME_WARP_THEMES=$XDG_CONFIG_HOME/warpthemes TTHEME_TERMINALS=() TTHEME_SPEC=""
+  unset TTHEME_PAINTED
+  ours() { __tt_warp_value $1; print -r -- "theme = $REPLY" }
+  mine=('[appearance]' 'font = 1' '' '[appearance.themes]' 'system_theme = false' 'theme = "dark_city"' '' '[other]' 'x = 2')
+  print -rl -- "${mine[@]}" > $XDG_CONFIG_HOME/dotwarp/settings.toml
+  ln -s $XDG_CONFIG_HOME/dotwarp/settings.toml $TTHEME_WARP_SETTINGS
+  out=$(ttheme preview 2>&1 </dev/null) && { print -u2 "preview ran in a Warp ttheme does not wire"; exit 1 }
+  [[ $out == *"— \`ttheme default <palette>\` puts one on every Warp window" ]] || { print -u2 "an unwired Warp offered preview: $out"; exit 1 }
+  TTHEME_TERMINALS=(warp)
+  out=$(ttheme use kaito 2>&1) && { print -u2 "ttheme use ran in a wired Warp"; exit 1 }
+  [[ $out == *"— \`ttheme preview\` or \`ttheme default <palette>\` puts one on every Warp window" ]] || { print -u2 "a wired Warp refused ttheme use without pointing at preview: $out"; exit 1 }
+  ttheme pin 2>/dev/null && { print -u2 "ttheme pin ran in Warp"; exit 1 }
+  ttheme 2>/dev/null && { print -u2 "the palette menu ran in a wired Warp"; exit 1 }
+  ttheme preview </dev/null >/dev/null 2>$XDG_CONFIG_HOME/err
+  [[ "$(<$XDG_CONFIG_HOME/err)" == *"needs a terminal"* && -z $TTHEME_SPEC && $TTHEME_WARP_BEFORE == '"dark_city"' ]] ||
+    { print -u2 "a wired Warp refused preview, or preview did not keep the user's theme to give back: $(<$XDG_CONFIG_HOME/err) $TTHEME_WARP_BEFORE"; exit 1 }
+  __tt_apply "$TTHEME_PALETTE[miku]" || { print -u2 "a Warp paint failed"; exit 1 }
+  [[ -L $TTHEME_WARP_SETTINGS && "$(<$TTHEME_WARP_SETTINGS)" == "$(print -rl -- "${(@)mine[1,5]}" "$(ours miku)" "${(@)mine[7,-1]}")" ]] ||
+    { print -u2 "a Warp paint did not put the palette in settings.toml alone, or replaced the link:"; cat $TTHEME_WARP_SETTINGS; exit 1 }
+  [[ "$(<$TTHEME_HOME/warp.base)" == '"dark_city"' && "$(<$TTHEME_WARP_SETTINGS.ttheme.bak)" == "$(print -rl -- "${mine[@]}")" && -z ${TTHEME_PAINTED+x} ]] ||
+    { print -u2 "a Warp paint did not keep the user's theme where ttheme off finds it, or marked the tab painted"; exit 1 }
+  forks_of __tt_apply "$TTHEME_PALETTE[kaito]"
+  (( REPLY == 0 )) || { print -u2 "a Warp paint forks again ($REPLY processes) — every preview hover pays it"; exit 1 }
+  __tt_apply "$TTHEME_PALETTE[kaito]"
+  __tt_osc_reset
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == "$(print -rl -- "${mine[@]}")" && ! -e $TTHEME_HOME/warp.base ]] ||
+    { print -u2 "closing preview did not give Warp the user's theme back as it was:"; cat $TTHEME_WARP_SETTINGS; exit 1 }
+  print -rl -- "${(@)mine[1,5]}" "$(ours kaito)" "${(@)mine[7,-1]}" >| $XDG_CONFIG_HOME/dotwarp/settings.toml
+  __tt_osc_reset
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == *"$(ours kaito)"* ]] || { print -u2 "a second reset wrote Warp's settings again"; exit 1 }
+  __tt_put $TTHEME_HOME/warp.base '"dark_city"'
+  ttheme preview </dev/null >/dev/null 2>/dev/null
+  [[ $TTHEME_SPEC == "$TTHEME_PALETTE[kaito]" ]] || { print -u2 "preview did not open on the palette Warp wears: ${TTHEME_SPEC%% *}"; exit 1 }
+  __tt_apply "$TTHEME_PALETTE[miku]"
+  __tt_osc_reset
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == *"$(ours kaito)"* && "$(<$TTHEME_HOME/warp.base)" == '"dark_city"' ]] ||
+    { print -u2 "closing preview did not put the default back, or dropped the user's theme kept for ttheme off"; exit 1 }
+  rm -f $TTHEME_HOME/warp.base
+  print -rl -- '[general]' 'x = 1' >| $XDG_CONFIG_HOME/dotwarp/settings.toml
+  ttheme preview </dev/null >/dev/null 2>/dev/null
+  __tt_apply "$TTHEME_PALETTE[miku]"
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == "$(print -rl -- '[general]' 'x = 1' '' '[appearance.themes]' "$(ours miku)")" ]] ||
+    { print -u2 "a Warp paint did not add the theme table:"; cat $TTHEME_WARP_SETTINGS; exit 1 }
+  __tt_osc_reset
+  [[ "$(<$TTHEME_WARP_SETTINGS)" == *$'\ntheme = "dark"' && ! -e $TTHEME_HOME/warp.base ]] ||
+    { print -u2 "closing preview over no theme did not leave Warp's default"; cat $TTHEME_WARP_SETTINGS; exit 1 }
+  __tt_apply "custom" && { print -u2 "Warp wore a spec that is no palette"; exit 1 }
+  : > $TTHEME_WARP_THEMES/ttheme-miku.yaml
+  : > $TTHEME_WARP_THEMES/ttheme-miku.0123abcd.yaml
+  touch -t 202001010000 $TTHEME_WARP_THEMES/ttheme-miku.0123abcd.yaml
+  : > $TTHEME_WARP_THEMES/ttheme-miku.89abcdef.yaml
+  REPLY=; __tt_warp_value miku
+  [[ $REPLY == '{ custom = { name = "miku", path = "ttheme-miku.89abcdef.yaml" } }' ]] ||
+    { print -u2 "a Warp palette with a picture did not wear its newest pictured theme: $REPLY"; exit 1 }
+) || exit 1
 mkdir -p $XDG_CONFIG_HOME/fakebin
 print -rl -- '#!/bin/sh' 'printf %s "$NODE_COMPILE_CACHE"' > $XDG_CONFIG_HOME/fakebin/node
 chmod +x $XDG_CONFIG_HOME/fakebin/node

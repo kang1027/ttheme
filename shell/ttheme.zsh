@@ -2697,7 +2697,9 @@ __tt_preview() {
     [[ -n $tune ]] && __tt_pv_untune
     (( conf )) && __tt_pv_unconf
     __tt_pv_bg_save
-    if [[ -n $spec ]]; then
+    if [[ -n $spec ]] && ! __tt_paints; then
+      __tt_keep "$sel"
+    elif [[ -n $spec ]]; then
       TTHEME_SPEC=$spec
       if [[ $mode == pin ]]; then
         __tt_pin_save "$sel" "${pkeys[picked]}" "$orig"
@@ -2733,7 +2735,7 @@ ttheme() {
     print -u2 "ttheme: unknown command '$1' — see \`ttheme help\`"
     return 1
   fi
-  if ! __tt_paints && (( ! $# || ${TTHEME_TAB_VERBS[(Ie)$1]} )); then
+  if ! __tt_paints && (( ! $# || ${TTHEME_TAB_VERBS[(Ie)$1]} )) && ! { [[ $1 == preview ]] && __tt_previews }; then
     __tt_unpainted
     return 1
   fi

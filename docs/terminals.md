@@ -29,6 +29,8 @@ get it.
   color queries but paints one theme app-wide and never the background an OSC
   sets, so the shell layer stays off there and `ttheme use <palette>` points you at
   `ttheme default <palette>`, which puts the palette on every Warp window.
+  `ttheme preview` runs there too: it switches that app-wide theme as you
+  browse, and enter makes the palette the default.
   Konsole draws a background and foreground an OSC sets but never an OSC 4, so
   a Konsole tab repaints by switching to the palette's own color scheme (OSC 50)
   — the scheme init wrote, which is why the shell layer paints Konsole only once
