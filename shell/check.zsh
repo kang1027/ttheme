@@ -702,8 +702,9 @@ done
   TTHEME_WARP_SETTINGS=$XDG_CONFIG_HOME/warpview/settings.toml TTHEME_WARP_THEMES=$XDG_CONFIG_HOME/warpviewthemes TTHEME_TERMINALS=(warp)
   print -rl -- '[appearance.themes]' 'theme = "Dracula"' > $TTHEME_WARP_SETTINGS
   head -c 6000 /dev/urandom > $XDG_CONFIG_HOME/big.png
-  out=$(__tt_bg_transmit 7 $XDG_CONFIG_HOME/big.png)
-  [[ $out == $'\e_Ga=t,f=100,i=7,m=1,q=2;'* && ${#${(M)${(ps:\e_G:)out}:#m=0,*}} == 1 && "$(print -rn -- ${(j::)${${${(ps:\e_G:)out}#*;}%$'\e\\'}} | base64 --decode | shasum)" == "$(shasum < $XDG_CONFIG_HOME/big.png)" ]] ||
+  out=$(base64() { if (( $# )); then command base64 "$@"; else command base64 | fold -w 76; fi }; __tt_bg_transmit 7 $XDG_CONFIG_HOME/big.png)
+  sent=${(j::)${${${(ps:\e_G:)out}#*;}%$'\e\\'}}
+  [[ $out == $'\e_Ga=t,f=100,i=7,m=1,q=2;'* && ${#${(M)${(ps:\e_G:)out}:#m=0,*}} == 1 && $sent != *[^A-Za-z0-9+/=]* && "$(print -rn -- $sent | base64 --decode | shasum)" == "$(shasum < $XDG_CONFIG_HOME/big.png)" ]] ||
     { print -u2 "a picture sent to Warp did not arrive whole in its chunks"; exit 1 }
   print -rl -- 'name: "miku"' 'details: darker' 'terminal_colors:' >| $TTHEME_WARP_THEMES/ttheme-miku.yaml
   : >| $TTHEME_WARP_THEMES/ttheme-miku.89abcdef.yaml
