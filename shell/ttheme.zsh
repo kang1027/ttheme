@@ -30,7 +30,7 @@ __tt_gone() {
   __tt_reload
   __tt_reset_reloaded $bg
   print -n $'\e[?1004l'
-  for hook in precmd:__tt_fresh precmd:__tt_precmd precmd:__tt_unmux preexec:__tt_preexec preexec:__tt_mux chpwd:__tt_chpwd; do
+  for hook in precmd:__tt_fresh precmd:__tt_precmd precmd:__tt_prompted precmd:__tt_unmux preexec:__tt_preexec preexec:__tt_mux chpwd:__tt_chpwd; do
     add-zsh-hook -d ${hook%%:*} ${hook#*:}
   done
   (( $+functions[add-zle-hook-widget] )) && add-zle-hook-widget -d line-init __tt_line_init
@@ -2697,9 +2697,7 @@ __tt_preview() {
     [[ -n $tune ]] && __tt_pv_untune
     (( conf )) && __tt_pv_unconf
     __tt_pv_bg_save
-    if [[ -n $spec ]] && ! __tt_paints; then
-      __tt_keep "$sel"
-    elif [[ -n $spec ]]; then
+    if [[ -n $spec ]]; then
       TTHEME_SPEC=$spec
       if [[ $mode == pin ]]; then
         __tt_pin_save "$sel" "${pkeys[picked]}" "$orig"
@@ -2735,7 +2733,7 @@ ttheme() {
     print -u2 "ttheme: unknown command '$1' — see \`ttheme help\`"
     return 1
   fi
-  if ! __tt_paints && (( ! $# || ${TTHEME_TAB_VERBS[(Ie)$1]} )) && ! { [[ $1 == preview ]] && __tt_previews }; then
+  if ! __tt_paints && (( ! $# || ${TTHEME_TAB_VERBS[(Ie)$1]} )); then
     __tt_unpainted
     return 1
   fi
@@ -2843,6 +2841,7 @@ fi
   else
     __tt_sync
   fi
+  __tt_follows_prompt && add-zsh-hook precmd __tt_prompted
   __tt_announce
 }
 

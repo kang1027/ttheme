@@ -59,11 +59,13 @@ __tt_keepable() { return 1 }
 
 __tt_paints() { return 0 }
 
-__tt_previews() { return 1 }
-
 __tt_unpainted() { : }
 
 __tt_follows_focus() { return 1 }
+
+__tt_follows_prompt() { return 1 }
+
+__tt_prompted() { : }
 
 __tt_pv_bg_open() { : }
 

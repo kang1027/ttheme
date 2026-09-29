@@ -1,36 +1,48 @@
 source $TTHEME_HOME/adapters/_bg.zsh
 
-typeset -g TTHEME_WARP_SETTINGS=$HOME/.warp/settings.toml TTHEME_WARP_THEMES=$HOME/.warp/themes TTHEME_WARP_WORN="" TTHEME_WARP_BEFORE=""
+typeset -g TTHEME_WARP_SETTINGS=$HOME/.warp/settings.toml TTHEME_WARP_THEMES=$HOME/.warp/themes TTHEME_WARP_WORN=""
+typeset -g TTHEME_WARP_TABS=$TTHEME_STATE_DIR/warp TTHEME_WARP_DB="" TTHEME_WARP_ID="" TTHEME_WARP_LAST="" TTHEME_WARP_SEEN=""
 typeset -g TTHEME_WARP_SHOWING="" TTHEME_WARP_VIEW=""
-typeset -gi TTHEME_WARP_BASED=0 TTHEME_WARP_VIEWS=0 TTHEME_WARP_BUSY=0
+typeset -gi TTHEME_WARP_VIEWS=0 TTHEME_WARP_BUSY=0 TTHEME_WARP_FOLLOWS=-1 TTHEME_WARP_TICK=0
 typeset -ga TTHEME_WARP_LAID=()
+typeset -g TTHEME_WARP_SQL='with t as (select id, window_id, row_number() over (partition by window_id order by id) - 1 as ix from tabs) select lower(hex(p.uuid)) from app a join windows w on w.id = a.active_window_id join t on t.window_id = w.id and t.ix = w.active_tab_index join pane_nodes n on n.tab_id = t.id and n.is_leaf join pane_leaves l on l.pane_node_id = n.id and l.is_focused join terminal_panes p on p.id = n.id'
 if [[ $OSTYPE != darwin* ]]; then
   TTHEME_WARP_SETTINGS=${XDG_CONFIG_HOME:-$HOME/.config}/warp-terminal/settings.toml
   TTHEME_WARP_THEMES=${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/themes
 fi
 
-zmodload -F zsh/files b:zf_rm 2>/dev/null
+zmodload -F zsh/files b:zf_rm b:zf_mkdir 2>/dev/null
 zmodload -F zsh/zselect b:zselect 2>/dev/null
 zmodload -F zsh/datetime p:EPOCHREALTIME 2>/dev/null
 
-__tt_paints() { return 1 }
+__tt_paints() { __tt_warp_wired }
 
 __tt_warp_wired() { (( ${TTHEME_TERMINALS[(Ie)warp]} )) && [[ -r $TTHEME_WARP_SETTINGS ]] }
 
 __tt_unpainted() {
-  local how='`ttheme default <palette>`'
-  __tt_warp_wired && how='`ttheme preview` or '$how
-  print -u2 "ttheme: Warp wears one theme app-wide and paints no tab background of its own — $how puts one on every Warp window"
+  print -u2 "ttheme: Warp takes a palette only through the settings.toml init wires — wire it with \`npx @kecan0406/ttheme@latest init\`"
 }
 
-__tt_previews() {
-  local REPLY
-  local -a reply TTHEME_WARP_LINES
-  __tt_warp_wired && __tt_warp_read || return 1
-  TTHEME_WARP_BEFORE=${REPLY:-'"dark"'} TTHEME_WARP_BASED=0 TTHEME_SPEC=""
-  [[ -e $TTHEME_HOME/warp.base ]] && TTHEME_WARP_BASED=1
-  [[ -n $TTHEME_WARP_WORN ]] && TTHEME_SPEC=${TTHEME_PALETTE[$TTHEME_WARP_WORN]}
-  return 0
+__tt_keepable() { return 0 }
+
+__tt_follows_prompt() { return 0 }
+
+__tt_prompted() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  __tt_warp_publish
+  __tt_warp_follow
+  __tt_warp_follows || __tt_sync
+}
+
+__tt_hear() {
+  if [[ -n $TTHEME_PAINTED ]] && __tt_warp_wearing && [[ -n ${TTHEME_PALETTE[$REPLY]} ]]; then
+    REPLY=${TTHEME_PALETTE[$REPLY]%% *}
+  elif [[ -n $TTHEME_STARTUP && -n ${TTHEME_PALETTE[$TTHEME_STARTUP]} ]]; then
+    REPLY=${TTHEME_PALETTE[$TTHEME_STARTUP]%% *}
+  else
+    REPLY=""
+    return 1
+  fi
 }
 
 __tt_warp_value() {
@@ -91,22 +103,193 @@ __tt_warp_wearing() {
   [[ -n $REPLY ]]
 }
 
+__tt_warp_want() {
+  local pal=$1 view=$2 base=$TTHEME_HOME/warp.base
+  if [[ -n $pal && -n ${TTHEME_PALETTE[$pal]} ]]; then
+    if [[ -n $view && -r $TTHEME_WARP_THEMES/$view ]]; then
+      REPLY="{ custom = { name = \"$pal\", path = \"$view\" } }"
+    else
+      __tt_warp_value $pal
+    fi
+  elif [[ -n $TTHEME_STARTUP && -n ${TTHEME_PALETTE[$TTHEME_STARTUP]} ]]; then
+    __tt_warp_value $TTHEME_STARTUP
+  elif [[ -e $base ]]; then
+    REPLY=$(<$base)
+    [[ -n $REPLY ]] || REPLY='"dark"'
+  else
+    __tt_warp_wearing || return 1
+    REPLY='"dark"'
+  fi
+  return 0
+}
+
+__tt_warp_wear() {
+  local value=$1
+  local -a at
+  integer wait
+  if [[ $value == *'path = "ttheme-'* ]]; then
+    zstat -F %s.%N -A at +mtime -- $TTHEME_WARP_THEMES/${${value#*path = \"}%%\"*} 2>/dev/null || return 1
+    wait=$(( (0.26 - (EPOCHREALTIME - at[1])) * 100 ))
+    (( wait > 0 )) && zselect -t $wait
+  fi
+  __tt_warp_set "$value" || return 1
+  [[ $value == *'path = "ttheme-'* ]] || zf_rm -f -- $TTHEME_HOME/warp.base 2>/dev/null
+  return 0
+}
+
+__tt_warp_here() {
+  local fd f=$TTHEME_WARP_TABS/.active
+  [[ -r $f && -e $TTHEME_WARP_TABS/.follow && -n $WARP_TERMINAL_SESSION_UUID ]] || return 0
+  [[ "$(<$f)" == "$WARP_TERMINAL_SESSION_UUID" ]] && return 0
+  zsystem flock -t 0 -f fd $TTHEME_WARP_TABS/.follow 2>/dev/null || return 1
+  zsystem flock -u $fd
+  return 0
+}
+
+__tt_warp_publish() {
+  local id=$WARP_TERMINAL_SESSION_UUID f pal=$1 line REPLY
+  [[ ${#id} == 32 && -e $TTHEME_HOME ]] || return 0
+  if (( ! $# )); then
+    __tt_warp_tab
+    pal=$REPLY
+  fi
+  f=$TTHEME_WARP_TABS/$id line="$$ ${TTHEME_STARTUP:--} ${pal:--} ${2:--}"
+  [[ -r $f && "$(<$f)" == "$line" ]] && return 0
+  [[ -d $TTHEME_WARP_TABS ]] || zf_mkdir -p $TTHEME_WARP_TABS 2>/dev/null || return 0
+  __tt_put $f "$line" 2>/dev/null
+  __tt_warp_follow
+}
+
+__tt_warp_db() {
+  setopt localoptions extendedglob
+  local -a db
+  [[ -n $TTHEME_WARP_DB ]] && return 0
+  if [[ $OSTYPE == darwin* ]]; then
+    db=($HOME/Library/Group\ Containers/*.dev.warp/Library/Application\ Support/dev.warp.Warp-Stable/warp.sqlite(N) $HOME/Library/Application\ Support/dev.warp.Warp-Stable/warp.sqlite(N))
+  else
+    db=(${XDG_STATE_HOME:-$HOME/.local/state}/warp-terminal/warp.sqlite(N))
+  fi
+  TTHEME_WARP_DB=${db[1]}
+  [[ -n $TTHEME_WARP_DB ]]
+}
+
+__tt_warp_follows() {
+  setopt localoptions extendedglob
+  (( TTHEME_WARP_FOLLOWS < 0 )) || return $(( ! TTHEME_WARP_FOLLOWS ))
+  TTHEME_WARP_FOLLOWS=0
+  [[ -o interactive && $WARP_TERMINAL_SESSION_UUID == [0-9a-f](#c32) ]] && (( $+commands[sqlite3] )) && __tt_warp_db || return 1
+  TTHEME_WARP_FOLLOWS=1
+}
+
+__tt_warp_follow() {
+  local fd lock=$TTHEME_WARP_TABS/.follow
+  __tt_warp_follows || return 0
+  if [[ ! -e $lock ]]; then
+    [[ -d $TTHEME_WARP_TABS ]] || zf_mkdir -p $TTHEME_WARP_TABS 2>/dev/null || return 0
+    : >>| $lock 2>/dev/null || return 0
+  fi
+  zsystem flock -t 0 -f fd $lock 2>/dev/null || return 0
+  zsystem flock -u $fd
+  zsh -fc 'source $1; __tt_warp_follower' zsh $TTHEME_HOME/ttheme.zsh </dev/null >/dev/null 2>&1 &!
+}
+
+__tt_warp_active() {
+  setopt localoptions extendedglob
+  REPLY=$(sqlite3 -readonly -cmd '.timeout 300' $TTHEME_WARP_DB $TTHEME_WARP_SQL 2>/dev/null)
+  [[ $REPLY == [0-9a-f](#c32) ]]
+}
+
+__tt_warp_line() {
+  local pal=${3#-} view=${4#-}
+  [[ $2 != - && -z $TTHEME_STARTUP ]] && pal="" view=""
+  __tt_warp_want "$pal" "$view"
+}
+
+__tt_warp_tick() {
+  local line="" REPLY
+  local -a at
+  if zstat -F %s.%N -A at +mtime -- $TTHEME_WARP_DB-wal 2>/dev/null || zstat -F %s.%N -A at +mtime -- $TTHEME_WARP_DB 2>/dev/null; then
+    if [[ $at[1] != "$TTHEME_WARP_SEEN" ]]; then
+      TTHEME_WARP_SEEN=$at[1]
+      if __tt_warp_active && [[ $REPLY != "$TTHEME_WARP_ID" ]]; then
+        TTHEME_WARP_ID=$REPLY
+        __tt_put $TTHEME_WARP_TABS/.active $REPLY 2>/dev/null
+      fi
+    fi
+  fi
+  zstat -F %s.%N -A at +mtime -- $TTHEME_HOME/palettes.zsh 2>/dev/null && [[ $at[1] != "$TTHEME_PALETTES_AT" ]] && __tt_palettes_load
+  [[ -n $TTHEME_WARP_ID && -r $TTHEME_WARP_TABS/$TTHEME_WARP_ID ]] && line=$(<$TTHEME_WARP_TABS/$TTHEME_WARP_ID)
+  [[ "$TTHEME_WARP_ID $line $TTHEME_PALETTES_AT" == "$TTHEME_WARP_LAST" ]] && return 0
+  TTHEME_WARP_LAST="$TTHEME_WARP_ID $line $TTHEME_PALETTES_AT"
+  [[ -n $line ]] && __tt_warp_line ${=line} && __tt_warp_wear "$REPLY"
+  return 0
+}
+
+__tt_warp_live() {
+  setopt localoptions extendedglob
+  local f pid
+  integer live=0
+  for f in $TTHEME_WARP_TABS/[0-9a-f](#c32)(N); do
+    pid=${"$(<$f)"%% *}
+    if [[ $pid == <-> ]] && kill -0 $pid 2>/dev/null; then
+      live=1
+    else
+      zf_rm -f -- $f 2>/dev/null
+    fi
+  done
+  (( live ))
+}
+
+__tt_warp_follower() {
+  emulate -L zsh
+  local fd
+  __tt_warp_db && zsystem flock -t 0 -f fd $TTHEME_WARP_TABS/.follow 2>/dev/null || return 0
+  trap '' HUP
+  while [[ -e $TTHEME_HOME/palettes.zsh && -e $TTHEME_WARP_DB ]]; do
+    __tt_warp_tick
+    (( ++TTHEME_WARP_TICK % 50 )) || __tt_warp_live || break
+    zselect -t 10
+  done
+  zf_rm -f -- $TTHEME_WARP_TABS/.active 2>/dev/null
+}
+
 __tt_apply() {
-  local REPLY
+  local REPLY pal
   __tt_name_of "$1"
-  [[ -n ${TTHEME_PALETTE[$REPLY]} ]] || return 1
-  __tt_warp_value $REPLY
-  __tt_warp_set "$REPLY" || return 1
+  pal=$REPLY
+  [[ -n ${TTHEME_PALETTE[$pal]} ]] || return 1
   TTHEME_WARP_VIEW=""
+  __tt_warp_publish $pal
+  __tt_warp_here && __tt_warp_want $pal && __tt_warp_wear "$REPLY"
+  export TTHEME_PAINTED=1
+  return 0
 }
 
 __tt_osc_reset() {
-  [[ -n $TTHEME_WARP_BEFORE ]] || return 0
-  local value=$TTHEME_WARP_BEFORE
-  TTHEME_WARP_BEFORE="" TTHEME_WARP_VIEW=""
-  __tt_warp_set "$value" || return 0
-  (( TTHEME_WARP_BASED )) || zf_rm -f -- $TTHEME_HOME/warp.base 2>/dev/null
+  local REPLY
+  TTHEME_WARP_VIEW=""
+  __tt_warp_publish ""
+  __tt_warp_here && __tt_warp_want "" && __tt_warp_wear "$REPLY"
+  unset TTHEME_PAINTED
   return 0
+}
+
+__tt_warp_tab() {
+  REPLY=""
+  [[ -n $TTHEME_PAINTED && -n $TTHEME_SPEC ]] || return 0
+  __tt_name_of "$TTHEME_SPEC"
+  [[ -n ${TTHEME_PALETTE[$REPLY]} ]] || REPLY=""
+}
+
+__tt_shown() {
+  local REPLY pal
+  __tt_warp_tab
+  pal=$REPLY
+  __tt_warp_publish "$pal"
+  if [[ $2 == force ]] || ! __tt_warp_follows; then
+    __tt_warp_here && __tt_warp_want "$pal" && __tt_warp_wear "$REPLY"
+  fi
+  return 1
 }
 
 __tt_bg_shown() { __tt_warp_wearing }
@@ -233,6 +416,7 @@ __tt_warp_view() {
   __tt_warp_set "{ custom = { name = \"$pal\", path = \"$theme\" } }" || return 1
   [[ -z $TTHEME_WARP_SHOWING ]] || zf_rm -f -- $TTHEME_WARP_THEMES/$TTHEME_WARP_SHOWING 2>/dev/null
   TTHEME_WARP_SHOWING=$theme TTHEME_WARP_VIEW="$pal $out $op"
+  __tt_warp_publish $pal $theme
 }
 
 __tt_warp_unview() {
