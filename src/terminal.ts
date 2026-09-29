@@ -125,6 +125,7 @@ export const CLEAR = '\x1b[H\x1b[K\x1b[2H\x1b[J\x1b[H'
 export interface Live {
   slots: readonly number[]
   paint(entry: PaletteEntry): string
+  look?(name: string, shown: readonly string[]): void
   wear(entry: PaletteEntry, wired: readonly string[]): string | undefined
   saved(): Promise<Map<string, string>>
   restore(saved: ReadonlyMap<string, string>): string

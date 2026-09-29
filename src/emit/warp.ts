@@ -38,7 +38,9 @@ function warpOpacity(picture: WarpPicture): number {
   return Math.max(0, Math.min(100, Math.round(picture.opacity * 100)))
 }
 
-export function warpTheme(theme: Theme, picture?: WarpPicture): string {
+export type WarpLook = Pick<Theme, 'name' | 'background' | 'foreground' | 'cursor' | 'ansi'>
+
+export function warpTheme(theme: WarpLook, picture?: WarpPicture): string {
   return [
     `name: "${theme.name}"`,
     `background: "${theme.background}"`,
